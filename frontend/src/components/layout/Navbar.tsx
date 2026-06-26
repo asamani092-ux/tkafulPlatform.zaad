@@ -21,6 +21,7 @@ export default function Navbar() {
     { to: '/projects', label: 'المشاريع' },
     { to: '/services', label: 'الخدمات' },
     { to: '/volunteers', label: 'المتطوعين' },
+    { to: '/executive', label: 'اللوحة التنفيذية' },
     { to: '/about', label: 'من نحن' },
   ];
 

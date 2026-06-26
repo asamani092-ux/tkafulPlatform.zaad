@@ -1,5 +1,9 @@
+import tmkeenPreset from "../design-system/tailwind.preset";
+
 /** @type {import('tailwindcss').Config} */
 export default {
+  // مصدر التصميم الموحّد: design-system (الألوان/الخط/المقاسات)
+  presets: [tmkeenPreset],
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
