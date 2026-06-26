@@ -23,4 +23,6 @@ urlpatterns = [
     path("api/admin/", include("takaful_app.urls")),
     path("api/", include("takaful_app.urls")),
     path("api/accounts/", include("accounts.urls")),  # ← Make sure this line exists
+    path("api/dashboard/", include("analytics.urls")),       # اللوحة التنفيذية الموحّدة (المشروع الثاني)
+    path("api/notifications/", include("notifications.urls")),  # الإشعارات
 ]

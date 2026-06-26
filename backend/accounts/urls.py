@@ -3,7 +3,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import register, me, update_profile
+from .views import register, me, update_profile, change_password
 from .serializers import EmailTokenObtainPairSerializer
 
 
@@ -21,4 +21,5 @@ urlpatterns = [
     # User profile endpoints
     path("me/", me, name="me"),
     path("profile/", update_profile, name="update_profile"),
+    path("change-password/", change_password, name="change_password"),
 ]

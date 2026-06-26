@@ -18,8 +18,10 @@ class ProfileSerializer(serializers.ModelSerializer):
             "qualification",
             "skills",
             "available_days",
+            "must_reset_password",
             "created_at",
         ]
+        read_only_fields = ["must_reset_password"]
 
 
 class UserSerializer(serializers.ModelSerializer):

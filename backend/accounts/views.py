@@ -3,6 +3,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 from .serializers import UserSerializer, RegisterSerializer
 
@@ -130,3 +132,37 @@ def update_profile(request):
         "message": "تم تحديث الملف الشخصي بنجاح",
         "user": serializer.data
     })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+    """
+    Change the authenticated user's password.
+    POST /api/accounts/change-password/
+    Body: { "new_password": "..." }
+
+    يستخدم لإكمال إجبار إعادة التعيين (must_reset_password) بعد ترحيل حسابات المشروع الثاني.
+    """
+    new_password = request.data.get("new_password")
+
+    if not new_password:
+        return Response(
+            {"detail": "كلمة المرور الجديدة مطلوبة"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        validate_password(new_password, user=request.user)
+    except DjangoValidationError as exc:
+        return Response({"detail": list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+    request.user.set_password(new_password)
+    request.user.save()
+
+    profile = request.user.profile
+    if profile.must_reset_password:
+        profile.must_reset_password = False
+        profile.save(update_fields=["must_reset_password"])
+
+    return Response({"message": "تم تحديث كلمة المرور بنجاح"})
