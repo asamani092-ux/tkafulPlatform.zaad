@@ -1,0 +1,45 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Cairo', sans-serif;
+  background-color: #fdf2f4;
+  color: #111827;
+  direction: rtl;
+  transition: all 300ms ease-out;
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #8d2e46 transparent;
+
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 7px;
+
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #8d2e46;
+  border-radius: 10px;
+}
+
+/* Leaflet Map Styles */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  z-index: 0;
+}
+
+.leaflet-control-container {
+  z-index: 1000;
+}
