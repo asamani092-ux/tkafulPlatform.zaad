@@ -54,6 +54,8 @@ INSTALLED_APPS = [
     "core",
     "takaful_app",
     "accounts",
+    "analytics",
+    "notifications",
 ]
 
 
