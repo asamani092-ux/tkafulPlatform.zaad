@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { API_BASE_URL } from "../../config";
 
 /**
@@ -116,9 +117,14 @@ export default function ExecutiveDashboard() {
     <div className="min-h-screen bg-surface-muted" style={{ fontFamily: FONT }} dir="rtl">
       {/* رأس اللوحة */}
       <header className="bg-gradient-to-l from-primary to-secondary px-6 py-8 text-white">
-        <div className="mx-auto max-w-page">
-          <h1 className="text-3xl font-extrabold">إدارة التكافل المجتمعي</h1>
-          <p className="mt-2 text-white/90">اللوحة التنفيذية الموحّدة — منصة التكافل والمبادرات</p>
+        <div className="mx-auto flex max-w-page items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-extrabold">إدارة التكافل المجتمعي</h1>
+            <p className="mt-2 text-white/90">اللوحة التنفيذية الموحّدة — منصة التكافل والمبادرات</p>
+          </div>
+          <Link to="/executive/manage" className="rounded-lg bg-white/15 px-4 py-2 font-bold text-white ring-1 ring-white/30">
+            تغذية اللوحة
+          </Link>
         </div>
       </header>
 

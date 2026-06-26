@@ -19,6 +19,7 @@ import AdminSignIn from './components/pages/admin/AdminSignIn';
 import Suggest from './components/pages/Suggest';
 import About from './components/pages/About';
 import ExecutiveDashboard from './components/pages/ExecutiveDashboard';
+import ManageDashboard from './components/pages/ManageDashboard';
 import RequestService from './components/pages/RequestService';
 import WaterSupplyRequestPage from './components/pages/WaterSupplyRequestPage.tsx';
 
@@ -70,6 +71,7 @@ function AppContent() {
           <Route path="/suggest" element={<Suggest />} />
           <Route path="/about" element={<About />} />
           <Route path="/executive" element={<ExecutiveDashboard />} />
+          <Route path="/executive/manage" element={<ManageDashboard />} />
           <Route path="/request-service" element={<RequestService />} />
           <Route path="/services/water-supply" element={<WaterSupplyRequestPage />} />
 
