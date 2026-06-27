@@ -26,6 +26,16 @@ import UserTasks from "./components/pages/user/Task";
 import UserSettings from "./components/pages/user/Setting";
 import PersonalInfo from "./components/pages/user/PersonalInfo";
 
+// Admin pages
+import AdminMain from "./components/pages/admin/main";
+import VolunteerRequests from "./components/pages/admin/VolunteerRequests";
+import VolunteerApplications from "./components/pages/admin/VolunteerApplications";
+import VolunteerManagement from "./components/pages/admin/VolunteerManagement";
+import AddProjectPage from "./components/pages/admin/AddProject";
+import ProjectIdeas from "./components/pages/admin/ProjectIdeas";
+import Reports from "./components/pages/admin/Reports";
+import ServiceRequests from "./components/pages/admin/ServiceRequests";
+
 // Unified executive dashboard (project 2)
 import ExecutiveDashboard from "./components/pages/ExecutiveDashboard";
 import ManageDashboard from "./components/pages/ManageDashboard";
@@ -58,6 +68,14 @@ function AppContent() {
           <Route path="/user/tasks" element={<UserTasks />} />
           <Route path="/user/settings" element={<UserSettings />} />
           <Route path="/user/personal-info" element={<PersonalInfo />} />
+          <Route path="/Admin" element={<AdminMain />} />
+          <Route path="/Admin/requests" element={<VolunteerRequests />} />
+          <Route path="/Admin/applications" element={<VolunteerApplications />} />
+          <Route path="/Admin/management" element={<VolunteerManagement />} />
+          <Route path="/Admin/tasks" element={<AddProjectPage />} />
+          <Route path="/Admin/ideas" element={<ProjectIdeas />} />
+          <Route path="/Admin/reports" element={<Reports />} />
+          <Route path="/Admin/service-requests" element={<ServiceRequests />} />
           <Route path="/executive" element={<ExecutiveDashboard />} />
           <Route path="/executive/manage" element={<ManageDashboard />} />
         </Routes>

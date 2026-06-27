@@ -14,7 +14,7 @@ interface DataTableProps<T> {
 }
 
 /** جدول بيانات موحّد (‎.tmkeen-table) مع رؤوس وتظليل وتمرير. */
-export default function DataTable<T extends Record<string, unknown>>({
+export default function DataTable<T>({
   columns,
   rows,
   onRowClick,
@@ -40,7 +40,7 @@ export default function DataTable<T extends Record<string, unknown>>({
           rows.map((row, i) => (
             <tr key={i} onClick={onRowClick ? () => onRowClick(row) : undefined}>
               {columns.map((c) => (
-                <td key={c.key}>{c.render ? c.render(row) : String(row[c.key] ?? "")}</td>
+                <td key={c.key}>{c.render ? c.render(row) : String((row as Record<string, unknown>)[c.key] ?? "")}</td>
               ))}
             </tr>
           ))
