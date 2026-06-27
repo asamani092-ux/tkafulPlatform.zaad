@@ -20,6 +20,12 @@ import SignIn from "./components/pages/Auth/SignIn";
 import SignUp from "./components/pages/Auth/SignUp";
 import AdminSignIn from "./components/pages/admin/AdminSignIn";
 
+// User (volunteer) pages
+import UserMain from "./components/pages/user/Main";
+import UserTasks from "./components/pages/user/Task";
+import UserSettings from "./components/pages/user/Setting";
+import PersonalInfo from "./components/pages/user/PersonalInfo";
+
 // Unified executive dashboard (project 2)
 import ExecutiveDashboard from "./components/pages/ExecutiveDashboard";
 import ManageDashboard from "./components/pages/ManageDashboard";
@@ -48,6 +54,10 @@ function AppContent() {
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/admin/signin" element={<AdminSignIn />} />
+          <Route path="/user/main" element={<UserMain />} />
+          <Route path="/user/tasks" element={<UserTasks />} />
+          <Route path="/user/settings" element={<UserSettings />} />
+          <Route path="/user/personal-info" element={<PersonalInfo />} />
           <Route path="/executive" element={<ExecutiveDashboard />} />
           <Route path="/executive/manage" element={<ManageDashboard />} />
         </Routes>
