@@ -12,7 +12,11 @@ export default defineConfig({
     // السماح باستيراد ملفات نظام التصميم من جذر المستودع (../design-system/*.css)
     fs: {
       allow: ['..']
-    }
+    },
+    // توجيه طلبات الـ API إلى الخادم الخلفي على نفس الأصل (يعمل عبر localhost والمعاينة الخارجية)
+    proxy: {
+      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+    },
   },
   build: {
     outDir: 'dist'
