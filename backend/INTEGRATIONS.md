@@ -59,12 +59,19 @@ idempotent معتمداً على `(external_source, external_id)`.
 > ملاحظة: استيراد البيانات الحقيقية من Google Sheets يتطلّب تصدير الأوراق إلى JSON
 > بالصيغة أعلاه (أو إضافة قارئ مصدر مباشر).
 
+## المشروع الثالث: «كفالات السقيا» (saqya) — مدموج
+- وحدة `saqya` مستقلة (مترجمة من Flask/SQLAlchemy إلى Django/DRF) بمصادقة SimpleJWT موحّدة وأدوار `supplier/representative/donor`.
+- الاستيراد: `python manage.py import_saqya_data --file export.json` (يرث `BaseImporter`, `source="saqya"`، idempotent).
+- **استراتيجية الدمج (المستخدمون):** المطابقة بـ email أو phone مع مستخدم موحّد قائم → دمج الملف (تعبئة الناقص دون استبدال) وربط الكفالات بالمستخدم الحالي؛ وإلا إنشاء جديد بـ `must_reset_password=True` (صيغ hash مختلفة).
+- **جسر اختياري (لاحقاً):** يمكن ربط `takaful_app.WaterSupplyRequest` (طلب مسجد عام) بإنشاء `saqya.Sponsorship` مقابل عند الاعتماد — يبقى التطبيقان مستقلَّين حالياً (لا مساس بـ WaterSupplyRequest).
+
 ## خريطة المظلّة «تكافل وأثر» (بنية التطبيقات)
 - `accounts` — الهوية والمصادقة (User + Profile، الأدوار: admin/manager/employee/user/beneficiary).
 - `takaful_app` — نطاق المشروع الأول: المشاريع/الخدمات/التطوع/المهام/الطلبات/الإحصائيات/التقارير.
 - `analytics` — اللوحة التنفيذية (المشروع الثاني): الأقسام/الموظفون/المهام/الـ KPIs.
 - `notifications` — الإشعارات (عابرة).
-- `integrations` — استقبال المصادر الخارجية (تجهيز المشروع الثالث).
+- `integrations` — استقبال المصادر الخارجية (محوّلات الاستيراد).
+- `saqya` — كفالات السقيا (المشروع الثالث): متبرّع/مورّد/مندوب/مشرف + كفالات/طلبات/فواتير/مدفوعات/توثيق.
 - `core` — مشترك (health/throttles).
 
 تجميع تجربة المستخدم تحت المظلّة:

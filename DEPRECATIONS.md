@@ -5,6 +5,7 @@
 
 ## واجهة (Frontend)
 - `frontend/src/legacy/` — أرشيف كامل للواجهة القديمة (قبل اعتماد design-system). مستثنى من tsc وغير مرتبط بالتوجيه.
+- `frontend/src/legacy/saqya/` — أرشيف مصدر المشروع الثالث (JSX + توثيق) كمرجع منطق فقط؛ أُعيد بناؤه بـ design-system/TS في وحدة saqya.
 - `Sidebar.jsx` (جذر المستودع) — ملف يتيم غير مُستورَد.
 - `package.json` (جذر المستودع) — يحوي `dompurify`/`validator` فقط؛ التبعيات الفعلية في `frontend/`. شبه فارغ/مكرّر.
 
