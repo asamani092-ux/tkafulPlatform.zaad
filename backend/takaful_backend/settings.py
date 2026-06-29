@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "analytics",
     "notifications",
     "integrations",  # طبقة استقبال المصادر الخارجية (تجهيز المشروع الثالث)
+    "saqya",         # وحدة كفالات السقيا (المشروع الثالث)
 ]
 
 
@@ -143,6 +144,16 @@ USE_TZ = True
 STATIC_URL = "static/"
 # Render will collect static files here
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# ===========================
+# Media (uploads)
+# ===========================
+# ملفات الوسائط (فواتير/توثيق كفالات السقيا) تُخزَّن تحت MEDIA_ROOT.
+# ملاحظة أمنية: ملفات saqya توضع في private/ ولا تُقدَّم عبر MEDIA_URL،
+# بل عبر view مصادق (saqya) يتحقّق من الدور/الملكية.
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+SAQYA_MAX_UPLOAD_SIZE = 16 * 1024 * 1024  # 16MB
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

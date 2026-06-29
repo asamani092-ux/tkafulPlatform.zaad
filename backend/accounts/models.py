@@ -9,6 +9,10 @@ class Profile(models.Model):
         ("user", "User"),          # متطوّع (يبقى كما هو لعدم كسر الاستعلامات القائمة)
         ("employee", "Employee"),  # موظف/كادر له دخول (من المشروع الثاني)
         ("beneficiary", "Beneficiary"),  # مستفيد (مستقبلاً)
+        # أدوار وحدة كفالات السقيا (المشروع الثالث)
+        ("supplier", "Supplier"),
+        ("representative", "Representative"),
+        ("donor", "Donor"),
     ]
 
     GENDER_CHOICES = [
