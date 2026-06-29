@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
-import { API_BASE_URL } from "../../../config";
+import { authFetch } from "../../../lib/api";
 import UserShell from "../../layout/UserShell";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
@@ -30,7 +30,7 @@ export default function PersonalInfo() {
   });
 
   const load = () => {
-    fetch(`${API_BASE_URL}/api/accounts/me/`, { headers: { Authorization: `Bearer ${access}` } })
+    authFetch(`/api/accounts/me/`)
       .then((r) => (r.ok ? r.json() : null)).then((d) => d && setData(mapMe(d))).catch(() => {}).finally(() => setLoading(false));
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -38,9 +38,8 @@ export default function PersonalInfo() {
 
   const save = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/accounts/profile/`, {
+      const res = await authFetch(`/api/accounts/profile/`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${access}` },
         body: JSON.stringify({ name: data.name, gender: data.gender, age: parseInt(data.age) || null, city: data.city, phone: data.phone, qualification: data.qualification }),
       });
       if (!res.ok) throw new Error();

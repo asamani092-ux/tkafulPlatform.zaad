@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
-import { API_BASE_URL } from "../../../config";
+import { authFetch } from "../../../lib/api";
 import UserShell from "../../layout/UserShell";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
@@ -21,20 +21,17 @@ export default function UserMain() {
   const [applyTarget, setApplyTarget] = useState<Opportunity | null>(null);
   const [withdrawTarget, setWithdrawTarget] = useState<UserTask | null>(null);
 
-  const authHeaders = { Authorization: `Bearer ${access}` };
-
   useEffect(() => {
     if (!access) return;
-    fetch(`${API_BASE_URL}/api/user/my-stats/`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)).then((d) => d && setStats(d)).catch(() => {});
-    fetch(`${API_BASE_URL}/api/user/opportunities/`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)).then((d) => d && setOpportunities((d.results || []).map((p: Record<string, unknown>) => ({ id: p.id, title: p.title || p.desc, category: p.category || "تطوّع", location: p.location || "غير محدد", estimated_hours: p.estimated_hours || 0, organization: p.organization || "منظمة تكافل" })))).catch(() => {});
-    fetch(`${API_BASE_URL}/api/user/my-tasks/`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)).then((d) => d && setTasks((d.results || []).filter((t: UserTask) => t.status !== "مكتملة"))).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    authFetch(`/api/user/my-stats/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setStats(d)).catch(() => {});
+    authFetch(`/api/user/opportunities/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setOpportunities((d.results || []).map((p: Record<string, unknown>) => ({ id: p.id, title: p.title || p.desc, category: p.category || "تطوّع", location: p.location || "غير محدد", estimated_hours: p.estimated_hours || 0, organization: p.organization || "منظمة تكافل" })))).catch(() => {});
+    authFetch(`/api/user/my-tasks/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setTasks((d.results || []).filter((t: UserTask) => t.status !== "مكتملة"))).catch(() => {});
   }, [access]);
 
   const confirmApply = async () => {
     if (!applyTarget) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/api/user/opportunities/${applyTarget.id}/apply/`, { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json" } });
+      const res = await authFetch(`/api/user/opportunities/${applyTarget.id}/apply/`, { method: "POST" });
       const data = await res.json();
       if (res.ok) success({ title: "تم تقديم طلبك بنجاح", description: applyTarget.title });
       else error({ title: "تعذّر التقديم", description: data.message || "حاول مرة أخرى" });
@@ -45,7 +42,7 @@ export default function UserMain() {
   const confirmWithdraw = async () => {
     if (!withdrawTarget) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/api/user/tasks/${withdrawTarget.id}/withdraw/`, { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json" } });
+      const res = await authFetch(`/api/user/tasks/${withdrawTarget.id}/withdraw/`, { method: "POST" });
       if (res.ok) { setTasks((p) => p.filter((t) => t.id !== withdrawTarget.id)); success({ title: "تم الانسحاب بنجاح", description: withdrawTarget.title }); }
       else error({ title: "خطأ", description: "تعذّر الانسحاب" });
     } catch { error({ title: "خطأ", description: "تعذّر الانسحاب" }); }

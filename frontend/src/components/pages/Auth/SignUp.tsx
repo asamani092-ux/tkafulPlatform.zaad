@@ -98,6 +98,8 @@ export default function SignUp() {
         qualification: formData.educationLevel,
         available_days: formData.availableDays,
         skills: formData.skills,
+        national_id: digitsOnly(formData.nationalId),
+        region: formData.region,
       };
       const res = await fetch(`${API_BASE_URL}/api/accounts/auth/register/`, {
         method: "POST",

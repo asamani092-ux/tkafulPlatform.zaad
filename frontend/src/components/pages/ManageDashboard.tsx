@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
-import { API_BASE_URL } from "../../config";
+import { authFetch } from "../../lib/api";
 import Card from "../ui/Card";
 import Input from "../ui/Input";
 import Select from "../ui/Select";
@@ -12,7 +12,7 @@ const STAFF_ROLES = ["admin", "manager", "employee"];
 type Employee = { id: number; name: string };
 
 export default function ManageDashboard() {
-  const { access, user } = useAuth();
+  const { user } = useAuth();
   const { success, error } = useToast();
   const isStaff = !!user && STAFF_ROLES.includes(user.role);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -23,15 +23,14 @@ export default function ManageDashboard() {
 
   useEffect(() => {
     if (!isStaff) return;
-    fetch(`${API_BASE_URL}/api/dashboard/employees/`).then((r) => (r.ok ? r.json() : [])).then((d) => setEmployees(Array.isArray(d) ? d : [])).catch(() => {});
+    authFetch(`/api/dashboard/employees/`).then((r) => (r.ok ? r.json() : [])).then((d) => setEmployees(Array.isArray(d) ? d : [])).catch(() => {});
   }, [isStaff]);
 
   const num = (v: string) => (v === "" ? 0 : Number(v));
   const post = async (path: string, body: Record<string, unknown>, ok: string) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/dashboard/${path}/`, {
+      const res = await authFetch(`/api/dashboard/${path}/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${access}` },
         body: JSON.stringify(body),
       });
       if (!res.ok) { error({ title: "تعذّر الحفظ", description: "تحقّق من الصلاحية والحقول" }); return false; }

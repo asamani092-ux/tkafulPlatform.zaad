@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
-import { API_BASE_URL } from "../../../config";
+import { authFetch } from "../../../lib/api";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Badge from "../../ui/Badge";
@@ -23,16 +23,14 @@ export default function AdminMain() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [tab, setTab] = useState("pending");
   const [projects, setProjects] = useState<Project[]>([]);
-  const authHeaders = { Authorization: `Bearer ${access}` };
 
   useEffect(() => {
     if (!access) return;
-    fetch(`${API_BASE_URL}/api/admin/stats/`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)).then((d) => d && setStats(d)).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    authFetch(`/api/admin/stats/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setStats(d)).catch(() => {});
   }, [access]);
 
   const loadProjects = (status: string) => {
-    fetch(`${API_BASE_URL}/api/projects/?status=${status}`, { headers: authHeaders })
+    authFetch(`/api/projects/?status=${status}`)
       .then((r) => (r.ok ? r.json() : [])).then((d) => setProjects(Array.isArray(d) ? d : d.results || [])).catch(() => {});
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -40,7 +38,7 @@ export default function AdminMain() {
 
   const act = async (id: number, action: "approve" | "reject") => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/projects/${id}/${action}/`, { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json" } });
+      const res = await authFetch(`/api/admin/projects/${id}/${action}/`, { method: "POST" });
       if (!res.ok) throw new Error();
       success({ title: action === "approve" ? "تم اعتماد المشروع" : "تم رفض المشروع" });
       loadProjects(tab);

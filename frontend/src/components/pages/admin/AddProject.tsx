@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
-import { API_BASE_URL } from "../../../config";
+import { authFetch } from "../../../lib/api";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
@@ -15,7 +14,6 @@ const EMPTY = {
 };
 
 export default function AddProjectPage() {
-  const { access } = useAuth();
   const { success, error } = useToast();
   const [form, setForm] = useState(EMPTY);
   const [submitting, setSubmitting] = useState(false);
@@ -27,9 +25,8 @@ export default function AddProjectPage() {
     if (!form.title || !form.category) { error({ title: "حقول مطلوبة", description: "اسم المشروع ونوعه مطلوبان" }); return; }
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/projects/`, {
+      const res = await authFetch(`/api/admin/projects/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${access}` },
         body: JSON.stringify({
           ...form,
           beneficiaries: Number(form.beneficiaries) || 0,

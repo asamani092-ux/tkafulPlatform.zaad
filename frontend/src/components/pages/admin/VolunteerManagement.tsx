@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
-import { API_BASE_URL } from "../../../config";
+import { authFetch } from "../../../lib/api";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Badge from "../../ui/Badge";
@@ -23,12 +23,11 @@ export default function VolunteerManagement() {
   const { access } = useAuth();
   const [stats, setStats] = useState<VStats | null>(null);
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
-  const authHeaders = { Authorization: `Bearer ${access}` };
 
   useEffect(() => {
     if (!access) return;
-    fetch(`${API_BASE_URL}/api/volunteer-stats/`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)).then((d) => d && setStats(d)).catch(() => {});
-    fetch(`${API_BASE_URL}/api/volunteers/`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : null)).then((d) => d && setVolunteers(d.results || [])).catch(() => {});
+    authFetch(`/api/volunteer-stats/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setStats(d)).catch(() => {});
+    authFetch(`/api/volunteers/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setVolunteers(d.results || [])).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [access]);
 

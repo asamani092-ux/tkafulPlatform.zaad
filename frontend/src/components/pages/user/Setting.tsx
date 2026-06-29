@@ -1,14 +1,12 @@
 import { useState } from "react";
-import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
-import { API_BASE_URL } from "../../../config";
+import { authFetch } from "../../../lib/api";
 import UserShell from "../../layout/UserShell";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
 import Button from "../../ui/Button";
 
 export default function UserSettings() {
-  const { access } = useAuth();
   const { success, error } = useToast();
   const [newPassword, setNewPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -20,9 +18,8 @@ export default function UserSettings() {
     if (newPassword !== confirm) { error({ title: "غير متطابقة", description: "تأكيد كلمة المرور لا يطابق" }); return; }
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/accounts/change-password/`, {
+      const res = await authFetch(`/api/accounts/change-password/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${access}` },
         body: JSON.stringify({ new_password: newPassword }),
       });
       const data = await res.json();

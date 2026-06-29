@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
-import { API_BASE_URL } from "../../../config";
+import { authFetch } from "../../../lib/api";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
@@ -15,10 +15,9 @@ export default function Reports() {
   const { success, error } = useToast();
   const [reports, setReports] = useState<Report[]>([]);
   const [generating, setGenerating] = useState(false);
-  const authHeaders = { Authorization: `Bearer ${access}` };
 
   const load = () => {
-    fetch(`${API_BASE_URL}/api/admin/reports/`, { headers: authHeaders })
+    authFetch(`/api/admin/reports/`)
       .then((r) => (r.ok ? r.json() : null)).then((d) => d && setReports(d.results || [])).catch(() => {});
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -27,7 +26,7 @@ export default function Reports() {
   const generate = async () => {
     setGenerating(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/reports/generate/`, { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      const res = await authFetch(`/api/admin/reports/generate/`, { method: "POST", body: JSON.stringify({}) });
       if (!res.ok) throw new Error();
       success({ title: "تم إنشاء التقرير بنجاح" }); load();
     } catch { error({ title: "خطأ", description: "تعذّر إنشاء التقرير" }); }
@@ -35,7 +34,7 @@ export default function Reports() {
   };
   const remove = async (id: number) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/reports/${id}/delete/`, { method: "DELETE", headers: authHeaders });
+      const res = await authFetch(`/api/admin/reports/${id}/delete/`, { method: "DELETE" });
       if (!res.ok) throw new Error();
       success({ title: "تم حذف التقرير" }); load();
     } catch { error({ title: "خطأ", description: "تعذّر الحذف" }); }

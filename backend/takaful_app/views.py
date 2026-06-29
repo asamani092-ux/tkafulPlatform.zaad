@@ -426,7 +426,19 @@ def list_volunteers(request):
         profile__role='user',
         profile__is_approved=True
     ).select_related('profile').prefetch_related('assigned_tasks')
-    
+
+    # ترقيم اختياري للقوائم الكبيرة (لا يغيّر السلوك الافتراضي عند عدم تمرير page)
+    if request.query_params.get('page'):
+        from rest_framework.pagination import PageNumberPagination
+        paginator = PageNumberPagination()
+        try:
+            paginator.page_size = min(int(request.query_params.get('page_size', 50)), 200)
+        except (TypeError, ValueError):
+            paginator.page_size = 50
+        page = paginator.paginate_queryset(volunteers, request)
+        serializer = VolunteerDetailSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
     serializer = VolunteerDetailSerializer(volunteers, many=True)
     return Response({
         'results': serializer.data

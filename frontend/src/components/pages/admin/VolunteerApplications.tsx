@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
-import { API_BASE_URL } from "../../../config";
+import { authFetch } from "../../../lib/api";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Badge from "../../ui/Badge";
@@ -21,10 +21,9 @@ export default function VolunteerApplications() {
   const { success, error } = useToast();
   const [items, setItems] = useState<Application[]>([]);
   const [tab, setTab] = useState("قيد المراجعة");
-  const authHeaders = { Authorization: `Bearer ${access}` };
 
   const load = (status: string) => {
-    fetch(`${API_BASE_URL}/api/admin/applications/?status=${encodeURIComponent(status)}`, { headers: authHeaders })
+    authFetch(`/api/admin/applications/?status=${encodeURIComponent(status)}`)
       .then((r) => (r.ok ? r.json() : null)).then((d) => d && setItems(d.results || [])).catch(() => {});
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -32,7 +31,7 @@ export default function VolunteerApplications() {
 
   const act = async (id: number, action: "accept" | "reject") => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/applications/${id}/${action}/`, { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      const res = await authFetch(`/api/admin/applications/${id}/${action}/`, { method: "POST", body: JSON.stringify({}) });
       if (!res.ok) throw new Error();
       success({ title: action === "accept" ? "تم قبول الطلب وإنشاء مهمة" : "تم رفض الطلب" });
       load(tab);

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
-import { API_BASE_URL } from "../../../config";
+import { authFetch } from "../../../lib/api";
 import UserShell from "../../layout/UserShell";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
@@ -28,10 +28,9 @@ export default function UserTasks() {
   const { success, error } = useToast();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tab, setTab] = useState("قيد التنفيذ");
-  const authHeaders = { Authorization: `Bearer ${access}` };
 
   const load = () => {
-    fetch(`${API_BASE_URL}/api/user/my-tasks/`, { headers: authHeaders })
+    authFetch(`/api/user/my-tasks/`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setTasks((d.results || []).map((t: Task) => ({ ...t, subtasks: t.subtasks || [] }))))
       .catch(() => {});
@@ -50,9 +49,8 @@ export default function UserTasks() {
     const done = task.subtasks.filter((s) => s.completed).length;
     const progress = total > 0 ? Math.round((done / total) * 100) : task.progress;
     try {
-      const res = await fetch(`${API_BASE_URL}/api/user/tasks/${task.id}/update-progress/`, {
+      const res = await authFetch(`/api/user/tasks/${task.id}/update-progress/`, {
         method: "PATCH",
-        headers: { ...authHeaders, "Content-Type": "application/json" },
         body: JSON.stringify({ progress, subtasks: task.subtasks.map((s) => ({ text: s.title, done: s.completed })) }),
       });
       if (!res.ok) throw new Error();
@@ -63,7 +61,7 @@ export default function UserTasks() {
 
   const withdraw = async (task: Task) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/user/tasks/${task.id}/withdraw/`, { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json" } });
+      const res = await authFetch(`/api/user/tasks/${task.id}/withdraw/`, { method: "POST" });
       if (!res.ok) throw new Error();
       success({ title: "تم الانسحاب", description: task.title });
       load();

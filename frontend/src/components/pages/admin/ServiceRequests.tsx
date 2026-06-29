@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
-import { API_BASE_URL } from "../../../config";
+import { authFetch } from "../../../lib/api";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Badge from "../../ui/Badge";
@@ -23,18 +23,17 @@ export default function ServiceRequests() {
   const { success, error } = useToast();
   const [items, setItems] = useState<ServiceRequest[]>([]);
   const [tab, setTab] = useState("");
-  const authHeaders = { Authorization: `Bearer ${access}` };
 
   const load = (status: string) => {
-    const url = status ? `${API_BASE_URL}/api/service-requests/?status=${status}` : `${API_BASE_URL}/api/service-requests/`;
-    fetch(url, { headers: authHeaders }).then((r) => (r.ok ? r.json() : [])).then((d) => setItems(Array.isArray(d) ? d : d.results || [])).catch(() => {});
+    const url = status ? `/api/service-requests/?status=${status}` : `/api/service-requests/`;
+    authFetch(url).then((r) => (r.ok ? r.json() : [])).then((d) => setItems(Array.isArray(d) ? d : d.results || [])).catch(() => {});
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (access) load(tab); }, [tab, access]);
 
   const act = async (id: number, action: "approve" | "reject" | "mark_done") => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/service-requests/${id}/${action}/`, { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json" } });
+      const res = await authFetch(`/api/service-requests/${id}/${action}/`, { method: "POST" });
       if (!res.ok) throw new Error();
       success({ title: "تم تنفيذ العملية بنجاح" });
       load(tab);
