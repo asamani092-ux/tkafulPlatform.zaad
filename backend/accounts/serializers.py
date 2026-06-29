@@ -18,8 +18,10 @@ class ProfileSerializer(serializers.ModelSerializer):
             "qualification",
             "skills",
             "available_days",
+            "must_reset_password",
             "created_at",
         ]
+        read_only_fields = ["must_reset_password"]
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -50,6 +52,8 @@ class RegisterSerializer(serializers.Serializer):
     city = serializers.CharField(required=True, max_length=100)
     phone = serializers.CharField(required=True, max_length=30)
     qualification = serializers.CharField(required=True, max_length=100)
+    national_id = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    region = serializers.CharField(required=False, allow_blank=True, max_length=100)
     available_days = serializers.ListField(
         child=serializers.CharField(),
         required=False,
@@ -90,6 +94,9 @@ class RegisterSerializer(serializers.Serializer):
             'qualification': validated_data.pop('qualification'),
             'available_days': validated_data.pop('available_days', []),
             'skills': validated_data.pop('skills', []),
+            'national_id': validated_data.pop('national_id', ''),
+            'region': validated_data.pop('region', ''),
+            'external_source': 'web',
         }
         
         # Create user (username = email for simplicity)

@@ -48,12 +48,17 @@ INSTALLED_APPS = [
 
     # Third-party apps
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",  # إبطال refresh عند الخروج
     "corsheaders",
 
     # Local apps
     "core",
     "takaful_app",
     "accounts",
+    "analytics",
+    "notifications",
+    "integrations",  # طبقة استقبال المصادر الخارجية (تجهيز المشروع الثالث)
+    "saqya",         # وحدة كفالات السقيا (المشروع الثالث)
 ]
 
 
@@ -140,6 +145,20 @@ STATIC_URL = "static/"
 # Render will collect static files here
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# ===========================
+# Media (uploads)
+# ===========================
+# ملفات الوسائط (فواتير/توثيق كفالات السقيا) تُخزَّن تحت MEDIA_ROOT.
+# ملاحظة أمنية: ملفات saqya توضع في private/ ولا تُقدَّم عبر MEDIA_URL،
+# بل عبر view مصادق (saqya) يتحقّق من الدور/الملكية.
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+SAQYA_MAX_UPLOAD_SIZE = 16 * 1024 * 1024  # 16MB
+
+# البريد: console محلياً، SMTP عبر البيئة في الإنتاج (لإشعارات سير العمل)
+EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@alzad.org")
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
@@ -192,9 +211,23 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
+    # افتراضياً يتطلّب مصادقة؛ النقاط العامة تُصرّح AllowAny بشكل صريح.
+    # هذا يحمي أي endpoint مستقبلي (بما فيها المشروع الثالث) من الانكشاف بالخطأ.
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.AllowAny",
+        "rest_framework.permissions.IsAuthenticated",
     ],
+    # تحديد معدّل الطلبات لمنع العبث وهجمات brute-force
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.ScopedRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "60/min",
+        "user": "240/min",
+        "auth": "10/min",      # تسجيل/دخول
+        "public_write": "20/min",  # النماذج العامة (اقتراح/طلب خدمة/سقيا)
+    },
 }
 
 
@@ -206,8 +239,8 @@ from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': False,
-    'BLACKLIST_AFTER_ROTATION': False,
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
@@ -228,3 +261,33 @@ CSRF_TRUSTED_ORIGINS = [
     for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
     if origin
 ]
+
+
+# ===========================
+# Production security hardening
+# ===========================
+# تُفعَّل فقط خارج وضع التطوير (DEBUG=False) حتى لا تعيق التطوير المحلي.
+if not DEBUG:
+    # منع التشغيل في الإنتاج بمفتاح افتراضي ضعيف
+    if SECRET_KEY == "dev-secret-key-change-me":
+        raise RuntimeError(
+            "SECRET_KEY must be set via environment in production (DEBUG=False)."
+        )
+
+    # الثقة بترويسة البروكسي لتحديد HTTPS (Render/Reverse proxy)
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = True
+
+    # HSTS
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30  # 30 يوماً
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    # كوكيز آمنة
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    # ترويسات حماية إضافية
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SESSION_COOKIE_HTTPONLY = True
+    X_FRAME_OPTIONS = "DENY"
