@@ -155,6 +155,10 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 SAQYA_MAX_UPLOAD_SIZE = 16 * 1024 * 1024  # 16MB
 
+# البريد: console محلياً، SMTP عبر البيئة في الإنتاج (لإشعارات سير العمل)
+EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@alzad.org")
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 

@@ -25,4 +25,5 @@ urlpatterns = [
     path("api/accounts/", include("accounts.urls")),  # ← Make sure this line exists
     path("api/dashboard/", include("analytics.urls")),       # اللوحة التنفيذية الموحّدة (المشروع الثاني)
     path("api/notifications/", include("notifications.urls")),  # الإشعارات
+    path("api/saqya/", include("saqya.urls")),               # وحدة كفالات السقيا (المشروع الثالث)
 ]
