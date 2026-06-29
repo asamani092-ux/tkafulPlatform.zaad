@@ -40,13 +40,17 @@ import ServiceRequests from "./components/pages/admin/ServiceRequests";
 import ExecutiveDashboard from "./components/pages/ExecutiveDashboard";
 import ManageDashboard from "./components/pages/ManageDashboard";
 
+// Saqya sponsorships module (project 3)
+import SaqyaHome from "./components/pages/saqya";
+
 function AppContent() {
   const location = useLocation();
   const pathname = location.pathname.toLowerCase();
   const isUserPage = pathname.startsWith("/user");
   const isAdminPage = pathname.startsWith("/admin");
   const isAdminSignIn = pathname === "/admin/signin";
-  const hideChrome = isUserPage || (isAdminPage && !isAdminSignIn);
+  const isSaqyaPage = pathname.startsWith("/saqya");
+  const hideChrome = isUserPage || isSaqyaPage || (isAdminPage && !isAdminSignIn);
 
   return (
     <div className="flex min-h-screen flex-col bg-surface-muted">
@@ -78,6 +82,7 @@ function AppContent() {
           <Route path="/Admin/service-requests" element={<ServiceRequests />} />
           <Route path="/executive" element={<ExecutiveDashboard />} />
           <Route path="/executive/manage" element={<ManageDashboard />} />
+          <Route path="/saqya" element={<SaqyaHome />} />
         </Routes>
       </main>
       {!hideChrome && <Footer />}

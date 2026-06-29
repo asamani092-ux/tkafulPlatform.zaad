@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 interface User {
   name: string;
   email: string;
-  role: "user" | "admin";
+  // الأدوار الموحّدة عبر المنصّة (تكافل + تنفيذية + كفالات السقيا)
+  role: string;
 }
 
 interface AuthContextType {
