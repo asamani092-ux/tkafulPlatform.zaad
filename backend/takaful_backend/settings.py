@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "accounts",
     "analytics",
     "notifications",
+    "integrations",  # طبقة استقبال المصادر الخارجية (تجهيز المشروع الثالث)
 ]
 
 
