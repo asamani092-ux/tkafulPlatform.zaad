@@ -1,16 +1,22 @@
+import logging
+
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 
+from core.throttles import AuthRateThrottle
 from .serializers import UserSerializer, RegisterSerializer
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([AuthRateThrottle])
 def register(request):
     """
     Register a new user
@@ -43,15 +49,11 @@ def register(request):
         "refresh": "jwt_refresh_token"
     }
     """
-    # Debug: Log received data
-    print(f"DEBUG - Registration age received: {request.data.get('age')}, type: {type(request.data.get('age'))}")
-
     serializer = RegisterSerializer(data=request.data)
 
     if serializer.is_valid():
-        print(f"DEBUG - After validation, age: {serializer.validated_data.get('age')}")
         user = serializer.save()
-        print(f"DEBUG - After save, profile age: {user.profile.age}")
+        logger.info("New user registered: id=%s", user.id)
 
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
@@ -166,3 +168,21 @@ def change_password(request):
         profile.save(update_fields=["must_reset_password"])
 
     return Response({"message": "تم تحديث كلمة المرور بنجاح"})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def logout(request):
+    """
+    Blacklist the provided refresh token so it can no longer be used.
+    POST /api/accounts/logout/
+    Body: { "refresh": "<refresh_token>" }
+    """
+    refresh = request.data.get("refresh")
+    if not refresh:
+        return Response({"detail": "refresh مطلوب"}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        RefreshToken(refresh).blacklist()
+    except TokenError:
+        return Response({"detail": "رمز غير صالح"}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({"message": "تم تسجيل الخروج بنجاح"})

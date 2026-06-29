@@ -1,8 +1,14 @@
+import logging
+
 from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
+
+from core.throttles import PublicWriteRateThrottle
+
+logger = logging.getLogger(__name__)
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.db.models import Sum, Count, Q
@@ -243,10 +249,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         # Add detailed error logging
         if not serializer.is_valid():
-            print(f"❌ Validation Error for Project {instance.id}:")
-            print(f"   Request data: {request.data}")
-            print(f"   Processed data: {data}")
-            print(f"   Errors: {serializer.errors}")
+            logger.warning("Project %s update validation failed: %s", instance.id, serializer.errors)
 
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
@@ -312,7 +315,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project.status = 'ACTIVE'
         project.save()
 
-        print(f"✅ Project '{project.title}' approved: {old_status} → ACTIVE")
+        logger.info("Project %s approved: %s -> ACTIVE", project.id, old_status)
 
         serializer = self.get_serializer(project)
         return Response({
@@ -1491,6 +1494,7 @@ def public_volunteers_stats(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([PublicWriteRateThrottle])
 def public_submit_suggestion(request):
     """
     POST /api/public-suggestions/
@@ -1545,6 +1549,7 @@ def public_home_stats(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([PublicWriteRateThrottle])
 def public_submit_service_request(request):
     """
     POST /api/public-service-request/
@@ -1775,6 +1780,7 @@ def public_volunteer_statistics(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([PublicWriteRateThrottle])
 def public_water_supply_request(request):
     """
     POST /api/public-water-supply-request/
