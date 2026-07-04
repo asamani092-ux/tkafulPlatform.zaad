@@ -63,10 +63,22 @@ The frontend is built with React, Vite, TypeScript, and Tailwind CSS.
 - **Suggest** (`/suggest`) - Submit new initiative suggestions
 - **Sign In** (`/signin`) - User authentication
 - **Sign Up** (`/signup`) - User registration
+- **Impact Map** (`/map`) - Public transparency map (Tafaqqadhum) — see [IMPACT_MAP.md](./IMPACT_MAP.md)
+- **Admin Impact Map** (`/Admin/map`) - Admin CRUD for map data (admin role required)
 
 ## Backend Setup
 
-The backend will be implemented with Django (currently empty).
+Django REST API in `backend/` (SQLite by default; PostgreSQL via `DATABASE_URL`).
+
+### Impact Map seed
+
+```bash
+cd backend
+./venv/bin/python manage.py migrate
+./venv/bin/python manage.py seed_impact_map
+```
+
+See [IMPACT_MAP.md](./IMPACT_MAP.md) for API, privacy rules, and placeholder decisions.
 
 ### Prerequisites
 - Python 3.8 or higher
