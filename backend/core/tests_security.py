@@ -2,9 +2,11 @@
 Security regression tests: IDOR, media access, uploads, GPS, throttling, payments.
 """
 import threading
+import unittest
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.test import TransactionTestCase, override_settings
 from rest_framework.test import APITestCase
 
@@ -113,22 +115,47 @@ class ConcurrentPaymentTests(TransactionTestCase):
         sp = self.client.post("/api/saqya/sponsorships/", {"amount": "100", "type": "سقيا"}, format="json")
         self.sp_id = sp.data["id"]
 
+    def test_sequential_payments_do_not_overfund(self):
+        """SQLite-safe: second sequential pay must be rejected after first succeeds."""
+        first = self.client.post(
+            f"/api/saqya/sponsorships/{self.sp_id}/pay/",
+            {"amount": "60", "method": "online"},
+            format="json",
+        )
+        second = self.client.post(
+            f"/api/saqya/sponsorships/{self.sp_id}/pay/",
+            {"amount": "60", "method": "online"},
+            format="json",
+        )
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 400)
+        sp = Sponsorship.objects.get(pk=self.sp_id)
+        self.assertLessEqual(float(sp.total_funded), 100.0)
+
+    @unittest.skipUnless(
+        connection.vendor == "postgresql",
+        "true concurrency requires PostgreSQL",
+    )
     def test_concurrent_payments_do_not_overfund(self):
         barrier = threading.Barrier(2)
         results = []
 
         def pay(amount):
-            from django.db import connection
+            from django.db import connection as db_connection
             from rest_framework.test import APIClient
-            connection.close()
-            c = APIClient()
-            c.force_authenticate(self.donor)
-            barrier.wait(timeout=5)
-            results.append(c.post(
-                f"/api/saqya/sponsorships/{self.sp_id}/pay/",
-                {"amount": str(amount), "method": "online"},
-                format="json",
-            ).status_code)
+            try:
+                db_connection.close()
+                c = APIClient()
+                c.force_authenticate(self.donor)
+                barrier.wait(timeout=5)
+                status = c.post(
+                    f"/api/saqya/sponsorships/{self.sp_id}/pay/",
+                    {"amount": str(amount), "method": "online"},
+                    format="json",
+                ).status_code
+                results.append(status)
+            except Exception as exc:
+                results.append(("error", repr(exc)))
 
         t1 = threading.Thread(target=pay, args=("60",))
         t2 = threading.Thread(target=pay, args=("60",))
@@ -137,9 +164,11 @@ class ConcurrentPaymentTests(TransactionTestCase):
         t1.join(timeout=10)
         t2.join(timeout=10)
 
-        self.assertGreaterEqual(len(results), 1)
+        errors = [r for r in results if isinstance(r, tuple) and r[0] == "error"]
+        self.assertEqual(errors, [], f"thread errors: {errors}")
+        self.assertEqual(len(results), 2)
         self.assertEqual(sum(1 for s in results if s == 201), 1)
-        self.assertTrue(any(s == 400 for s in results) or len(results) == 1)
+        self.assertEqual(sum(1 for s in results if s == 400), 1)
         sp = Sponsorship.objects.get(pk=self.sp_id)
         self.assertLessEqual(float(sp.total_funded), 100.0)
 
