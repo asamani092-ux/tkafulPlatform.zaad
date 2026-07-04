@@ -9,6 +9,7 @@ const navLinks = [
   { to: "/services", label: "الخدمات" },
   { to: "/volunteers", label: "المتطوعين" },
   { to: "/executive", label: "اللوحة التنفيذية" },
+  { to: "/map", label: "خارطة تفقدهم" },
   { to: "/saqya", label: "كفالات السقيا" },
   { to: "/about", label: "من نحن" },
 ];

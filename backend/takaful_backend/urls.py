@@ -25,4 +25,5 @@ urlpatterns = [
     path("api/dashboard/", include("analytics.urls")),       # اللوحة التنفيذية الموحّدة (المشروع الثاني)
     path("api/notifications/", include("notifications.urls")),  # الإشعارات
     path("api/saqya/", include("saqya.urls")),               # وحدة كفالات السقيا (المشروع الثالث)
+    path("api/map/", include("impact_map.urls")),            # خارطة تفقدهم
 ]

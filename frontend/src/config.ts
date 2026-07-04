@@ -4,3 +4,7 @@
 // يمكن تجاوزه بمتغيّر البيئة VITE_API_BASE_URL عند الحاجة (مثلاً للإنتاج).
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "";
+
+/** رابط المتجر الخارجي للتفويض (delegate_association). فارغ = وضع تجريبي. */
+export const EXTERNAL_STORE_URL =
+  import.meta.env.VITE_EXTERNAL_STORE_URL || "";

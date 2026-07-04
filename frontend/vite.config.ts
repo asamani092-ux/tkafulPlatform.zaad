@@ -27,6 +27,9 @@ export default defineConfig({
           if (id.includes('/components/pages/saqya/')) {
             return 'saqya';
           }
+          if (id.includes('/components/pages/map/')) {
+            return 'impact-map';
+          }
           if (id.includes('/components/pages/admin/')) {
             return 'admin';
           }

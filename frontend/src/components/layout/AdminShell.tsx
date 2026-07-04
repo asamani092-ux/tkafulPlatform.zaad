@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, FolderPlus, Lightbulb, ClipboardList, UserCheck, Users, FileBarChart, HandHeart, LogOut, BarChart3 } from "lucide-react";
+import { LayoutDashboard, FolderPlus, Lightbulb, ClipboardList, UserCheck, Users, FileBarChart, HandHeart, LogOut, BarChart3, Map } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 
 const links = [
@@ -12,6 +12,7 @@ const links = [
   { to: "/Admin/service-requests", label: "طلبات الخدمات", icon: HandHeart },
   { to: "/Admin/tasks", label: "إضافة مشروع", icon: FolderPlus },
   { to: "/Admin/reports", label: "التقارير", icon: FileBarChart },
+  { to: "/Admin/map", label: "خارطة تفقدهم", icon: Map },
   { to: "/executive", label: "اللوحة التنفيذية", icon: BarChart3 },
 ];
 

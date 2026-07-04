@@ -42,6 +42,8 @@ const ServiceRequests = lazy(() => import("./components/pages/admin/ServiceReque
 const ExecutiveDashboard = lazy(() => import("./components/pages/ExecutiveDashboard"));
 const ManageDashboard = lazy(() => import("./components/pages/ManageDashboard"));
 const SaqyaHome = lazy(() => import("./components/pages/saqya"));
+const ImpactMapPage = lazy(() => import("./components/pages/map"));
+const ImpactMapAdmin = lazy(() => import("./components/pages/admin/ImpactMapAdmin"));
 
 function Lazy({ children }: { children: ReactNode }) {
   return <Suspense fallback={<LoadingState />}>{children}</Suspense>;
@@ -93,6 +95,9 @@ function AppContent() {
           <Route path="/executive" element={<Lazy><ExecutiveDashboard /></Lazy>} />
           <Route path="/executive/manage" element={<Lazy><ManageDashboard /></Lazy>} />
           <Route path="/saqya" element={<Lazy><SaqyaHome /></Lazy>} />
+          <Route path="/map" element={<Lazy><ImpactMapPage /></Lazy>} />
+
+          <Route path="/Admin/map" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><ImpactMapAdmin /></ProtectedRoute></Lazy>} />
 
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
