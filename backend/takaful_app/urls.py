@@ -7,7 +7,6 @@ router = DefaultRouter()
 router.register(r'projects', views.ProjectViewSet, basename='project')
 router.register(r'services', views.ServiceViewSet, basename='service')
 router.register(r'service-requests', views.ServiceRequestViewSet, basename='service-request')  # NEW: Service requests
-router.register(r'volunteers-old', views.VolunteerViewSet, basename='volunteer-old')  # Old volunteer model
 router.register(r'suggestions', views.SuggestionViewSet, basename='suggestion')
 router.register(r'assignments', views.ProjectAssignmentViewSet, basename='assignment')
 router.register(r'tasks', views.TaskViewSet, basename='task')  # NEW: Task management

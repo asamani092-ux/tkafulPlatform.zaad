@@ -1,53 +1,46 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { API_BASE_URL } from "../../config";
 import Card from "../ui/Card";
 import HeroBand from "../ui/HeroBand";
+import { LoadingState, ErrorState } from "../feedback/PageStates";
 
-interface VolStat {
-  id: number;
-  gender: string;
+interface AggStats {
+  total_volunteers: number;
+  by_gender: { male: number; female: number };
   total_hours: number;
-  participations_count: number;
-  successes_count: number;
+  total_participations: number;
+  total_successes: number;
 }
 
 export default function Volunteers() {
-  const [data, setData] = useState<VolStat[]>([]);
+  const [data, setData] = useState<AggStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/public-volunteers-stats/`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((d) => setData(Array.isArray(d) ? d : []))
-      .catch(() => {})
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then((d: AggStats) => setData(d))
+      .catch(() => setError("تعذّر تحميل إحصاءات المتطوعين"))
       .finally(() => setLoading(false));
   }, []);
 
-  const agg = useMemo(() => {
-    const totalHours = data.reduce((s, v) => s + (v.total_hours || 0), 0);
-    const participations = data.reduce((s, v) => s + (v.participations_count || 0), 0);
-    const successes = data.reduce((s, v) => s + (v.successes_count || 0), 0);
-    const males = data.filter((v) => v.gender === "ذكر").length;
-    const females = data.filter((v) => v.gender === "أنثى").length;
-    return { count: data.length, totalHours, participations, successes, males, females };
-  }, [data]);
-
-  const cards = [
-    { label: "إجمالي المتطوعين", value: agg.count },
-    { label: "ساعات التطوّع", value: agg.totalHours },
-    { label: "المشاركات", value: agg.participations },
-    { label: "المهام المنجزة", value: agg.successes },
-    { label: "ذكور", value: agg.males },
-    { label: "إناث", value: agg.females },
-  ];
+  const cards = data ? [
+    { label: "إجمالي المتطوعين", value: data.total_volunteers },
+    { label: "ساعات التطوّع", value: data.total_hours },
+    { label: "المشاركات", value: data.total_participations },
+    { label: "المهام المنجزة", value: data.total_successes },
+    { label: "ذكور", value: data.by_gender.male },
+    { label: "إناث", value: data.by_gender.female },
+  ] : [];
 
   return (
     <div>
       <HeroBand title="المتطوعون" subtitle="مجتمع العطاء وأثره في أرقام." />
       <main className="mx-auto max-w-page px-4 py-10">
-        {loading ? (
-          <p className="text-center text-brand-gray">جاري التحميل…</p>
-        ) : (
+        {loading && <LoadingState />}
+        {error && !loading && <ErrorState title="خطأ" message={error} />}
+        {!loading && !error && data && (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
             {cards.map((c) => (
               <Card key={c.label}>

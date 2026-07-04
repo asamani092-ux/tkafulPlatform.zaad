@@ -1,0 +1,48 @@
+# Nginx template — replace SUBDOMAIN and paths before use.
+# TLS via certbot: sudo certbot --nginx -d SUBDOMAIN
+
+upstream takaful_gunicorn {
+    server 127.0.0.1:8000;
+}
+
+server {
+    listen 80;
+    server_name SUBDOMAIN;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name SUBDOMAIN;
+
+    # ssl_certificate /etc/letsencrypt/live/SUBDOMAIN/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/SUBDOMAIN/privkey.pem;
+
+    client_max_body_size 20M;
+
+    root /var/www/takaful/frontend/dist;
+    index index.html;
+
+    location /api/ {
+        proxy_pass http://takaful_gunicorn;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Private saqya media — served by authenticated Django views (not direct file access)
+    location /media/private/ {
+        internal;
+        alias /var/www/takaful/backend/media/private/;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?)$ {
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+    }
+}

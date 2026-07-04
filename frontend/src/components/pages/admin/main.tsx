@@ -26,7 +26,7 @@ export default function AdminMain() {
 
   useEffect(() => {
     if (!access) return;
-    authFetch(`/api/admin/stats/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setStats(d)).catch(() => {});
+    authFetch(`/api/stats/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setStats(d)).catch(() => {});
   }, [access]);
 
   const loadProjects = (status: string) => {
@@ -38,7 +38,7 @@ export default function AdminMain() {
 
   const act = async (id: number, action: "approve" | "reject") => {
     try {
-      const res = await authFetch(`/api/admin/projects/${id}/${action}/`, { method: "POST" });
+      const res = await authFetch(`/api/projects/${id}/${action}/`, { method: "POST" });
       if (!res.ok) throw new Error();
       success({ title: action === "approve" ? "تم اعتماد المشروع" : "تم رفض المشروع" });
       loadProjects(tab);

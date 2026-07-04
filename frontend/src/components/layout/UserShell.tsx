@@ -31,7 +31,7 @@ export default function UserShell({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
-          <button onClick={() => { logout(); nav("/signin"); }}
+          <button type="button" onClick={() => { void logout().then(() => nav("/signin")); }}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-brand-gray">
             <LogOut size={16} /> خروج
           </button>

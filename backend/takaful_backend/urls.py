@@ -20,7 +20,6 @@ from django.urls import path, include
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("core.urls")),
-    path("api/admin/", include("takaful_app.urls")),
     path("api/", include("takaful_app.urls")),
     path("api/accounts/", include("accounts.urls")),  # ← Make sure this line exists
     path("api/dashboard/", include("analytics.urls")),       # اللوحة التنفيذية الموحّدة (المشروع الثاني)

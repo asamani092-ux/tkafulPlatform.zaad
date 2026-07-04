@@ -1,13 +1,17 @@
+import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 
 import { AuthProvider } from "./contexts/AuthContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { DashboardSettingsProvider } from "./contexts/DashboardSettingsContext";
+import ProtectedRoute from "./components/routing/ProtectedRoute";
+import { LoadingState } from "./components/feedback/PageStates";
+import { ForbiddenPage, NotFoundPage } from "./components/pages/ErrorPages";
 
 import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer";
 
-// Public / general
+// Public / general (eager — small landing pages)
 import Home from "./components/pages/Home";
 import Projects from "./components/pages/Projects";
 import Services from "./components/pages/Services";
@@ -20,28 +24,28 @@ import SignIn from "./components/pages/Auth/SignIn";
 import SignUp from "./components/pages/Auth/SignUp";
 import AdminSignIn from "./components/pages/admin/AdminSignIn";
 
-// User (volunteer) pages
-import UserMain from "./components/pages/user/Main";
-import UserTasks from "./components/pages/user/Task";
-import UserSettings from "./components/pages/user/Setting";
-import PersonalInfo from "./components/pages/user/PersonalInfo";
+// Code-split heavy portals
+const UserMain = lazy(() => import("./components/pages/user/Main"));
+const UserTasks = lazy(() => import("./components/pages/user/Task"));
+const UserSettings = lazy(() => import("./components/pages/user/Setting"));
+const PersonalInfo = lazy(() => import("./components/pages/user/PersonalInfo"));
 
-// Admin pages
-import AdminMain from "./components/pages/admin/main";
-import VolunteerRequests from "./components/pages/admin/VolunteerRequests";
-import VolunteerApplications from "./components/pages/admin/VolunteerApplications";
-import VolunteerManagement from "./components/pages/admin/VolunteerManagement";
-import AddProjectPage from "./components/pages/admin/AddProject";
-import ProjectIdeas from "./components/pages/admin/ProjectIdeas";
-import Reports from "./components/pages/admin/Reports";
-import ServiceRequests from "./components/pages/admin/ServiceRequests";
+const AdminMain = lazy(() => import("./components/pages/admin/main"));
+const VolunteerRequests = lazy(() => import("./components/pages/admin/VolunteerRequests"));
+const VolunteerApplications = lazy(() => import("./components/pages/admin/VolunteerApplications"));
+const VolunteerManagement = lazy(() => import("./components/pages/admin/VolunteerManagement"));
+const AddProjectPage = lazy(() => import("./components/pages/admin/AddProject"));
+const ProjectIdeas = lazy(() => import("./components/pages/admin/ProjectIdeas"));
+const Reports = lazy(() => import("./components/pages/admin/Reports"));
+const ServiceRequests = lazy(() => import("./components/pages/admin/ServiceRequests"));
 
-// Unified executive dashboard (project 2)
-import ExecutiveDashboard from "./components/pages/ExecutiveDashboard";
-import ManageDashboard from "./components/pages/ManageDashboard";
+const ExecutiveDashboard = lazy(() => import("./components/pages/ExecutiveDashboard"));
+const ManageDashboard = lazy(() => import("./components/pages/ManageDashboard"));
+const SaqyaHome = lazy(() => import("./components/pages/saqya"));
 
-// Saqya sponsorships module (project 3)
-import SaqyaHome from "./components/pages/saqya";
+function Lazy({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<LoadingState />}>{children}</Suspense>;
+}
 
 function AppContent() {
   const location = useLocation();
@@ -50,12 +54,13 @@ function AppContent() {
   const isAdminPage = pathname.startsWith("/admin");
   const isAdminSignIn = pathname === "/admin/signin";
   const isSaqyaPage = pathname.startsWith("/saqya");
-  const hideChrome = isUserPage || isSaqyaPage || (isAdminPage && !isAdminSignIn);
+  const isErrorPage = pathname === "/403" || pathname === "/404";
+  const hideChrome = isUserPage || isSaqyaPage || (isAdminPage && !isAdminSignIn) || isErrorPage;
 
   return (
-    <div className="flex min-h-screen flex-col bg-surface-muted">
+    <div className="flex min-h-screen flex-col bg-surface-muted" dir="rtl">
       {!hideChrome && <Navbar />}
-      <main className="flex-1">
+      <main className="flex-1 overflow-x-hidden">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/projects" element={<Projects />} />
@@ -68,21 +73,28 @@ function AppContent() {
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/admin/signin" element={<AdminSignIn />} />
-          <Route path="/user/main" element={<UserMain />} />
-          <Route path="/user/tasks" element={<UserTasks />} />
-          <Route path="/user/settings" element={<UserSettings />} />
-          <Route path="/user/personal-info" element={<PersonalInfo />} />
-          <Route path="/Admin" element={<AdminMain />} />
-          <Route path="/Admin/requests" element={<VolunteerRequests />} />
-          <Route path="/Admin/applications" element={<VolunteerApplications />} />
-          <Route path="/Admin/management" element={<VolunteerManagement />} />
-          <Route path="/Admin/tasks" element={<AddProjectPage />} />
-          <Route path="/Admin/ideas" element={<ProjectIdeas />} />
-          <Route path="/Admin/reports" element={<Reports />} />
-          <Route path="/Admin/service-requests" element={<ServiceRequests />} />
-          <Route path="/executive" element={<ExecutiveDashboard />} />
-          <Route path="/executive/manage" element={<ManageDashboard />} />
-          <Route path="/saqya" element={<SaqyaHome />} />
+          <Route path="/403" element={<ForbiddenPage />} />
+          <Route path="/404" element={<NotFoundPage />} />
+
+          <Route path="/user/main" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserMain /></ProtectedRoute></Lazy>} />
+          <Route path="/user/tasks" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserTasks /></ProtectedRoute></Lazy>} />
+          <Route path="/user/settings" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserSettings /></ProtectedRoute></Lazy>} />
+          <Route path="/user/personal-info" element={<Lazy><ProtectedRoute requiredRole="authenticated"><PersonalInfo /></ProtectedRoute></Lazy>} />
+
+          <Route path="/Admin" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><AdminMain /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/requests" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><VolunteerRequests /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/applications" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><VolunteerApplications /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/management" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><VolunteerManagement /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/tasks" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><AddProjectPage /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/ideas" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><ProjectIdeas /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/reports" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><Reports /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/service-requests" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><ServiceRequests /></ProtectedRoute></Lazy>} />
+
+          <Route path="/executive" element={<Lazy><ExecutiveDashboard /></Lazy>} />
+          <Route path="/executive/manage" element={<Lazy><ManageDashboard /></Lazy>} />
+          <Route path="/saqya" element={<Lazy><SaqyaHome /></Lazy>} />
+
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
       {!hideChrome && <Footer />}

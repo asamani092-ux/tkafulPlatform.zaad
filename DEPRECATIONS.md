@@ -10,8 +10,9 @@
 - `package.json` (جذر المستودع) — يحوي `dompurify`/`validator` فقط؛ التبعيات الفعلية في `frontend/`. شبه فارغ/مكرّر.
 
 ## خلفية (Backend)
-- `takaful_app.views.LoginView` و`RegisterView` — معرّفتان وغير مربوطتين بأي مسار (المصادقة الفعلية في `accounts`).
-- نموذج `takaful_app.Volunteer` + `VolunteerViewSet` + المسار `volunteers-old/` — مهجور؛ المتطوع الحقيقي هو `User`+`Profile`. يلزم ترحيل أي بيانات قبل الحذف.
+- `takaful_app.views.LoginView` و`RegisterView` — **أُزila من الكود** (كانت غير مربوطة؛ المصادقة في `accounts`).
+- المسار `volunteers-old/` — **أُزيل من التوجيه** (كان `VolunteerViewSet` + `IsAdmin`). النموذج `Volunteer` ما زال في ORM حتى ترحيل البيانات.
+- `takaful_backend.urls` — **أُزيل** التضمين المكرر `path("api/admin/", include("takaful_app.urls"))`؛ البادئة الموحّدة `/api/` فقط.
 
 ## design-system
 - `design-system/*.ps1` (4 سكربتات ويندوزية) — غير مستخدمة في بيئة Linux/CI.

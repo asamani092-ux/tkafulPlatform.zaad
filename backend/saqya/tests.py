@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from rest_framework.test import APITestCase
 
 from notifications.models import Notification
@@ -106,3 +107,17 @@ class SaqyaWorkflowTests(APITestCase):
         res = self.client.post(f"/api/saqya/documentation/{doc_id}/approve/", {}, format="json")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(Notification.objects.filter(user=self.donor).count(), before + 1)
+
+
+class ExternalCheckoutTests(APITestCase):
+    def setUp(self):
+        self.donor = make_user("checkout@x.com", "donor")
+
+    @override_settings(EXTERNAL_STORE_URL="https://store.test/donate")
+    def test_checkout_url_redirect_params(self):
+        self.client.force_authenticate(self.donor)
+        sp_id = self.client.post("/api/saqya/sponsorships/", {"amount": "200", "type": "سقيا"}, format="json").data["id"]
+        res = self.client.get(f"/api/saqya/sponsorships/{sp_id}/checkout_url/?amount=50")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("store.test", res.data["redirect_url"])
+        self.assertIn("sponsorship_id", res.data["redirect_url"])

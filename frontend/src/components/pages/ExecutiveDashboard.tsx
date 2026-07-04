@@ -6,6 +6,7 @@ import Donut from "../ui/Donut";
 import DataTable from "../ui/DataTable";
 import type { Column } from "../ui/DataTable";
 import ProgressBar from "../ui/ProgressBar";
+import { LoadingState, ErrorState, EmptyState } from "../feedback/PageStates";
 
 type Section = {
   id: number; title: string; unit: string; total: number; actual: string; expected: string;
@@ -51,13 +52,9 @@ export default function ExecutiveDashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="page-shell p-10 text-center text-brand-gray">جارٍ تحميل اللوحة…</div>;
-  if (error || !data)
-    return (
-      <div className="page-shell p-10 text-center">
-        <div className="mx-auto max-w-md rounded-xl px-4 py-3" style={{ background: "var(--tmkeen-danger-bg)", color: "var(--tmkeen-danger)" }}>{error || "لا توجد بيانات"}</div>
-      </div>
-    );
+  if (loading) return <div className="page-shell p-10"><LoadingState title="جارٍ تحميل اللوحة…" /></div>;
+  if (error) return <div className="page-shell p-10"><ErrorState title="خطأ" message={error} /></div>;
+  if (!data) return <div className="page-shell p-10"><EmptyState title="لا توجد بيانات" /></div>;
 
   return (
     <div className="page-shell">

@@ -23,7 +23,7 @@ export default function VolunteerApplications() {
   const [tab, setTab] = useState("قيد المراجعة");
 
   const load = (status: string) => {
-    authFetch(`/api/admin/applications/?status=${encodeURIComponent(status)}`)
+    authFetch(`/api/applications/?status=${encodeURIComponent(status)}`)
       .then((r) => (r.ok ? r.json() : null)).then((d) => d && setItems(d.results || [])).catch(() => {});
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -31,7 +31,7 @@ export default function VolunteerApplications() {
 
   const act = async (id: number, action: "accept" | "reject") => {
     try {
-      const res = await authFetch(`/api/admin/applications/${id}/${action}/`, { method: "POST", body: JSON.stringify({}) });
+      const res = await authFetch(`/api/applications/${id}/${action}/`, { method: "POST", body: JSON.stringify({}) });
       if (!res.ok) throw new Error();
       success({ title: action === "accept" ? "تم قبول الطلب وإنشاء مهمة" : "تم رفض الطلب" });
       load(tab);

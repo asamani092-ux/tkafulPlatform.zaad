@@ -36,7 +36,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
-          <button onClick={() => { logout(); nav("/admin/signin"); }}
+          <button type="button" onClick={() => { void logout().then(() => nav("/admin/signin")); }}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-brand-gray">
             <LogOut size={16} /> خروج
           </button>

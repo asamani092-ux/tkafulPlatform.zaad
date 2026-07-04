@@ -48,7 +48,7 @@ export default function Navbar() {
               <Link to={dashboardPath} className="flex items-center gap-2 text-sm font-semibold text-primary">
                 <User size={16} /> {user?.name || "حسابي"}
               </Link>
-              <button onClick={logout} aria-label="خروج" className="text-brand-gray hover:text-primary">
+              <button type="button" onClick={() => { void logout(); }} aria-label="خروج" className="text-brand-gray hover:text-primary">
                 <LogOut size={18} />
               </button>
             </>
@@ -73,7 +73,7 @@ export default function Navbar() {
           ))}
           <div className="mt-2 border-t border-surface-border pt-2">
             {isAuthenticated ? (
-              <button onClick={() => { logout(); setOpen(false); }} className="text-sm font-semibold text-primary">
+              <button type="button" onClick={() => { void logout(); setOpen(false); }} className="text-sm font-semibold text-primary">
                 خروج ({user?.name})
               </button>
             ) : (
