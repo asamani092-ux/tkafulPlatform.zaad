@@ -1,119 +1,63 @@
-import { useEffect, useState } from 'react';
-import { X, Check, AlertCircle, Info } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { X, Check, AlertCircle, Info } from "lucide-react";
 
 export interface ToastProps {
   id: string;
-  type: 'success' | 'error' | 'info';
+  type: "success" | "error" | "info";
   title: string;
   description?: string;
   duration?: number;
   onClose: (id: string) => void;
 }
 
-export default function Toast({ 
-  id, 
-  type, 
-  title, 
-  description, 
-  duration = 4500, 
-  onClose 
-}: ToastProps) {
-  const [isVisible, setIsVisible] = useState(false);
-  const [isLeaving, setIsLeaving] = useState(false);
+const STYLES: Record<ToastProps["type"], { bg: string; fg: string }> = {
+  success: { bg: "var(--tmkeen-success-bg)", fg: "var(--tmkeen-success)" },
+  error: { bg: "var(--tmkeen-danger-bg)", fg: "var(--tmkeen-danger)" },
+  info: { bg: "var(--tmkeen-warning-bg)", fg: "var(--tmkeen-warning)" },
+};
+
+/** إشعار Toast موحّد بألوان design-system الدلالية. */
+export default function Toast({ id, type, title, description, duration = 4500, onClose }: ToastProps) {
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    // Trigger entrance animation
-    const timer = setTimeout(() => setIsVisible(true), 10);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => setVisible(true), 10);
+    return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
     if (duration > 0) {
-      const timer = setTimeout(() => {
-        handleClose();
-      }, duration);
-      return () => clearTimeout(timer);
+      const t = setTimeout(() => onClose(id), duration);
+      return () => clearTimeout(t);
     }
-  }, [duration]);
+  }, [duration, id, onClose]);
 
-  const handleClose = () => {
-    setIsLeaving(true);
-    setTimeout(() => {
-      onClose(id);
-    }, 200); // Match animation duration
-  };
-
-  const getIcon = () => {
-    switch (type) {
-      case 'success':
-        return <Check size={20} className="text-green-600" />;
-      case 'error':
-        return <AlertCircle size={20} className="text-red-600" />;
-      case 'info':
-        return <Info size={20} className="text-blue-600" />;
-      default:
-        return <Info size={20} className="text-blue-600" />;
-    }
-  };
-
-  const getBackgroundColor = () => {
-    switch (type) {
-      case 'success':
-        return 'bg-green-50 border-green-200';
-      case 'error':
-        return 'bg-red-50 border-red-200';
-      case 'info':
-        return 'bg-blue-50 border-blue-200';
-      default:
-        return 'bg-blue-50 border-blue-200';
-    }
-  };
-
-  const getTextColor = () => {
-    switch (type) {
-      case 'success':
-        return 'text-green-800';
-      case 'error':
-        return 'text-red-800';
-      case 'info':
-        return 'text-blue-800';
-      default:
-        return 'text-blue-800';
-    }
-  };
+  const s = STYLES[type];
+  const icon = type === "success" ? <Check size={20} /> : type === "error" ? <AlertCircle size={20} /> : <Info size={20} />;
 
   return (
     <div
-      className={`relative max-w-sm w-full transform transition-all duration-200 ease-out ${
-        isVisible && !isLeaving 
-          ? 'translate-x-0 opacity-100' 
-          : 'translate-x-full opacity-0'
-      }`}
       dir="rtl"
+      style={{
+        maxWidth: "24rem",
+        transition: "all .2s ease",
+        transform: visible ? "translateX(0)" : "translateX(100%)",
+        opacity: visible ? 1 : 0,
+      }}
     >
-      <div className={`rounded-2xl border p-4 shadow-lg ${getBackgroundColor()}`}>
-        <div className="flex items-start gap-3">
-          <div className="flex-shrink-0 mt-0.5">
-            {getIcon()}
+      <div className="card" style={{ background: s.bg, color: s.fg, padding: "1rem" }}>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
+          <span style={{ color: s.fg, flexShrink: 0 }}>{icon}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h4 style={{ fontWeight: 600, fontSize: "0.875rem", margin: 0 }}>{title}</h4>
+            {description && <p style={{ fontSize: "0.875rem", marginTop: "0.25rem", opacity: 0.9 }}>{description}</p>}
           </div>
-          
-          <div className="flex-1 min-w-0">
-            <h4 className={`text-sm font-semibold ${getTextColor()}`}>
-              {title}
-            </h4>
-            {description && (
-              <p className={`text-sm mt-1 ${getTextColor()} opacity-90`}>
-                {description}
-              </p>
-            )}
-          </div>
-          
           <button
-            onClick={handleClose}
-            className="flex-shrink-0 p-1 hover:bg-black/10 rounded-full transition-colors duration-200"
+            onClick={() => onClose(id)}
             aria-label="إغلاق"
+            style={{ background: "transparent", border: 0, cursor: "pointer", color: s.fg, flexShrink: 0 }}
           >
-            <X size={16} className={getTextColor()} />
+            <X size={16} />
           </button>
         </div>
       </div>

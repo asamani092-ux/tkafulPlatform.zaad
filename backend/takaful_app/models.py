@@ -45,6 +45,15 @@ class Project(models.Model):
     hours = models.CharField(max_length=50, blank=True)  # "40 ساعة"
     is_hidden = models.BooleanField(default=False)  # Hide/show project in public views
 
+    # حقول موحّدة من مشاريع المشروع الثاني (GAS Projects sheet)
+    budget = models.DecimalField(max_digits=12, decimal_places=2, default=0)  # ميزانية (≠ donation_amount)
+    manager_employee = models.ForeignKey(
+        'analytics.Employee', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="managed_projects"
+    )  # Projects.manager
+    external_source = models.CharField(max_length=50, blank=True)  # 'gas' لمشاريع المشروع الثاني
+    external_id = models.CharField(max_length=100, blank=True)
+
     # Status & Tracking
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PLANNED")
     created_at = models.DateTimeField(auto_now_add=True)
