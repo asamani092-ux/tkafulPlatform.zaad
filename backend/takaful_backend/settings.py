@@ -159,11 +159,9 @@ SAQYA_MAX_UPLOAD_SIZE = 16 * 1024 * 1024  # 16MB
 EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@alzad.org")
 
+EXTERNAL_STORE_URL = os.environ.get("EXTERNAL_STORE_URL", "")
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-
-# ===========================
-# CORS + DRF configuration
 # ===========================
 
 # CORS Configuration

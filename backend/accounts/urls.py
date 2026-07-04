@@ -14,11 +14,16 @@ class EmailTokenObtainPairView(TokenObtainPairView):
     throttle_classes = [AuthRateThrottle]  # تحديد معدّل محاولات الدخول
 
 
+class ThrottledTokenRefreshView(TokenRefreshView):
+    """Refresh token with the same auth rate limit as login."""
+    throttle_classes = [AuthRateThrottle]
+
+
 urlpatterns = [
     # Authentication endpoints
     path("auth/register/", register, name="register"),
     path("auth/token/", EmailTokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("auth/token/refresh/", ThrottledTokenRefreshView.as_view(), name="token_refresh"),
     
     # User profile endpoints
     path("me/", me, name="me"),

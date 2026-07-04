@@ -4,18 +4,16 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.views import APIView
 
 from core.throttles import PublicWriteRateThrottle
 
 logger = logging.getLogger(__name__)
 from django.contrib.auth.models import User
-from django.contrib.auth import authenticate
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
 
 from .models import (
-    Project, Service, ServiceRequest, ServiceVolunteerApplication, Volunteer, Suggestion,
+    Project, Service, ServiceRequest, ServiceVolunteerApplication, Suggestion,
     ProjectAssignment, Task, Subtask, AdminReport, VolunteerApplication,
     VolunteerStatistics, QuarterlyTarget, DepartmentHours, TopVolunteer, WaterSupplyRequest
 )
@@ -24,7 +22,7 @@ from io import BytesIO
 from decimal import Decimal
 from .serializers import (
     ProjectSerializer, ServiceSerializer, ServiceRequestSerializer, ServiceVolunteerApplicationSerializer,
-    VolunteerSerializer, SuggestionSerializer, ProjectAssignmentSerializer,
+    SuggestionSerializer, ProjectAssignmentSerializer,
     TaskSerializer, SubtaskSerializer, VolunteerDetailSerializer,
     VolunteerRequestSerializer, AdminReportSerializer, VolunteerApplicationSerializer,
     VolunteerStatisticsSerializer, WaterSupplyRequestSerializer
@@ -709,21 +707,19 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
         })
 
 
-class VolunteerViewSet(viewsets.ModelViewSet):
-    queryset = Volunteer.objects.all()
-    serializer_class = VolunteerSerializer
-    permission_classes = [IsAdmin]
-
-
 class SuggestionViewSet(viewsets.ModelViewSet):
     queryset = Suggestion.objects.all()
     serializer_class = SuggestionSerializer
-    permission_classes = [AllowAny]
-    
+
     def get_permissions(self):
-        if self.action in ['update', 'partial_update', 'destroy']:
-            return [IsAdmin()]
-        return [AllowAny()]
+        if self.action == "create":
+            return [AllowAny()]
+        return [IsAdmin()]
+
+    def get_throttles(self):
+        if self.action == "create":
+            return [PublicWriteRateThrottle()]
+        return super().get_throttles()
 
 
 class ProjectAssignmentViewSet(viewsets.ModelViewSet):
@@ -765,85 +761,6 @@ def list_users(request):
         })
     
     return Response(data)
-
-
-# ============================================================================
-# AUTH VIEWS (Login & Register)
-# ============================================================================
-class LoginView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        email = request.data.get("email")
-        password = request.data.get("password")
-
-        if not email or not password:
-            return Response(
-                {"detail": "Email and password are required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        user = authenticate(request, username=email, password=password)
-
-        if user is None:
-            return Response(
-                {"detail": "بيانات الدخول غير صحيحة"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        return Response(
-            {
-                "name": user.get_full_name() or user.username,
-                "email": user.email or user.username,
-                "role": "user",
-            },
-            status=status.HTTP_200_OK,
-        )
-
-
-class RegisterView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        full_name = request.data.get("fullName") or request.data.get("full_name")
-        email = request.data.get("email")
-        phone = request.data.get("phone")
-        password = request.data.get("password")
-
-        if not full_name or not email or not password:
-            return Response(
-                {"detail": "الاسم، البريد الإلكتروني، وكلمة السر مطلوبة"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if User.objects.filter(username=email).exists():
-            return Response(
-                {"detail": "هذا البريد مسجّل مسبقاً"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        user = User.objects.create_user(
-            username=email,
-            email=email,
-            password=password,
-        )
-        user.first_name = full_name
-        user.save()
-
-        Volunteer.objects.create(
-            full_name=full_name,
-            email=email,
-            phone=phone or "",
-        )
-
-        return Response(
-            {
-                "name": full_name,
-                "email": email,
-                "role": "user",
-            },
-            status=status.HTTP_201_CREATED,
-        )
 
 
 # ============================================================================
@@ -1468,40 +1385,37 @@ def reject_volunteer_application(request, application_id):
 def public_volunteers_stats(request):
     """
     GET /api/public-volunteers-stats/
-    Returns volunteer statistics for the public volunteers page.
-    No authentication required.
+    إحصاءات مجمّعة فقط — لا تُرجع صفوفاً لكل متطوّع (خصوصية).
     """
     from accounts.models import Profile
 
-    # Get all user profiles (volunteers only)
-    volunteers = Profile.objects.filter(role='user')
+    volunteers = Profile.objects.filter(role='user', is_approved=True)
+    volunteer_users = User.objects.filter(profile__in=volunteers)
 
-    stats = []
-    for profile in volunteers:
-        # Calculate stats for each volunteer
-        total_hours = Task.objects.filter(
-            volunteer=profile.user,
-            status='مكتملة'
-        ).aggregate(total=Sum('hours'))['total'] or 0
+    total_hours = Task.objects.filter(
+        volunteer__in=volunteer_users,
+        status='مكتملة',
+    ).aggregate(total=Sum('hours'))['total'] or 0
 
-        participations_count = Task.objects.filter(
-            volunteer=profile.user
-        ).exclude(status='ملغاة').count()
+    participations = Task.objects.filter(
+        volunteer__in=volunteer_users,
+    ).exclude(status='ملغاة').count()
 
-        successes_count = Task.objects.filter(
-            volunteer=profile.user,
-            status='مكتملة'
-        ).count()
+    successes = Task.objects.filter(
+        volunteer__in=volunteer_users,
+        status='مكتملة',
+    ).count()
 
-        stats.append({
-            'id': profile.user.id,
-            'gender': profile.gender,
-            'total_hours': total_hours,
-            'participations_count': participations_count,
-            'successes_count': successes_count,
-        })
-
-    return Response(stats)
+    return Response({
+        'total_volunteers': volunteers.count(),
+        'by_gender': {
+            'male': volunteers.filter(gender='ذكر').count(),
+            'female': volunteers.filter(gender='أنثى').count(),
+        },
+        'total_hours': int(total_hours),
+        'total_participations': participations,
+        'total_successes': successes,
+    })
 
 
 @api_view(['POST'])

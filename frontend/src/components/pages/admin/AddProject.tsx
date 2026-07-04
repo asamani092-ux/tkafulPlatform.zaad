@@ -25,7 +25,7 @@ export default function AddProjectPage() {
     if (!form.title || !form.category) { error({ title: "حقول مطلوبة", description: "اسم المشروع ونوعه مطلوبان" }); return; }
     setSubmitting(true);
     try {
-      const res = await authFetch(`/api/admin/projects/`, {
+      const res = await authFetch(`/api/projects/`, {
         method: "POST",
         body: JSON.stringify({
           ...form,

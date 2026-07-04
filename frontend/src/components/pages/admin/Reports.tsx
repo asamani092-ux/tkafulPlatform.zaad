@@ -17,7 +17,7 @@ export default function Reports() {
   const [generating, setGenerating] = useState(false);
 
   const load = () => {
-    authFetch(`/api/admin/reports/`)
+    authFetch(`/api/reports/`)
       .then((r) => (r.ok ? r.json() : null)).then((d) => d && setReports(d.results || [])).catch(() => {});
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -26,7 +26,7 @@ export default function Reports() {
   const generate = async () => {
     setGenerating(true);
     try {
-      const res = await authFetch(`/api/admin/reports/generate/`, { method: "POST", body: JSON.stringify({}) });
+      const res = await authFetch(`/api/reports/generate/`, { method: "POST", body: JSON.stringify({}) });
       if (!res.ok) throw new Error();
       success({ title: "تم إنشاء التقرير بنجاح" }); load();
     } catch { error({ title: "خطأ", description: "تعذّر إنشاء التقرير" }); }
@@ -34,7 +34,7 @@ export default function Reports() {
   };
   const remove = async (id: number) => {
     try {
-      const res = await authFetch(`/api/admin/reports/${id}/delete/`, { method: "DELETE" });
+      const res = await authFetch(`/api/reports/${id}/delete/`, { method: "DELETE" });
       if (!res.ok) throw new Error();
       success({ title: "تم حذف التقرير" }); load();
     } catch { error({ title: "خطأ", description: "تعذّر الحذف" }); }

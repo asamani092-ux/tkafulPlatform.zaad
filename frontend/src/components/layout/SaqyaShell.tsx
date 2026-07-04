@@ -25,7 +25,7 @@ export default function SaqyaShell({ children }: { children: ReactNode }) {
               <p className="text-sm" style={{ opacity: 0.9 }}>{ROLE_LABEL[user?.role || ""] || ""} · {user?.name}</p>
             </div>
           </div>
-          <button onClick={() => { logout(); nav("/signin"); }} className="flex items-center gap-2 rounded-lg px-3 py-2 font-bold text-white" style={{ background: "rgba(255,255,255,.15)" }}>
+          <button type="button" onClick={() => { void logout().then(() => nav("/signin")); }} className="flex items-center gap-2 rounded-lg px-3 py-2 font-bold text-white" style={{ background: "rgba(255,255,255,.15)" }}>
             <LogOut size={16} /> خروج
           </button>
         </div>

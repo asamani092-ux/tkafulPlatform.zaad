@@ -1,0 +1,19 @@
+[Unit]
+Description=Takaful Platform Gunicorn
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/takaful/backend
+EnvironmentFile=/var/www/takaful/backend/.env
+ExecStart=/var/www/takaful/backend/venv/bin/gunicorn takaful_backend.wsgi:application \
+  --bind 127.0.0.1:8000 \
+  --workers 3 \
+  --timeout 120 \
+  --access-logfile - \
+  --error-logfile -
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

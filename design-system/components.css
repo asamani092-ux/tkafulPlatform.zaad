@@ -290,3 +290,38 @@ input[type="password"][dir="ltr"],
 .modal-panel.wide {
   max-width: 48rem;
 }
+
+/* ── Page states (loading / empty / error) ── */
+.state-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+}
+.state-panel--error .state-title {
+  color: var(--tmkeen-danger);
+}
+.state-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--tmkeen-primary);
+}
+.state-message {
+  font-size: 0.875rem;
+  color: var(--tmkeen-brand-gray);
+  max-width: 28rem;
+}
+.state-spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 3px solid var(--tmkeen-surface-border);
+  border-top-color: var(--tmkeen-primary);
+  border-radius: 50%;
+  animation: tmkeen-spin 0.8s linear infinite;
+}
+@keyframes tmkeen-spin {
+  to { transform: rotate(360deg); }
+}

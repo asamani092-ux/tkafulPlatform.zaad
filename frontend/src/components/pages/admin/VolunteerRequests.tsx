@@ -15,7 +15,7 @@ export default function VolunteerRequests() {
   const [items, setItems] = useState<Req[]>([]);
 
   const load = () => {
-    authFetch(`/api/admin/volunteer-requests/`)
+    authFetch(`/api/volunteer-requests/`)
       .then((r) => (r.ok ? r.json() : null)).then((d) => d && setItems(d.results || [])).catch(() => {});
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -23,7 +23,7 @@ export default function VolunteerRequests() {
 
   const act = async (id: number, action: "accept" | "reject") => {
     try {
-      const res = await authFetch(`/api/admin/volunteer-requests/${id}/${action}/`, { method: "POST" });
+      const res = await authFetch(`/api/volunteer-requests/${id}/${action}/`, { method: "POST" });
       if (!res.ok) throw new Error();
       success({ title: action === "accept" ? "تم قبول المتطوع" : "تم رفض الطلب" });
       load();

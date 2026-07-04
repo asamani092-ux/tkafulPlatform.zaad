@@ -21,6 +21,8 @@ from .serializers import (
 )
 from .permissions import IsSaqyaAdmin, IsSaqyaStaffOrReadOnly
 from . import notifications as notify
+from .validators import validate_upload_file, validate_gps
+from .payments import get_payment_provider, CheckoutRequest
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +129,27 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
         return Response({"message": "تم تسجيل الدفعة", "payment_id": payment.id,
                          "total_funded": float(sp.total_funded), "status": sp.status}, status=201)
 
+    @action(detail=True, methods=["get"])
+    def checkout_url(self, request, pk=None):
+        """External store redirect URL for donor contribution (no in-app payment)."""
+        sp = self.get_object()
+        if role(request.user) != "admin" and sp.donor_id != request.user.id:
+            return Response({"detail": "غير مصرّح"}, status=403)
+        amount = request.query_params.get("amount", str(sp.remaining))
+        try:
+            amount_dec = Decimal(str(amount))
+        except (InvalidOperation, TypeError):
+            return Response({"detail": "مبلغ غير صالح"}, status=400)
+        provider = get_payment_provider()
+        result = provider.create_checkout(CheckoutRequest(
+            sponsorship_id=sp.id,
+            amount=amount_dec,
+            reference=str(sp.id),
+        ))
+        if not result.redirect_url:
+            return Response({"detail": "رابط المتجر الخارجي غير مهيّأ"}, status=503)
+        return Response({"redirect_url": result.redirect_url, "provider": result.provider})
+
 
 # ============ Orders ============
 class OrderViewSet(viewsets.ModelViewSet):
@@ -223,8 +246,9 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         if role(request.user) not in ("supplier", "admin"):
             return Response({"detail": "رفع الفاتورة للمورّد فقط"}, status=403)
         f = request.FILES.get("file")
-        if f and f.size > settings.SAQYA_MAX_UPLOAD_SIZE:
-            return Response({"detail": "حجم الملف يتجاوز الحد المسموح"}, status=400)
+        err = validate_upload_file(f)
+        if err:
+            return Response({"detail": err}, status=400)
         return super().create(request, *args, **kwargs)
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
@@ -258,8 +282,12 @@ class DocumentationViewSet(viewsets.ModelViewSet):
         if role(request.user) not in ("representative", "supplier", "admin"):
             return Response({"detail": "رفع التوثيق للمندوب/المورّد فقط"}, status=403)
         f = request.FILES.get("file")
-        if f and f.size > settings.SAQYA_MAX_UPLOAD_SIZE:
-            return Response({"detail": "حجم الملف يتجاوز الحد المسموح"}, status=400)
+        err = validate_upload_file(f)
+        if err:
+            return Response({"detail": err}, status=400)
+        gps_err = validate_gps(request.data.get("latitude"), request.data.get("longitude"))
+        if gps_err:
+            return Response({"detail": gps_err}, status=400)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         extra = {"uploaded_by": request.user}
