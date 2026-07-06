@@ -2,8 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import Button from "./Button";
 
-describe("Button (design-system)", () => {
-  it("renders primary variant with design-system class", () => {
+describe("Button (Design_system_f)", () => {
+  it("renders primary variant with Design_system_f class", () => {
     render(<Button>حفظ</Button>);
     const btn = screen.getByRole("button", { name: "حفظ" });
     expect(btn).toBeInTheDocument();

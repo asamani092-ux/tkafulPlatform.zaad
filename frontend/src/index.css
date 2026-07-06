@@ -1,6 +1,6 @@
-/* مصدر التصميم الموحّد (Design System) — الرموز + المكوّنات */
-@import "../../design-system/tokens.css";
-@import "../../design-system/components.css";
+/* مصدر التصميم الموحّد — Design_system_f */
+@import "../../Design_system_f/uploads/design-system/tokens.css";
+@import "../../Design_system_f/uploads/design-system/components.css";
 
 @tailwind base;
 @tailwind components;

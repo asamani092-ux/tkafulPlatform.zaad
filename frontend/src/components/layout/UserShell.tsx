@@ -10,7 +10,7 @@ const links = [
   { to: "/user/settings", label: "الإعدادات", icon: Settings },
 ];
 
-/** غلاف صفحات المتطوّع (شريط جانبي) على design-system. */
+/** غلاف صفحات المتطوّع (شريط جانبي) على Design_system_f. */
 export default function UserShell({ children }: { children: ReactNode }) {
   const loc = useLocation();
   const nav = useNavigate();

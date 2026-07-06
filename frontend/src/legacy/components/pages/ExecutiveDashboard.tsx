@@ -4,7 +4,7 @@ import { API_BASE_URL } from "../../config";
 
 /**
  * اللوحة التنفيذية الموحّدة — دمج المشروع الثاني (GAS) في المنصة.
- * التصميم معتمد بالكامل على design-system (ألوان/خط Tajawal) — لا تصميم قديم.
+ * التصميم معتمد بالكامل على Design_system_f (ألوان/خط Tajawal) — لا تصميم قديم.
  * يستهلك GET /api/dashboard/executive/ (يطابق getDashboardData في GAS).
  */
 
@@ -54,7 +54,7 @@ type DashboardData = {
   kpis: Kpi[];
 };
 
-// ألوان الحالات من design-system (tokens.json) — المصدر الوحيد
+// ألوان الحالات من Design_system_f (tokens.json) — المصدر الوحيد
 const STATUS = [
   { key: "closed", label: "مغلق", color: "#15803D" },
   { key: "in_progress", label: "قيد التنفيذ", color: "#8B1538" },

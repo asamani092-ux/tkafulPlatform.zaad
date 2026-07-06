@@ -16,7 +16,7 @@ const STYLES: Record<ToastProps["type"], { bg: string; fg: string }> = {
   info: { bg: "var(--tmkeen-warning-bg)", fg: "var(--tmkeen-warning)" },
 };
 
-/** إشعار Toast موحّد بألوان design-system الدلالية. */
+/** إشعار Toast موحّد بألوان Design_system_f الدلالية. */
 export default function Toast({ id, type, title, description, duration = 4500, onClose }: ToastProps) {
   const [visible, setVisible] = useState(false);
 

@@ -14,7 +14,7 @@
 | **معايير الأولوية** | high / medium / low (أحمر / برتقالي / أخضر) | معايير مرتبطة بكثافة احتياج / فجوة تغطية |
 | **رابط المتجر** | `EXTERNAL_STORE_URL` / `VITE_EXTERNAL_STORE_URL` — فارغ = شارة «تجريبي — بانتظار رابط المتجر» | رابط إنتاجي + معاملات `product` و `region` |
 | **مستوى realtime** | تجميعات من `DistributionRecord` + cache 60 ثانية | WebSocket / polling / إلغاء cache |
-| **الهوية البصرية** | Tajawal + ألوان design-system (#8b1538, #f2b824) | ضبط حسب دليل العلامة بعد المراجعة |
+| **الهوية البصرية** | Tajawal + ألوان Design_system_f (#8b1538, #f2b824) | ضبط حسب دليل العلامة بعد المراجعة |
 
 ## API
 

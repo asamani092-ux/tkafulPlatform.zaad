@@ -6,7 +6,7 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   children: ReactNode;
 }
 
-/** قائمة منسدلة موحّدة تعتمد نمط ‎.input-field من design-system. */
+/** قائمة منسدلة موحّدة تعتمد نمط ‎.input-field من Design_system_f. */
 export default function Select({ label, error, id, className = "", children, ...rest }: SelectProps) {
   return (
     <div>

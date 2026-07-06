@@ -16,7 +16,7 @@ const links = [
   { to: "/executive", label: "اللوحة التنفيذية", icon: BarChart3 },
 ];
 
-/** غلاف لوحات الإدارة (شريط جانبي) على design-system. */
+/** غلاف لوحات الإدارة (شريط جانبي) على Design_system_f. */
 export default function AdminShell({ children }: { children: ReactNode }) {
   const loc = useLocation();
   const nav = useNavigate();

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import Toast from '../components/feedback/Toast';
-// ملاحظة: Toast أُعيد بناؤه في المكتبة الجديدة على design-system (نفس واجهة الـ props).
+// ملاحظة: Toast أُعيد بناؤه في المكتبة الجديدة على Design_system_f (نفس واجهة الـ props).
 
 export interface ToastData {
   id: string;
