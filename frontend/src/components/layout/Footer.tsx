@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Mail, Phone, MapPin } from "lucide-react";
 
-/** تذييل الموقع الموحّد على design-system. */
+/** تذييل الموقع الموحّد على Design_system_f. */
 export default function Footer() {
   return (
     <footer style={{ background: "var(--tmkeen-primary-dark)", color: "#fff" }}>

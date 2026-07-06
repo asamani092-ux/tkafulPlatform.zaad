@@ -14,7 +14,7 @@ const navLinks = [
   { to: "/about", label: "من نحن" },
 ];
 
-/** شريط التنقّل الموحّد على design-system. */
+/** شريط التنقّل الموحّد على Design_system_f. */
 export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();

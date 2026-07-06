@@ -4,7 +4,7 @@ import type { Config } from "tailwindcss";
  * Tmkeen Design System — Tailwind Preset
  *
  * Usage in tailwind.config.ts:
- *   import tmkeenPreset from "./design-system/tailwind.preset";
+ *   import tmkeenPreset from "./Design_system_f/uploads/design-system/tailwind.preset";
  *   export default { presets: [tmkeenPreset], content: [...] };
  */
 const tmkeenPreset: Partial<Config> = {

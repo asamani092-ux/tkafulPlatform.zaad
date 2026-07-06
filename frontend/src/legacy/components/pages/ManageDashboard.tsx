@@ -6,7 +6,7 @@ import { API_BASE_URL } from "../../config";
 /**
  * شاشة تغذية اللوحة التنفيذية (مكافئ Index.html في المشروع الثاني GAS).
  * متاحة لطاقم الإدارة (admin / manager / employee) — تستخدم توكن JWT الموحّد.
- * التصميم معتمد على design-system (Tajawal + ألوان primary/surface).
+ * التصميم معتمد على Design_system_f (Tajawal + ألوان primary/surface).
  */
 
 const FONT = "Tajawal, Tahoma, Arial, sans-serif";

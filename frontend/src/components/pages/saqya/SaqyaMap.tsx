@@ -6,7 +6,7 @@ export interface MapPoint {
   latitude: number; longitude: number; amount: string;
 }
 
-/** خريطة توزيع الكفالات (react-leaflet) بألوان design-system. */
+/** خريطة توزيع الكفالات (react-leaflet) بألوان Design_system_f. */
 export default function SaqyaMap({ points }: { points: MapPoint[] }) {
   const center: [number, number] = points.length
     ? [points[0].latitude, points[0].longitude]

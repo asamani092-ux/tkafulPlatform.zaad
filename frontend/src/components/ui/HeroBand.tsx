@@ -6,7 +6,7 @@ interface HeroBandProps {
   children?: ReactNode;
 }
 
-/** شريط رأس متدرّج (maroon→gold) موحّد على ألوان design-system. */
+/** شريط رأس متدرّج (maroon→gold) موحّد على ألوان Design_system_f. */
 export default function HeroBand({ title, subtitle, children }: HeroBandProps) {
   return (
     <header

@@ -10,7 +10,7 @@ const ROLE_LABEL: Record<string, string> = {
   representative: "مندوب",
 };
 
-/** غلاف وحدة كفالات السقيا على design-system. */
+/** غلاف وحدة كفالات السقيا على Design_system_f. */
 export default function SaqyaShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const nav = useNavigate();

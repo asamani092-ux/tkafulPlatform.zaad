@@ -14,7 +14,7 @@ const CLASS: Record<Variant, string> = {
   register: "btn-register",
 };
 
-/** زر موحّد يعتمد فئات design-system (components.css) دون أنماط مكتوبة يدوياً. */
+/** زر موحّد يعتمد فئات Design_system_f (components.css) دون أنماط مكتوبة يدوياً. */
 export default function Button({ variant = "primary", className = "", children, ...rest }: ButtonProps) {
   return (
     <button className={`${CLASS[variant]} ${className}`.trim()} {...rest}>

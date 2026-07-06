@@ -1,4 +1,4 @@
-/** شريط تقدّم موحّد يعتمد رموز design-system. */
+/** شريط تقدّم موحّد يعتمد رموز Design_system_f. */
 export default function ProgressBar({ value }: { value: number }) {
   const v = Math.max(0, Math.min(100, value));
   return (

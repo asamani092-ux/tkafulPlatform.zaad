@@ -5,7 +5,7 @@ interface DonutProps {
   children?: ReactNode;
 }
 
-/** رسم دائري (Donut) موحّد بلون primary من design-system. */
+/** رسم دائري (Donut) موحّد بلون primary من Design_system_f. */
 export default function Donut({ percent, children }: DonutProps) {
   const p = Math.max(0, Math.min(100, percent));
   return (

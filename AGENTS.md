@@ -3,7 +3,7 @@
 ## Cursor Cloud specific instructions
 
 Takaful Platform is a full-stack Arabic RTL volunteering app. It is a monorepo with three parts:
-`backend/` (Django REST API), `frontend/` (React + Vite + TypeScript SPA), and `design-system/`
+`backend/` (Django REST API), `frontend/` (React + Vite + TypeScript SPA), and `Design_system_f/`
 (static CSS/token package, no runtime service).
 
 ### Services
