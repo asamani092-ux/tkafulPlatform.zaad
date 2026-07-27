@@ -1,4 +1,4 @@
-import tmkeenPreset from "../design-system/tailwind.preset";
+import tmkeenPreset from "../Design_system_f/uploads/design-system/tailwind.preset";
 
 /** @type {import('tailwindcss').Config} */
 export default {
