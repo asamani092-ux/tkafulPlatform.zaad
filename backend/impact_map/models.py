@@ -2,6 +2,60 @@ from django.conf import settings
 from django.db import models
 
 
+class MapProject(models.Model):
+    """
+    مشروع على الخارطة (تفقدهم/سقيا/زكاة الفطر...). يسحب بياناته من وحدته الحيّة
+    عبر مزوّد (Provider) يُختار حسب source_type. يتحكّم بأدواته المشرف العام
+    (role=admin) ومسؤول المشروع (manager).
+    """
+    SOURCE_CHOICES = [
+        ("native", "native"),   # بيانات داخل impact_map مُقسَّمة بالمشروع (تفقدهم/زكاة)
+        ("saqya", "saqya"),     # حيّة من تطبيق saqya
+    ]
+
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(unique=True)
+    source_type = models.CharField(max_length=20, choices=SOURCE_CHOICES, default="native")
+    icon_key = models.CharField(max_length=50, blank=True)   # أيقونة من الهوية (lucide/design-system)
+    color = models.CharField(max_length=20, default="#8B1538")
+    cta_url = models.URLField(blank=True)                    # رابط المتجر/التبرّع الخاص بالمشروع
+    manager = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="managed_map_projects",
+    )
+    is_active = models.BooleanField(default=True)
+    order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
+class ProjectMapLayer(models.Model):
+    """إعداد أداة/طبقة لكل مشروع (أيقونة/لون/تفعيل/مؤشرات) — يتحكّم بها المشرف/مسؤول المشروع."""
+    project = models.ForeignKey(MapProject, on_delete=models.CASCADE, related_name="layers")
+    layer_key = models.CharField(max_length=40)   # regions | outlets | deliveries
+    label = models.CharField(max_length=120, blank=True)
+    marker_type = models.CharField(max_length=40, blank=True)
+    icon_key = models.CharField(max_length=50, blank=True)
+    color = models.CharField(max_length=20, blank=True)
+    enabled = models.BooleanField(default=True)
+    kpi_keys = models.JSONField(default=list, blank=True)
+    order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["project", "layer_key", "marker_type"],
+                                    name="uq_projectmaplayer_key")
+        ]
+
+    def __str__(self):
+        return f"{self.project.slug}:{self.layer_key}:{self.marker_type}"
+
+
 class Region(models.Model):
     PRIORITY_CHOICES = [
         ("high", "high"),
@@ -9,6 +63,7 @@ class Region(models.Model):
         ("low", "low"),
     ]
 
+    project = models.ForeignKey("MapProject", null=True, blank=True, on_delete=models.CASCADE, related_name="regions")
     name = models.CharField(max_length=120)
     slug = models.SlugField(unique=True)
     center_lat = models.FloatField()
@@ -26,6 +81,7 @@ class Region(models.Model):
 
 
 class Product(models.Model):
+    project = models.ForeignKey("MapProject", null=True, blank=True, on_delete=models.CASCADE, related_name="products")
     name = models.CharField(max_length=120)
     slug = models.SlugField(unique=True)
     icon = models.CharField(max_length=50, blank=True)
@@ -48,6 +104,7 @@ class Outlet(models.Model):
         ("participation_point", "participation_point"),
     ]
 
+    project = models.ForeignKey("MapProject", null=True, blank=True, on_delete=models.CASCADE, related_name="outlets")
     name = models.CharField(max_length=120)
     type = models.CharField(max_length=30, choices=TYPE_CHOICES)
     lat = models.FloatField()
@@ -83,6 +140,7 @@ class Contribution(models.Model):
         on_delete=models.SET_NULL,
         related_name="impact_contributions",
     )
+    project = models.ForeignKey("MapProject", null=True, blank=True, on_delete=models.CASCADE, related_name="contributions")
     name = models.CharField(max_length=150)
     phone = models.CharField(max_length=20)
     region = models.ForeignKey(Region, on_delete=models.PROTECT, related_name="contributions")
@@ -101,6 +159,7 @@ class Contribution(models.Model):
 
 
 class DistributionRecord(models.Model):
+    project = models.ForeignKey("MapProject", null=True, blank=True, on_delete=models.CASCADE, related_name="distribution_records")
     region = models.ForeignKey(Region, on_delete=models.CASCADE, related_name="distribution_records")
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="distribution_records")
     families_served = models.IntegerField()

@@ -9,7 +9,14 @@ from datetime import date
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from impact_map.models import Region, Product, Outlet, DistributionRecord
+from impact_map.models import Region, Product, Outlet, DistributionRecord, MapProject, ProjectMapLayer
+
+# طبقات/أدوات مشروع تفقدهم الافتراضية (المشرف/مسؤول المشروع يتحكّم بها لاحقاً)
+DEFAULT_LAYERS = [
+    ("regions", "المناطق", "", "MapPin", "#8B1538", ["families_served", "completion_percent"], 1),
+    ("outlets", "المنافذ", "sale_point", "Store", "#B8860B", [], 2),
+    ("deliveries", "التوزيعات", "", "PackageCheck", "#287a63", ["quantity_distributed"], 3),
+]
 
 REGIONS = [
     ("النخيل", "al-nakheel", 24.769, 46.729, "high", 1),
@@ -66,6 +73,27 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
+        project, _ = MapProject.objects.update_or_create(
+            slug="tafaqadhum",
+            defaults={
+                "name": "تفقدهم",
+                "source_type": "native",
+                "icon_key": "MapPin",
+                "color": "#8B1538",
+                "is_active": True,
+                "order": 0,
+            },
+        )
+        for layer_key, label, marker_type, icon_key, color, kpi_keys, order in DEFAULT_LAYERS:
+            ProjectMapLayer.objects.update_or_create(
+                project=project, layer_key=layer_key, marker_type=marker_type,
+                defaults={
+                    "label": label, "icon_key": icon_key, "color": color,
+                    "enabled": True, "kpi_keys": kpi_keys, "order": order,
+                },
+            )
+        self.stdout.write(self.style.SUCCESS("MapProject 'تفقدهم' + layers upserted"))
+
         region_by_slug = {}
         for name, slug, lat, lng, priority, order in REGIONS:
             region, _ = Region.objects.update_or_create(
@@ -77,6 +105,7 @@ class Command(BaseCommand):
                     "priority": priority,
                     "is_active": True,
                     "order": order,
+                    "project": project,
                 },
             )
             region_by_slug[slug] = region
@@ -93,6 +122,7 @@ class Command(BaseCommand):
                     "target_families": target,
                     "is_active": True,
                     "order": order,
+                    "project": project,
                 },
             )
             product_by_slug[slug] = product
@@ -110,6 +140,7 @@ class Command(BaseCommand):
                     "address": address,
                     "working_hours": hours,
                     "is_active": True,
+                    "project": project,
                 },
             )
         self.stdout.write(self.style.SUCCESS(f"Outlets: {len(OUTLETS)} upserted"))
@@ -125,6 +156,7 @@ class Command(BaseCommand):
                 defaults={
                     "families_served": families,
                     "quantity_distributed": qty,
+                    "project": project,
                 },
             )
         self.stdout.write(self.style.SUCCESS(f"Distributions: {len(DISTRIBUTIONS)} upserted"))
