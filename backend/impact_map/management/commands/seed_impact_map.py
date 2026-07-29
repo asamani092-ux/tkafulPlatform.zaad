@@ -14,7 +14,7 @@ from impact_map.models import Region, Product, Outlet, DistributionRecord, MapPr
 # طبقات/أدوات مشروع تفقدهم الافتراضية (المشرف/مسؤول المشروع يتحكّم بها لاحقاً)
 DEFAULT_LAYERS = [
     ("regions", "المناطق", "", "MapPin", "#8B1538", ["families_served", "completion_percent"], 1),
-    ("outlets", "المنافذ", "sale_point", "Store", "#B8860B", [], 2),
+    ("outlets", "المنافذ", "", "Store", "#B8860B", [], 2),
     ("deliveries", "التوزيعات", "", "PackageCheck", "#287a63", ["quantity_distributed"], 3),
 ]
 
