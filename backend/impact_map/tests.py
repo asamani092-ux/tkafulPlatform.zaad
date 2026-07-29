@@ -8,8 +8,10 @@ from django.test import override_settings
 from rest_framework.settings import api_settings
 from rest_framework.test import APITestCase
 
-from impact_map.models import Region, Product, Contribution, DistributionRecord
+from impact_map.models import Region, Product, Contribution, DistributionRecord, MapProject
 from impact_map.serializers import mask_families_count
+from impact_map.services import coarsen_coord
+from impact_map.providers import get_provider
 
 
 class MaskFamiliesTests(APITestCase):
@@ -187,6 +189,124 @@ class ContributionStatusActionTests(APITestCase):
             self.assertEqual(res.status_code, 200)
             self.contrib.refresh_from_db()
             self.assertEqual(self.contrib.status, expected)
+
+
+class MultiProjectApiTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        call_command("seed_impact_map")
+
+    def test_projects_list_public(self):
+        res = self.client.get("/api/map/projects/")
+        self.assertEqual(res.status_code, 200)
+        slugs = {p["slug"] for p in res.data}
+        self.assertIn("tafaqadhum", slugs)
+        self.assertIn("saqya", slugs)
+        taf = next(p for p in res.data if p["slug"] == "tafaqadhum")
+        self.assertTrue(len(taf["layers"]) >= 1)
+
+    def test_native_markers_regions_kpis(self):
+        m = self.client.get("/api/map/projects/tafaqadhum/markers/")
+        r = self.client.get("/api/map/projects/tafaqadhum/regions/")
+        k = self.client.get("/api/map/projects/tafaqadhum/kpis/")
+        self.assertEqual(m.status_code, 200)
+        self.assertEqual(len(m.data), 8)   # 8 outlets
+        self.assertEqual(len(r.data), 12)  # 12 regions
+        self.assertTrue(any(x["key"] == "families_served" for x in k.data))
+
+    def test_unknown_project_404(self):
+        res = self.client.get("/api/map/projects/does-not-exist/markers/")
+        self.assertEqual(res.status_code, 404)
+
+
+class SaqyaProviderPrivacyTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        call_command("seed_impact_map")
+        call_command("seed_saqya")
+        self.project = MapProject.objects.get(slug="saqya")
+
+    def test_gps_is_coarsened(self):
+        self.assertEqual(coarsen_coord(24.7745, 2), 24.77)
+        prov = get_provider(self.project)
+        for mk in prov.markers():
+            # مخشّنة إلى منزلتين عشريتين على الأكثر
+            self.assertLessEqual(len(str(mk["lat"]).split(".")[-1]), 2)
+
+    def test_public_markers_exclude_raw_coords_and_pii(self):
+        res = self.client.get("/api/map/projects/saqya/markers/")
+        body = json.dumps(res.data, ensure_ascii=False)
+        self.assertEqual(res.status_code, 200)
+        self.assertNotIn("24.774", body)   # الإحداثية الدقيقة الأصلية
+        self.assertNotIn("saqya_demo_donor", body)
+        self.assertNotIn("5000", body)     # مبلغ الكفالة لا يظهر
+
+    def test_small_beneficiaries_masked(self):
+        prov = get_provider(self.project)
+        marks = {m["id"]: m for m in prov.markers()}
+        # sp-3 لديه 3 مستفيدين (<5) ⇒ يُقنّع
+        self.assertEqual(marks["sp-3"]["beneficiaries"], "<5")
+
+    def test_regions_grid_aggregation(self):
+        res = self.client.get("/api/map/projects/saqya/regions/")
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(len(res.data) >= 1)
+        for row in res.data:
+            self.assertNotIn("donor", row)
+
+
+class ProjectManagerRbacTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        call_command("seed_impact_map")
+        self.admin = User.objects.create_user(username="adm@x.com", email="adm@x.com", password="Hello12345!")
+        self.admin.profile.role = "admin"; self.admin.profile.save()
+        self.manager = User.objects.create_user(username="mgr@x.com", email="mgr@x.com", password="Hello12345!")
+        self.manager.profile.role = "manager"; self.manager.profile.save()
+        # مشروع خاص بالمدير
+        self.mine = MapProject.objects.create(name="مشروعي", slug="mine", source_type="native", manager=self.manager)
+        self.other = MapProject.objects.get(slug="tafaqadhum")
+
+    def test_manager_cannot_create_project(self):
+        self.client.force_authenticate(self.manager)
+        res = self.client.post("/api/map/admin/map-projects/", {"name": "x", "slug": "x", "source_type": "native"}, format="json")
+        self.assertEqual(res.status_code, 403)
+
+    def test_admin_can_create_project(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.post("/api/map/admin/map-projects/", {"name": "جديد", "slug": "new-proj", "source_type": "native"}, format="json")
+        self.assertEqual(res.status_code, 201)
+
+    def test_manager_sees_only_own_projects(self):
+        self.client.force_authenticate(self.manager)
+        res = self.client.get("/api/map/admin/map-projects/")
+        self.assertEqual(res.status_code, 200)
+        slugs = {p["slug"] for p in (res.data.get("results", res.data) if isinstance(res.data, dict) else res.data)}
+        self.assertEqual(slugs, {"mine"})
+
+    def test_manager_can_add_region_to_own_project(self):
+        self.client.force_authenticate(self.manager)
+        res = self.client.post("/api/map/admin/regions/", {
+            "project": self.mine.id, "name": "ح", "slug": "hh", "center_lat": 24.7,
+            "center_lng": 46.7, "priority": "low", "is_active": True, "order": 1,
+        }, format="json")
+        self.assertEqual(res.status_code, 201)
+
+    def test_manager_cannot_add_region_to_other_project(self):
+        self.client.force_authenticate(self.manager)
+        res = self.client.post("/api/map/admin/regions/", {
+            "project": self.other.id, "name": "ح2", "slug": "hh2", "center_lat": 24.7,
+            "center_lng": 46.7, "priority": "low", "is_active": True, "order": 1,
+        }, format="json")
+        self.assertEqual(res.status_code, 403)
+
+    def test_manager_scoped_region_list(self):
+        # منطقة في مشروع آخر لا تظهر للمدير
+        self.client.force_authenticate(self.manager)
+        res = self.client.get("/api/map/admin/regions/")
+        self.assertEqual(res.status_code, 200)
+        data = res.data.get("results", res.data) if isinstance(res.data, dict) else res.data
+        self.assertEqual(len(data), 0)  # مشروعه لا يحوي مناطق بعد
 
 
 class SeedIdempotencyTests(APITestCase):
