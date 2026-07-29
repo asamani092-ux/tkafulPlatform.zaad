@@ -2,7 +2,7 @@ import re
 
 from rest_framework import serializers
 
-from .models import Region, Product, Outlet, Contribution, DistributionRecord
+from .models import Region, Product, Outlet, Contribution, DistributionRecord, MapProject, ProjectMapLayer
 
 
 def mask_families_count(value: int):
@@ -10,6 +10,39 @@ def mask_families_count(value: int):
     if value < 5:
         return "<5"
     return value
+
+
+# ---- MapProject / ProjectMapLayer ----
+class ProjectMapLayerPublicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectMapLayer
+        fields = ["layer_key", "label", "marker_type", "icon_key", "color", "kpi_keys", "order"]
+
+
+class MapProjectPublicSerializer(serializers.ModelSerializer):
+    layers = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MapProject
+        fields = ["id", "name", "slug", "source_type", "icon_key", "color", "cta_url", "order", "layers"]
+
+    def get_layers(self, obj):
+        qs = obj.layers.filter(enabled=True)
+        return ProjectMapLayerPublicSerializer(qs, many=True).data
+
+
+class ProjectMapLayerAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectMapLayer
+        fields = "__all__"
+
+
+class MapProjectAdminSerializer(serializers.ModelSerializer):
+    manager_name = serializers.CharField(source="manager.username", read_only=True)
+
+    class Meta:
+        model = MapProject
+        fields = "__all__"
 
 
 class PublicProductSerializer(serializers.ModelSerializer):

@@ -94,6 +94,33 @@ class Command(BaseCommand):
             )
         self.stdout.write(self.style.SUCCESS("MapProject 'تفقدهم' + layers upserted"))
 
+        # مشروع «سقيا» (حيّ من تطبيق saqya) — لجعل الخارطة متعددة المشاريع
+        saqya_project, _ = MapProject.objects.update_or_create(
+            slug="saqya",
+            defaults={
+                "name": "كفالات السقيا",
+                "source_type": "saqya",
+                "icon_key": "Droplet",
+                "color": "#0e7490",
+                "is_active": True,
+                "order": 1,
+            },
+        )
+        SAQYA_LAYERS = [
+            ("regions", "نطاقات الكفالات", "", "MapPin", "#0e7490", ["families_served", "completion_percent"], 1),
+            ("sponsorships", "الكفالات", "", "HeartHandshake", "#0e7490", ["beneficiaries"], 2),
+            ("deliveries", "التوثيق الميداني", "", "Camera", "#287a63", [], 3),
+        ]
+        for layer_key, label, marker_type, icon_key, color, kpi_keys, order in SAQYA_LAYERS:
+            ProjectMapLayer.objects.update_or_create(
+                project=saqya_project, layer_key=layer_key, marker_type=marker_type,
+                defaults={
+                    "label": label, "icon_key": icon_key, "color": color,
+                    "enabled": True, "kpi_keys": kpi_keys, "order": order,
+                },
+            )
+        self.stdout.write(self.style.SUCCESS("MapProject 'سقيا' + layers upserted"))
+
         region_by_slug = {}
         for name, slug, lat, lng, priority, order in REGIONS:
             region, _ = Region.objects.update_or_create(
