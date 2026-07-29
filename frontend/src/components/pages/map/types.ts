@@ -47,6 +47,54 @@ export interface MapOutlet {
   working_hours: string;
 }
 
+// ---- متعدد المشاريع (Multi-Project) ----
+export type MapSourceType = "native" | "saqya";
+
+export interface MapLayerConf {
+  layer_key: string;
+  label: string;
+  marker_type: string;
+  icon_key: string;
+  color: string;
+  kpi_keys: string[];
+  order: number;
+}
+
+export interface MapProjectPublic {
+  id: number;
+  name: string;
+  slug: string;
+  source_type: MapSourceType;
+  icon_key: string;
+  color: string;
+  cta_url: string;
+  order: number;
+  layers: MapLayerConf[];
+}
+
+export interface MapMarker {
+  id: string;
+  name: string;
+  type: string;
+  layer: string;
+  lat: number;
+  lng: number;
+  icon_key?: string;
+  color?: string;
+  region_slug?: string | null;
+  address?: string;
+  working_hours?: string;
+  beneficiaries?: number | "<5";
+}
+
+export interface MapKpi {
+  key: string;
+  label: string;
+  value: number | string;
+  unit?: string;
+  icon?: string;
+}
+
 export const PRIORITY_COLORS: Record<RegionPriority, string> = {
   high: "#dc2626",
   medium: "#f97316",

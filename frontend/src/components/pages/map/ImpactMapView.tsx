@@ -1,14 +1,15 @@
 import { MapContainer, TileLayer, CircleMarker, Popup, Polygon } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import type { MapRegion, MapOutlet, MapProduct } from "./types";
-import { PRIORITY_COLORS, PRIORITY_LABELS, OUTLET_COLORS, OUTLET_LABELS } from "./types";
+import type { MapRegion, MapMarker, MapLayerConf, MapProduct } from "./types";
+import { PRIORITY_COLORS, PRIORITY_LABELS } from "./types";
+import { getMapIcon } from "./icons";
 
 interface Props {
   regions: MapRegion[];
-  outlets: MapOutlet[];
+  markers: MapMarker[];
   selectedSlug: string | null;
-  productFilter: string | null;
   onSelectRegion: (slug: string) => void;
+  projectColor?: string;
 }
 
 function parseBoundary(raw: string | null): [number, number][] | null {
@@ -23,22 +24,20 @@ function parseBoundary(raw: string | null): [number, number][] | null {
   }
 }
 
-/** خريطة المناطق والمنافذ — ألوان حسب الأولوية/النوع. */
-export default function ImpactMapView({ regions, outlets, selectedSlug, productFilter, onSelectRegion }: Props) {
+/** خريطة متعددة المشاريع — مناطق (بألوان الأولوية) + علامات المشروع (بأيقونة/لون كل طبقة). */
+export default function ImpactMapView({ regions, markers, selectedSlug, onSelectRegion, projectColor = "#8B1538" }: Props) {
   const center: [number, number] = regions.length
     ? [regions[0].center_lat, regions[0].center_lng]
-    : [24.7136, 46.6753];
-
-  const filteredOutlets = productFilter
-    ? outlets
-    : outlets;
+    : markers.length
+      ? [markers[0].lat, markers[0].lng]
+      : [24.7136, 46.6753];
 
   return (
     <div className="impact-map-container" style={{ height: "min(420px, 55vh)", borderRadius: "0.75rem", overflow: "hidden", border: "2px solid var(--tmkeen-surface-border)" }}>
       <MapContainer center={center} zoom={10} style={{ height: "100%", width: "100%" }} scrollWheelZoom>
         <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         {regions.map((r) => {
-          const color = PRIORITY_COLORS[r.priority];
+          const color = PRIORITY_COLORS[r.priority] || projectColor;
           const poly = parseBoundary(r.boundary);
           const selected = r.slug === selectedSlug;
           if (poly && poly.length > 2) {
@@ -58,32 +57,40 @@ export default function ImpactMapView({ regions, outlets, selectedSlug, productF
             </CircleMarker>
           );
         })}
-        {filteredOutlets.map((o) => (
-          <CircleMarker key={`o-${o.id}`} center={[o.lat, o.lng]} radius={6}
-            pathOptions={{ color: OUTLET_COLORS[o.type], fillColor: OUTLET_COLORS[o.type], fillOpacity: 0.9 }}>
-            <Popup>
-              <div dir="rtl">
-                <strong>{o.name}</strong><br />
-                {OUTLET_LABELS[o.type]}<br />
-                {o.address}
-              </div>
-            </Popup>
-          </CircleMarker>
-        ))}
+        {markers.map((m) => {
+          const color = m.color || projectColor;
+          return (
+            <CircleMarker key={m.id} center={[m.lat, m.lng]} radius={6}
+              pathOptions={{ color, fillColor: color, fillOpacity: 0.9 }}>
+              <Popup>
+                <div dir="rtl">
+                  <strong>{m.name}</strong>
+                  {m.address ? <><br />{m.address}</> : null}
+                  {m.working_hours ? <><br />{m.working_hours}</> : null}
+                  {m.beneficiaries !== undefined ? <><br />المستفيدون: {m.beneficiaries}</> : null}
+                </div>
+              </Popup>
+            </CircleMarker>
+          );
+        })}
       </MapContainer>
     </div>
   );
 }
 
-export function MapLegend() {
+/** مفتاح الطبقات لكل مشروع (أيقونة + لون + اسم الطبقة). */
+export function MapLegend({ layers }: { layers: MapLayerConf[] }) {
   return (
     <div className="mt-3 flex flex-wrap gap-3 text-xs font-semibold">
-      {(Object.keys(PRIORITY_COLORS) as Array<keyof typeof PRIORITY_COLORS>).map((p) => (
-        <span key={p} className="flex items-center gap-1">
-          <span style={{ width: 12, height: 12, borderRadius: "50%", background: PRIORITY_COLORS[p], display: "inline-block" }} />
-          {PRIORITY_LABELS[p]}
-        </span>
-      ))}
+      {layers.map((l) => {
+        const Icon = getMapIcon(l.icon_key);
+        return (
+          <span key={`${l.layer_key}-${l.marker_type}`} className="flex items-center gap-1">
+            <Icon size={14} style={{ color: l.color }} />
+            {l.label || l.layer_key}
+          </span>
+        );
+      })}
     </div>
   );
 }
