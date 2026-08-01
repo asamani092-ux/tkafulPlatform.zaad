@@ -70,7 +70,10 @@ export default function AdminSignIn() {
       <HeroBand title="أهلاً بعودتك إلى لوحة التحكم" subtitle="بوجودك تكتمل المنظومة ونمضي نحو التمكين." />
       <main className="mx-auto max-w-md px-4 py-12">
         <Card>
-          <h2 className="mb-6 text-center text-2xl font-bold text-primary">تسجيل دخول المشرف</h2>
+          <div className="mb-4 flex justify-center">
+            <img src="/logo-alzad.svg" alt="جمعية الزاد" style={{ height: 72, width: "auto" }} />
+          </div>
+          <h2 className="mb-6 text-center text-2xl font-bold text-primary">تسجيل دخول المشرف — تكافل وأثر</h2>
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <Input type="email" dir="ltr" label="البريد الإلكتروني" placeholder="admin@takaful.com"
               value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} error={errors.email} required />

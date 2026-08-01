@@ -19,7 +19,10 @@ export default function UserShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen bg-surface-muted" dir="rtl">
       <aside className="w-60 shrink-0 border-l border-surface-border bg-surface p-5">
-        <div className="mb-6 text-lg font-extrabold text-primary">تكافل</div>
+        <div className="mb-6 flex items-center gap-2 text-lg font-extrabold text-primary">
+          <img src="/logo-alzad.svg" alt="جمعية الزاد" style={{ height: 36, width: "auto" }} />
+          تكافل وأثر
+        </div>
         <div className="mb-4 text-sm text-brand-gray">مرحبًا {user?.name || "متطوّع"}</div>
         <nav className="space-y-1">
           {links.map((l) => {

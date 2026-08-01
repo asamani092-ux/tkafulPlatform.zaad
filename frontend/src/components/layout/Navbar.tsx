@@ -31,8 +31,9 @@ export default function Navbar() {
   return (
     <nav className="sticky top-0 z-30 border-b border-surface-border bg-surface">
       <div className="mx-auto flex max-w-page items-center justify-between px-4 py-3">
-        <Link to="/" className="text-xl font-extrabold text-primary">
-          تكافل
+        <Link to="/" className="flex items-center gap-2 text-xl font-extrabold text-primary">
+          <img src="/logo-alzad.svg" alt="جمعية الزاد" style={{ height: 40, width: "auto" }} />
+          تكافل وأثر
         </Link>
 
         <div className="hidden items-center gap-2 md:flex">
