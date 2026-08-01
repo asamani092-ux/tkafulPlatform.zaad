@@ -38,8 +38,10 @@ def build_migrated_state():
                                 options=[{"value": "p1", "label": "منتج"}])
     MapItem.objects.create(map=map_obj, layer=layer, lat=24.7, lng=46.6, name="منطقة",
                            data={"kind": "region"})
+    source_contribution = Contribution.objects.first()
     MapContribution.objects.create(map=map_obj, name="مساهم", phone="512345678",
-                                   mode="self_distribution", quantity=3)
+                                   mode="self_distribution", quantity=3,
+                                   external_id=f"impact_map:{source_contribution.id}")
     return map_obj
 
 
@@ -78,6 +80,55 @@ class MigrationIntegrityCommandTests(APITestCase):
         build_migrated_state()
         with self.assertRaises(CommandError):
             call_command("check_migration_integrity", expect="reverted")
+
+
+class PostMigrateSeedSyncTests(APITestCase):
+    """
+    سيناريو المطوّر الافتراضي: migrate على قاعدة جديدة (مصدر impact_map فارغ
+    لحظة تشغيل maps.0002) ثم seed_impact_map — يجب أن تمر فحوص السلامة
+    بفضل المزامنة التلقائية sync_impact_map_to_maps.
+    """
+
+    def test_migrate_then_seed_passes_integrity(self):
+        # قاعدة الاختبار مُهاجرة بالفعل والمصدر كان فارغاً أثناء maps.0002
+        call_command("seed_impact_map")  # يستدعي sync_impact_map_to_maps تلقائياً
+        call_command("check_migration_integrity", expect="migrated")
+
+    def test_seed_and_sync_are_idempotent(self):
+        call_command("seed_impact_map")
+        tafaqqadhum = Project.objects.get(slug="tafaqqadhum")
+        map_obj = Map.objects.get(project=tafaqqadhum, title="خارطة تفقدهم")
+        items_before = MapItem.objects.filter(map=map_obj).count()
+
+        # إعادة البذر + المزامنة لا تُكرّر شيئاً
+        call_command("seed_impact_map")
+        self.assertEqual(MapItem.objects.filter(map=map_obj).count(), items_before)
+        call_command("check_migration_integrity", expect="migrated")
+
+    def test_sync_copies_late_contributions_once(self):
+        call_command("seed_impact_map")
+        region = Region.objects.first()
+        product = Product.objects.first()
+        c = Contribution.objects.create(
+            name="مساهم متأخر", phone="512345678", region=region, product=product,
+            quantity=3, mode="self_distribution",
+        )
+        call_command("sync_impact_map_to_maps")
+        call_command("sync_impact_map_to_maps")  # إعادة تشغيل آمنة
+        copies = MapContribution.objects.filter(external_id=f"impact_map:{c.id}")
+        self.assertEqual(copies.count(), 1)
+        # الحفاظ على تاريخ الإنشاء الأصلي
+        self.assertEqual(copies.first().created_at, c.created_at)
+        call_command("check_migration_integrity", expect="migrated")
+
+    def test_direct_public_contributions_do_not_break_integrity(self):
+        call_command("seed_impact_map")
+        tafaqqadhum = Project.objects.get(slug="tafaqqadhum")
+        map_obj = Map.objects.get(project=tafaqqadhum, title="خارطة تفقدهم")
+        # مساهمة عامة مباشرة على النظام الجديد (بدون وسم مصدر) — خارج مقارنة السلامة
+        MapContribution.objects.create(map=map_obj, name="زائر", phone="512345678",
+                                       mode="self_distribution", quantity=1)
+        call_command("check_migration_integrity", expect="migrated")
 
 
 class LegacyUrlCompatibilityTests(APITestCase):

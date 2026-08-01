@@ -169,11 +169,16 @@ class MapContribution(models.Model):
     quantity = models.IntegerField()
     note = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    # وسم المصدر للمزامنة التراكمية (impact_map:<id>) — يمنع التكرار عند إعادة التشغيل
+    external_id = models.CharField(max_length=100, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["map", "status"])]
+        indexes = [
+            models.Index(fields=["map", "status"]),
+            models.Index(fields=["map", "external_id"]),
+        ]
 
     def __str__(self):
         return f"{self.name} — map {self.map_id} ({self.status})"
