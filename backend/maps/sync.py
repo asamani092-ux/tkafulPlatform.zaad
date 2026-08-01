@@ -16,6 +16,16 @@ MAP_TITLE = "خارطة تفقدهم"
 PROJECT_SLUG = "tafaqqadhum"
 SOURCE_PREFIX = "impact_map:"
 
+# مخطط الألوان الافتراضي: أولويات المناطق + أنواع المنافذ (تقرأه وسيلة الإيضاح في الواجهة)
+DEFAULT_COLOR_SCHEME = {
+    "high": "#dc2626",
+    "medium": "#f2b824",
+    "low": "#16a34a",
+    "sale_point": "#8b1538",
+    "permanent_corner": "#f2b824",
+    "participation_point": "#2563eb",
+}
+
 
 def _field_defs(products):
     """تعريفات المخطط الديناميكي — نفس بنية الهجرة الأصلية."""
@@ -80,11 +90,19 @@ def sync_impact_map_to_maps(apps=None) -> dict:
             "description": "خريطة شفافية توزيع المساهمات على المناطق والمنافذ (منسوخة من impact_map).",
             "visibility": "mixed",
             "icon_set": {"region": "map-pin", "outlet": "store"},
-            "color_scheme": {"high": "#dc2626", "medium": "#f2b824", "low": "#16a34a"},
+            "color_scheme": dict(DEFAULT_COLOR_SCHEME),
             "published_at": timezone.now(),
         },
     )
     stats["map_created"] = map_created
+
+    # إضافة تراكمية لمفاتيح الألوان الناقصة على الخرائط القائمة — لا استبدال لتخصيصات يدوية
+    scheme = dict(map_obj.color_scheme or {})
+    missing = {k: v for k, v in DEFAULT_COLOR_SCHEME.items() if k not in scheme}
+    if missing:
+        scheme.update(missing)
+        map_obj.color_scheme = scheme
+        map_obj.save(update_fields=["color_scheme"])
 
     regions_layer, _ = MapLayer.objects.get_or_create(
         map=map_obj, name="المناطق", defaults={"visibility": "public", "order": 0, "style": {"kind": "region"}},
