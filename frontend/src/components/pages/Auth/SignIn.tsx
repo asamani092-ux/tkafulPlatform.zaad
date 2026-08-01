@@ -79,7 +79,7 @@ export default function SignIn() {
       <main className="mx-auto max-w-md px-4 py-12">
         <Card>
           <div className="mb-4 flex justify-center">
-            <img src="/logo-alzad.svg" alt="جمعية الزاد" style={{ height: 72, width: "auto" }} />
+            <img src="/logo.png" alt="جمعية الزاد" style={{ height: 72, width: "auto" }} />
           </div>
           <h2 className="mb-6 text-center text-2xl font-bold text-primary">الدخول الموحّد — تكافل وأثر</h2>
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
