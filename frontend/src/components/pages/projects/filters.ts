@@ -31,3 +31,44 @@ export function applyDynamicFilters(
     active.every(([key, value]) => item.data?.[key] === value),
   );
 }
+
+/**
+ * دمج حقول عدة خرائط لفلاتر موحّدة (المجمّع /map): توحيد بالمفتاح مع اتحاد خيارات
+ * select حسب القيمة — O(M·F) حيث M عدد الخرائط وF حقولها.
+ */
+export function mergeFields(fieldSets: MapFieldDef[][]): MapFieldDef[] {
+  const merged = new Map<string, MapFieldDef>();
+  for (const fields of fieldSets) {
+    for (const field of fields) {
+      const existing = merged.get(field.key);
+      if (!existing) {
+        merged.set(field.key, { ...field, options: [...field.options] });
+        continue;
+      }
+      if (field.type === "select" && existing.type === "select") {
+        const seen = new Set(existing.options.map(optionValue));
+        for (const option of field.options) {
+          if (!seen.has(optionValue(option))) {
+            existing.options.push(option);
+            seen.add(optionValue(option));
+          }
+        }
+      }
+    }
+  }
+  return [...merged.values()].sort((a, b) => a.order - b.order);
+}
+
+/**
+ * جمع قيم قد تكون مقنّعة PDPL ("<5"): يجمع الأرقام فقط ويُعلم بوجود قيم مقنّعة —
+ * لا يكشف القيم الصغيرة أبداً. O(V).
+ */
+export function sumMasked(values: Array<number | "<5">): { total: number; masked: boolean } {
+  let total = 0;
+  let masked = false;
+  for (const value of values) {
+    if (value === "<5") masked = true;
+    else total += value;
+  }
+  return { total, masked };
+}

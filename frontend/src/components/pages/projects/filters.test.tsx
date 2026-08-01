@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { applyDynamicFilters, filterableFields, optionLabel, optionValue } from "./filters";
+import {
+  applyDynamicFilters,
+  filterableFields,
+  mergeFields,
+  optionLabel,
+  optionValue,
+  sumMasked,
+} from "./filters";
 import type { MapFieldDef, PublicMapItem } from "./types";
 
 const fields: MapFieldDef[] = [
@@ -40,5 +47,26 @@ describe("dynamic public filters (MapItemField-driven)", () => {
 
   it("filters by boolean false without dropping it", () => {
     expect(applyDynamicFilters(items, { active: false }).map((i) => i.id)).toEqual([2, 3]);
+  });
+});
+
+describe("aggregator helpers (unified /map)", () => {
+  it("merges fields across maps with select options union", () => {
+    const a: MapFieldDef[] = [
+      { key: "kind", label: "النوع", type: "select", required: false, options: ["region"], order: 0 },
+    ];
+    const b: MapFieldDef[] = [
+      { key: "kind", label: "النوع", type: "select", required: false, options: ["region", { value: "outlet", label: "منفذ" }], order: 0 },
+      { key: "active", label: "نشط", type: "boolean", required: false, options: [], order: 1 },
+    ];
+    const merged = mergeFields([a, b]);
+    expect(merged.map((f) => f.key)).toEqual(["kind", "active"]);
+    expect(merged[0].options.map(optionValue)).toEqual(["region", "outlet"]);
+  });
+
+  it("sums masked values without revealing small counts (PDPL)", () => {
+    expect(sumMasked([10, 7])).toEqual({ total: 17, masked: false });
+    expect(sumMasked([10, "<5"])).toEqual({ total: 10, masked: true });
+    expect(sumMasked(["<5", "<5"])).toEqual({ total: 0, masked: true });
   });
 });

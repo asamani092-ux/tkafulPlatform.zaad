@@ -1,6 +1,6 @@
 import { MapContainer, TileLayer, CircleMarker, Popup, Polygon } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import type { PublicMapDetail, PublicMapItem } from "./types";
+import { COLOR_SCHEME_LABELS, type PublicMapDetail, type PublicMapItem } from "./types";
 
 interface Props {
   maps: PublicMapDetail[]; // خريطة واحدة أو عدة خرائط (المجمّع الموحّد)
@@ -23,11 +23,33 @@ function parseBoundary(raw: unknown): [number, number][] | null {
 
 function itemColor(item: PublicMapItem, detail: PublicMapDetail): string {
   const scheme = detail.color_scheme || {};
-  const priority = item.data?.priority;
-  if (typeof priority === "string" && scheme[priority]) return scheme[priority];
-  const kind = item.data?.kind;
-  if (typeof kind === "string" && scheme[kind]) return scheme[kind];
+  // الترتيب: أولوية المنطقة → نوع المنفذ → نوع العنصر → لون هوية المشروع
+  for (const key of ["priority", "outlet_type", "kind"] as const) {
+    const value = item.data?.[key];
+    if (typeof value === "string" && scheme[value]) return scheme[value];
+  }
   return detail.project.brand_color || "#8b1538";
+}
+
+/** وسيلة إيضاح مولّدة من color_scheme للخرائط الظاهرة (مفاتيح موحّدة بلا تكرار). */
+export function MapLegend({ maps }: { maps: PublicMapDetail[] }) {
+  const entries = new Map<string, string>();
+  maps.forEach((m) =>
+    Object.entries(m.color_scheme || {}).forEach(([key, color]) => {
+      if (!entries.has(key) && typeof color === "string") entries.set(key, color);
+    }),
+  );
+  if (!entries.size) return null;
+  return (
+    <div className="mt-3 flex flex-wrap gap-3 text-xs font-semibold">
+      {[...entries.entries()].map(([key, color]) => (
+        <span key={key} className="flex items-center gap-1">
+          <span style={{ width: 12, height: 12, borderRadius: "50%", background: color, display: "inline-block" }} />
+          {COLOR_SCHEME_LABELS[key] || key}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 /** عارض الخرائط العام — يرسم عناصر الطبقات العامة لخريطة أو أكثر (leaflet). */
