@@ -6,6 +6,7 @@ idempotent: update_or_create على slug — لا يُكرّر الصفوف عن
 """
 from datetime import date
 
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -128,3 +129,7 @@ class Command(BaseCommand):
                 },
             )
         self.stdout.write(self.style.SUCCESS(f"Distributions: {len(DISTRIBUTIONS)} upserted"))
+
+        # مزامنة تلقائية إلى نظام الخرائط الجديد (خريطة «تفقدهم») — idempotent.
+        # ضرورية عندما يُبذر المصدر بعد migrate (فتكون هجرة maps.0002 قد مرّت على مصدر فارغ).
+        call_command("sync_impact_map_to_maps")

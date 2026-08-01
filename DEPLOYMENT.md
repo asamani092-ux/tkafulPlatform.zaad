@@ -57,6 +57,22 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now takaful-gunicorn
 ```
 
+## 6.5 Post-migrate sync (نظام الخرائط)
+
+هجرة البيانات `maps.0002` تنسخ بيانات `impact_map` الموجودة **لحظة تشغيلها**.
+إذا بُذرت/استُوردت بيانات `impact_map` بعد `migrate` (أو وصلت لاحقاً من أي مصدر)،
+شغّل المزامنة الـ idempotent التالية — آمنة لإعادة التشغيل ولا تكرّر صفوفاً:
+
+```bash
+cd /var/www/takaful/backend
+./venv/bin/python manage.py sync_impact_map_to_maps
+# للتحقق من سلامة الأعداد بعد المزامنة:
+./venv/bin/python manage.py check_migration_integrity --expect migrated
+```
+
+ملاحظة: `seed_impact_map` يستدعي `sync_impact_map_to_maps` تلقائياً في نهايته،
+فسير العمل الافتراضي `migrate` → `seed_impact_map` مغطّى دون خطوة إضافية.
+
 ## 7. Daily backup (cron)
 
 ```bash

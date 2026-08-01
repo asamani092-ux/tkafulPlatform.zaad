@@ -121,8 +121,11 @@ def _cross_checks(expect: str):
                 ("outlet items == impact_map.Outlet",
                  MapItem.objects.filter(map=copied_map, data__kind="outlet").count(),
                  Outlet.objects.count()),
+                # تُحتسب النسخ الموسومة فقط — المساهمات العامة الجديدة (بدون وسم) خارج المقارنة
                 ("map contributions == impact_map.Contribution",
-                 MapContribution.objects.filter(map=copied_map).count(),
+                 MapContribution.objects.filter(
+                     map=copied_map, external_id__startswith="impact_map:"
+                 ).count(),
                  Contribution.objects.count()),
                 ("product options == impact_map.Product",
                  len(MapItemField.objects.filter(map=copied_map, key="product")
