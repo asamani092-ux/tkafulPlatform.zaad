@@ -72,6 +72,24 @@
 - `IsAdmin` كانت مكررة في `takaful_app.views` و`notifications.views`. نُقلت النسخة القانونية إلى
   `core/permissions.py` مع إبقاء aliases في المواضع القديمة للتوافق (ثبات الواجهات).
 
+## D-13 — `Project.cover_image` كرابط URL وليس ImageField
+- لا يوجد Pillow في requirements، وإضافته تبعية جديدة غير ضرورية لهذا النطاق.
+- **القرار**: `URLField` لرابط صورة الغلاف. يمكن الترقية لاحقاً إلى رفع ملفات عبر نمط
+  private-media القائم في sponsorships إذا طُلب.
+
+## D-14 — واجهة /map القديمة (خارطة تفقدهم) تُستبدل بالمجمّع الموحّد
+- صفحة `/map` الجديدة تجمع كل الطبقات العامة لخرائط المشاريع النشطة مع فلترة بالمشروع،
+  وخريطة «تفقدهم» المهاجرة تُعرض عبر `/projects/tafaqqadhum/map` بنفس المسار العام الجديد.
+- أرقام «الأسر المخدومة» المشتقة من `DistributionRecord` لم تكن ضمن نطاق هجرة البيانات
+  الإلزامي (Region/Product/Outlet/Contribution فقط) — تبقى متاحة عبر `/api/map/*` القديم
+  وتُهاجر في PR لاحق (مقيّدة في DEPRECATIONS.md).
+- `/Admin/map` القديم → redirect إلى `/Admin/maps` (إدارة نظام الخرائط الجديد).
+
+## D-15 — دخول مديري المشاريع (project-admin)
+- صفحة `/admin/signin` القديمة ترفض غير `admin` (سلوك قائم لم يُكسر). مدير المشروع يسجّل
+  عبر `/signin` العادية ثم يفتح `/Admin/projects`؛ الحارس الجديد `staff` يتحقق من العضوية
+  عبر `/api/platform/my-memberships/`.
+
 ## D-12 — `check --deploy` تحت بيئة إنتاج
 - يُشغَّل بـ `DEBUG=False` و`SECRET_KEY` عشوائي قوي و`SECURE_*` المفعّلة افتراضاً في settings عند
   `DEBUG=False`. النتيجة مسجلة في التقرير النهائي.

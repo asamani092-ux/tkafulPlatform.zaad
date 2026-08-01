@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 import { AuthProvider } from "./contexts/AuthContext";
 import { ToastProvider } from "./contexts/ToastContext";
@@ -42,8 +42,13 @@ const ServiceRequests = lazy(() => import("./components/pages/admin/ServiceReque
 const ExecutiveDashboard = lazy(() => import("./components/pages/ExecutiveDashboard"));
 const ManageDashboard = lazy(() => import("./components/pages/ManageDashboard"));
 const SaqyaHome = lazy(() => import("./components/pages/saqya"));
-const ImpactMapPage = lazy(() => import("./components/pages/map"));
-const ImpactMapAdmin = lazy(() => import("./components/pages/admin/ImpactMapAdmin"));
+
+// project-first: صفحات المشاريع ونظام الخرائط المتعددة
+const ProjectLanding = lazy(() => import("./components/pages/projects/ProjectLanding"));
+const ProjectMapPage = lazy(() => import("./components/pages/projects/ProjectMapPage"));
+const MapsAggregator = lazy(() => import("./components/pages/projects/MapsAggregator"));
+const PlatformProjects = lazy(() => import("./components/pages/admin/PlatformProjects"));
+const MapsAdmin = lazy(() => import("./components/pages/admin/MapsAdmin"));
 
 function Lazy({ children }: { children: ReactNode }) {
   return <Suspense fallback={<LoadingState />}>{children}</Suspense>;
@@ -55,7 +60,9 @@ function AppContent() {
   const isUserPage = pathname.startsWith("/user");
   const isAdminPage = pathname.startsWith("/admin");
   const isAdminSignIn = pathname === "/admin/signin";
-  const isSaqyaPage = pathname.startsWith("/saqya");
+  const isSaqyaPage =
+    pathname.startsWith("/saqya") ||
+    (pathname.startsWith("/projects/") && pathname.endsWith("/sponsorships"));
   const isErrorPage = pathname === "/403" || pathname === "/404";
   const hideChrome = isUserPage || isSaqyaPage || (isAdminPage && !isAdminSignIn) || isErrorPage;
 
@@ -94,10 +101,21 @@ function AppContent() {
 
           <Route path="/executive" element={<Lazy><ExecutiveDashboard /></Lazy>} />
           <Route path="/executive/manage" element={<Lazy><ManageDashboard /></Lazy>} />
-          <Route path="/saqya" element={<Lazy><SaqyaHome /></Lazy>} />
-          <Route path="/map" element={<Lazy><ImpactMapPage /></Lazy>} />
 
-          <Route path="/Admin/map" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><ImpactMapAdmin /></ProtectedRoute></Lazy>} />
+          {/* project-first: صفحات المشاريع والخرائط */}
+          <Route path="/projects/:slug" element={<Lazy><ProjectLanding /></Lazy>} />
+          <Route path="/projects/:slug/map" element={<Lazy><ProjectMapPage /></Lazy>} />
+          <Route path="/projects/:slug/sponsorships" element={<Lazy><SaqyaHome /></Lazy>} />
+          <Route path="/map" element={<Lazy><MapsAggregator /></Lazy>} />
+
+          {/* توافق خلفي: المسار القديم /saqya → المسار الجديد داخل المشروع */}
+          <Route path="/saqya" element={<Navigate to="/projects/saqya/sponsorships" replace />} />
+
+          {/* الأدمن الموحّد role-scoped: مشرف عام أو عضو مشروع */}
+          <Route path="/Admin/projects" element={<Lazy><ProtectedRoute requiredRole="staff" signInPath="/admin/signin"><PlatformProjects /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/maps" element={<Lazy><ProtectedRoute requiredRole="staff" signInPath="/admin/signin"><MapsAdmin /></ProtectedRoute></Lazy>} />
+          {/* توافق خلفي: مسار إدارة الخارطة القديم → إدارة الخرائط الجديدة */}
+          <Route path="/Admin/map" element={<Navigate to="/Admin/maps" replace />} />
 
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
