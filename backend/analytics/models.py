@@ -127,7 +127,7 @@ class StaffTask(models.Model):
     initiative = models.CharField(max_length=200, blank=True)  # "أضحيتي زاد وإسعاد"
     # ربط اختياري بمشروع موحّد (لدراسة دمج مشاريع GAS مستقبلاً)
     project = models.ForeignKey(
-        'takaful_app.Project', on_delete=models.SET_NULL, null=True, blank=True,
+        'volunteering.Project', on_delete=models.SET_NULL, null=True, blank=True,
         related_name="staff_tasks"
     )
     completed_date = models.DateField(null=True, blank=True)

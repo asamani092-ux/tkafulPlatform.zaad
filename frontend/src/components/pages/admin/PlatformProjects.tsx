@@ -1,0 +1,188 @@
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import AdminShell from "../../layout/AdminShell";
+import Card from "../../ui/Card";
+import Button from "../../ui/Button";
+import Input from "../../ui/Input";
+import Select from "../../ui/Select";
+import Badge from "../../ui/Badge";
+import { LoadingState, ErrorState } from "../../feedback/PageStates";
+import { useToast } from "../../../contexts/ToastContext";
+import { authFetch } from "../../../lib/api";
+import { TOOL_LABELS } from "../projects/types";
+
+interface AdminTool { id: number; tool_key: string; config: Record<string, unknown>; is_enabled: boolean }
+interface AdminMember { id: number; user: number; username: string; email: string; role: string }
+interface AdminProject {
+  id: number; name: string; slug: string; description: string; brand_color: string;
+  status: string; is_active: boolean; tools: AdminTool[]; members: AdminMember[];
+  my_role: string | null;
+}
+
+const ALL_TOOLS = Object.keys(TOOL_LABELS);
+const MEMBER_ROLES = [
+  { value: "project_admin", label: "مدير مشروع" },
+  { value: "project_editor", label: "محرر" },
+  { value: "project_viewer", label: "مشاهد" },
+];
+
+/** إدارة مشاريع المنصّة — نطاق حسب الدور (super-admin يرى الكل). */
+export default function PlatformProjects() {
+  const toast = useToast();
+  const [projects, setProjects] = useState<AdminProject[]>([]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [form, setForm] = useState({ name: "", slug: "", description: "", brand_color: "#8b1538" });
+  const [memberForm, setMemberForm] = useState({ projectId: 0, userId: "", role: "project_viewer" });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const [projectsRes, meRes] = await Promise.all([
+        authFetch("/api/platform/projects/"),
+        authFetch("/api/platform/my-memberships/"),
+      ]);
+      if (!projectsRes.ok || !meRes.ok) throw new Error("fetch");
+      setProjects(await projectsRes.json());
+      setIsSuperAdmin((await meRes.json()).is_super_admin);
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const createProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const res = await authFetch("/api/platform/projects/", {
+      method: "POST",
+      body: JSON.stringify(form),
+    });
+    if (res.ok) {
+      toast.success({ title: "تم إنشاء المشروع" });
+      setForm({ name: "", slug: "", description: "", brand_color: "#8b1538" });
+      void load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error({ title: data.detail || data.slug?.[0] || "تعذّر إنشاء المشروع" });
+    }
+  };
+
+  const setTool = async (project: AdminProject, toolKey: string, enable: boolean) => {
+    const res = await authFetch(`/api/platform/projects/${project.id}/set_tool/`, {
+      method: "POST",
+      body: JSON.stringify({ tool_key: toolKey, is_enabled: enable }),
+    });
+    if (res.ok) { toast.success({ title: "تم تحديث الأداة" }); void load(); }
+    else toast.error({ title: "تعذّر تحديث الأداة (صلاحية المشرف العام)" });
+  };
+
+  const addMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const res = await authFetch(`/api/platform/projects/${memberForm.projectId}/add_member/`, {
+      method: "POST",
+      body: JSON.stringify({ user_id: Number(memberForm.userId), role: memberForm.role }),
+    });
+    if (res.ok) { toast.success({ title: "تمت إضافة العضو" }); setMemberForm({ ...memberForm, userId: "" }); void load(); }
+    else {
+      const data = await res.json().catch(() => ({}));
+      toast.error({ title: data.detail || "تعذّرت إضافة العضو" });
+    }
+  };
+
+  const removeMember = async (project: AdminProject, userId: number) => {
+    const res = await authFetch(`/api/platform/projects/${project.id}/remove_member/`, {
+      method: "POST",
+      body: JSON.stringify({ user_id: userId }),
+    });
+    if (res.ok) { toast.success({ title: "تمت إزالة العضو" }); void load(); }
+    else toast.error({ title: "تعذّرت إزالة العضو" });
+  };
+
+  if (loading) return <AdminShell><LoadingState title="جاري تحميل المشاريع…" /></AdminShell>;
+  if (error) return <AdminShell><ErrorState title="تعذّر التحميل" message="تحقّق من الاتصال." /></AdminShell>;
+
+  return (
+    <AdminShell>
+      <h1 className="mb-4 text-2xl font-extrabold text-primary">مشاريع المنصّة</h1>
+
+      {isSuperAdmin && (
+        <Card className="mb-6">
+          <h2 className="mb-3 text-lg font-bold text-primary">إنشاء مشروع جديد (المشرف العام)</h2>
+          <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={createProject}>
+            <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            <Input label="المعرّف (slug)" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} dir="ltr" required />
+            <Input label="الوصف" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            <Input label="لون الهوية" type="color" value={form.brand_color} onChange={(e) => setForm({ ...form, brand_color: e.target.value })} />
+            <div className="sm:col-span-2"><Button type="submit">إنشاء</Button></div>
+          </form>
+        </Card>
+      )}
+
+      <div className="space-y-4">
+        {projects.map((p) => (
+          <Card key={p.id}>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span style={{ width: 14, height: 14, borderRadius: 4, background: p.brand_color, display: "inline-block" }} />
+                <h3 className="text-lg font-bold text-primary">{p.name}</h3>
+                <Badge variant={p.status === "active" ? "success" : "warning"}>{p.status}</Badge>
+                {p.my_role && <Badge>{p.my_role === "super_admin" ? "مشرف عام" : p.my_role}</Badge>}
+              </div>
+              <Link to={`/projects/${p.slug}`} className="text-sm font-bold text-primary hover:underline">صفحة المشروع ←</Link>
+            </div>
+
+            <div className="mb-3">
+              <span className="text-xs font-bold text-brand-gray">الأدوات: </span>
+              {ALL_TOOLS.map((toolKey) => {
+                const tool = p.tools.find((t) => t.tool_key === toolKey);
+                const enabled = !!tool?.is_enabled;
+                return (
+                  <button key={toolKey} type="button" disabled={!isSuperAdmin}
+                    className={`m-1 rounded-full px-3 py-1 text-xs font-bold${enabled ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
+                    onClick={() => isSuperAdmin && setTool(p, toolKey, !enabled)}>
+                    {TOOL_LABELS[toolKey]}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div>
+              <span className="text-xs font-bold text-brand-gray">الأعضاء:</span>
+              <ul className="mt-1 space-y-1 text-sm">
+                {p.members.map((m) => (
+                  <li key={m.id} className="flex items-center gap-2">
+                    <span>{m.username} ({m.email || "بلا بريد"}) — {MEMBER_ROLES.find((r) => r.value === m.role)?.label || m.role}</span>
+                    {(isSuperAdmin || p.my_role === "project_admin" || p.my_role === "super_admin") && (
+                      <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => removeMember(p, m.user)}>إزالة</button>
+                    )}
+                  </li>
+                ))}
+                {p.members.length === 0 && <li className="text-brand-gray">لا أعضاء بعد.</li>}
+              </ul>
+              {(isSuperAdmin || p.my_role === "project_admin" || p.my_role === "super_admin") && (
+                <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(e) => { setMemberForm((f) => ({ ...f, projectId: p.id })); addMember(e); }}
+                  onFocus={() => setMemberForm((f) => ({ ...f, projectId: p.id }))}>
+                  <div className="w-32"><Input label="معرّف المستخدم" value={memberForm.projectId === p.id ? memberForm.userId : ""}
+                    onChange={(e) => setMemberForm({ ...memberForm, projectId: p.id, userId: e.target.value })} dir="ltr" /></div>
+                  <div className="w-36">
+                    <Select label="الدور" value={memberForm.projectId === p.id ? memberForm.role : "project_viewer"}
+                      onChange={(e) => setMemberForm({ ...memberForm, projectId: p.id, role: e.target.value })}>
+                      {MEMBER_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </Select>
+                  </div>
+                  <Button type="submit" variant="secondary">إضافة عضو</Button>
+                </form>
+              )}
+            </div>
+          </Card>
+        ))}
+        {projects.length === 0 && <p className="text-brand-gray">لا مشاريع ضمن نطاقك.</p>}
+      </div>
+    </AdminShell>
+  );
+}

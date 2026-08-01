@@ -15,14 +15,24 @@ interface BeneficiaryService {
   title: string;
   desc: string;
 }
+interface PlatformProjectCard {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  brand_color: string;
+  tools: string[];
+}
 
 export default function Home() {
   const [stats, setStats] = useState<Stats>({ beneficiaries: 0, potential_projects: 0, donations: 0 });
   const [services, setServices] = useState<BeneficiaryService[]>([]);
+  const [platformProjects, setPlatformProjects] = useState<PlatformProjectCard[]>([]);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/public-home-stats/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setStats(d)).catch(() => {});
     fetch(`${API_BASE_URL}/api/beneficiary-services/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setServices(d.results || d)).catch(() => {});
+    fetch(`${API_BASE_URL}/api/platform/public/projects/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setPlatformProjects(d)).catch(() => {});
   }, []);
 
   const display = [
@@ -49,6 +59,33 @@ export default function Home() {
           <Link to="/about" className="btn-register mt-8 inline-flex">اعرف أكثر</Link>
         </div>
       </header>
+
+      {/* مشاريع المنصّة (project-first): كل مشروع له صفحة هبوط خاصة */}
+      {platformProjects.length > 0 && (
+        <section className="mx-auto max-w-page px-4 py-12">
+          <h2 className="mb-8 text-center text-3xl font-bold text-primary">مشاريع المنصّة</h2>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {platformProjects.map((p) => (
+              <Link key={p.slug} to={`/projects/${p.slug}`} className="block">
+                <Card className="h-full">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span style={{ width: 14, height: 14, borderRadius: 4, background: p.brand_color, display: "inline-block" }} />
+                    <h3 className="text-lg font-bold text-primary">{p.name}</h3>
+                  </div>
+                  <p className="mb-3 text-sm text-brand-gray">{p.description}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {p.tools.map((t) => (
+                      <span key={t} className="rounded-full border border-surface-border bg-surface px-2 py-0.5 text-xs font-bold text-brand-gray">
+                        {{ map: "خريطة", sponsorships: "كفالات", volunteering: "تطوع", services: "خدمات", reports: "تقارير" }[t] || t}
+                      </span>
+                    ))}
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="mx-auto max-w-page px-4 py-12">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

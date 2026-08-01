@@ -7,7 +7,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from core.throttles import PublicWriteRateThrottle
-from takaful_app.views import IsAdmin
+from core.permissions import IsAdmin
 
 from .models import Region, Product, Outlet, Contribution, DistributionRecord
 from .serializers import (

@@ -31,7 +31,7 @@ from django.db import transaction
 from accounts.models import Profile
 from analytics.models import Employee, DashboardSection, DashboardKpi, StaffTask
 from notifications.models import Notification
-from takaful_app.models import Project
+from volunteering.models import Project
 
 # تحويل أدوار GAS (غير مكتملة من العميل) إلى المسميات الموحّدة الجديدة
 ROLE_MAP = {"admin": "admin", "manager": "manager"}

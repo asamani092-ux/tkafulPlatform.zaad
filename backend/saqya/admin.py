@@ -1,3 +1,1 @@
-from django.contrib import admin
-
-# Register your models here.
+"""تسجيلات لوحة Django الإدارية انتقلت إلى sponsorships/admin.py (D-02)."""

@@ -24,6 +24,9 @@ urlpatterns = [
     path("api/accounts/", include("accounts.urls")),  # ← Make sure this line exists
     path("api/dashboard/", include("analytics.urls")),       # اللوحة التنفيذية الموحّدة (المشروع الثاني)
     path("api/notifications/", include("notifications.urls")),  # الإشعارات
-    path("api/saqya/", include("saqya.urls")),               # وحدة كفالات السقيا (المشروع الثالث)
-    path("api/map/", include("impact_map.urls")),            # خارطة تفقدهم
+    path("api/saqya/", include("saqya.urls")),               # مسار قديم متوافق → sponsorships (D-05)
+    path("api/sponsorships/", include(("sponsorships.urls", "sponsorships"), namespace="sponsorships")),
+    path("api/map/", include("impact_map.urls")),            # خارطة تفقدهم (قديم — يبقى حياً، D-05)
+    path("api/platform/", include("projects.urls")),         # المشاريع (project-first)
+    path("api/maps/", include("maps.urls")),                 # نظام الخرائط المتعددة
 ]

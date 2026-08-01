@@ -59,7 +59,11 @@ INSTALLED_APPS = [
     "notifications",
     "integrations",  # طبقة استقبال المصادر الخارجية (تجهيز المشروع الثالث)
     "saqya",         # وحدة كفالات السقيا (المشروع الثالث)
-    "impact_map",    # خارطة تفقدهم — شفافية التوزيع
+    "impact_map",    # خارطة تفقدهم — شفافية التوزيع (بيانات قديمة؛ انظر DECISIONS.md D-03)
+    "projects",      # المشروع ككيان أول (project-first)
+    "maps",          # نظام الخرائط المتعددة
+    "sponsorships",  # الكفالات (منقولة من saqya — D-02)
+    "volunteering",  # التطوع (منقول من takaful_app — D-02)
 ]
 
 

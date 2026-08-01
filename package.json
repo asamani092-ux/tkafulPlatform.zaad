@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "dompurify": "^3.3.0",
-    "validator": "^13.15.20"
-  }
-}
