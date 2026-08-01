@@ -11,7 +11,7 @@ export default function HeroBand({ title, subtitle, children }: HeroBandProps) {
   return (
     <header
       className="px-4 py-12 text-center text-white"
-      style={{ background: "linear-gradient(to left, var(--tmkeen-primary), var(--tmkeen-secondary))" }}
+      style={{ background: "var(--tmkeen-primary)" }}
     >
       <div className="mx-auto max-w-page">
         <h1 className="text-3xl md:text-4xl" style={{ fontWeight: 800 }}>

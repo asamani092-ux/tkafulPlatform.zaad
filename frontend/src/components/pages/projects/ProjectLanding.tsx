@@ -51,7 +51,7 @@ export default function ProjectLanding() {
 
   return (
     <div dir="rtl">
-      <header className="px-4 py-14 text-center text-white" style={{ background: `linear-gradient(to left, ${project.brand_color}, ${project.brand_color}cc)` }}>
+      <header className="px-4 py-14 text-center text-white" style={{ background: project.brand_color }}>
         <div className="mx-auto max-w-page">
           <h1 className="text-4xl font-extrabold">{project.name}</h1>
           {project.description && <p className="mt-3 text-lg" style={{ opacity: 0.92 }}>{project.description}</p>}

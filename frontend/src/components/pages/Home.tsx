@@ -44,7 +44,7 @@ export default function Home() {
   return (
     <div>
       {/* Hero */}
-      <header className="px-4 py-16 text-center text-white" style={{ background: "linear-gradient(to left, var(--tmkeen-primary), var(--tmkeen-secondary))" }}>
+      <header className="px-4 py-16 text-center text-white" style={{ background: "var(--tmkeen-primary)" }}>
         <div className="mx-auto max-w-page">
           <h1 className="text-4xl font-extrabold md:text-5xl">منصة تكافل وأثر</h1>
           <p className="mt-3 text-lg" style={{ opacity: 0.9 }}>حيث يلتقي العطاء بالأثر — انضم إلى مجتمع المتكافلين واصنع أثرًا يدوم</p>

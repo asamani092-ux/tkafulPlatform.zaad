@@ -16,7 +16,7 @@ export default function SaqyaShell({ children }: { children: ReactNode }) {
   const nav = useNavigate();
   return (
     <div className="page-shell" dir="rtl">
-      <header className="px-6 py-6 text-white" style={{ background: "linear-gradient(to left, var(--tmkeen-primary), var(--tmkeen-secondary))" }}>
+      <header className="px-6 py-6 text-white" style={{ background: "var(--tmkeen-primary)" }}>
         <div className="mx-auto flex max-w-page items-center justify-between">
           <div className="flex items-center gap-2">
             <Droplets size={26} />

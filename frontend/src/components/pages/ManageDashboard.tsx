@@ -53,7 +53,7 @@ export default function ManageDashboard() {
 
   return (
     <div className="page-shell">
-      <header className="px-6 py-8 text-white" style={{ background: "linear-gradient(to left, var(--tmkeen-primary), var(--tmkeen-secondary))" }}>
+      <header className="px-6 py-8 text-white" style={{ background: "var(--tmkeen-primary)" }}>
         <div className="mx-auto flex max-w-page items-center justify-between">
           <div>
             <h1 className="text-3xl font-extrabold">تغذية اللوحة التنفيذية</h1>
