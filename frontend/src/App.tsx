@@ -49,6 +49,7 @@ const ProjectMapPage = lazy(() => import("./components/pages/projects/ProjectMap
 const MapsAggregator = lazy(() => import("./components/pages/projects/MapsAggregator"));
 const PlatformProjects = lazy(() => import("./components/pages/admin/PlatformProjects"));
 const MapsAdmin = lazy(() => import("./components/pages/admin/MapsAdmin"));
+const UatPage = lazy(() => import("./components/pages/uat"));
 
 function Lazy({ children }: { children: ReactNode }) {
   return <Suspense fallback={<LoadingState />}>{children}</Suspense>;
@@ -110,6 +111,9 @@ function AppContent() {
 
           {/* توافق خلفي: المسار القديم /saqya → المسار الجديد داخل المشروع */}
           <Route path="/saqya" element={<Navigate to="/projects/saqya/sponsorships" replace />} />
+
+          {/* نموذج تقييم القبول (UAT) — حفظ محلي + نسخ/تنزيل التقرير */}
+          <Route path="/uat" element={<Lazy><UatPage /></Lazy>} />
 
           {/* الأدمن الموحّد role-scoped: مشرف عام أو عضو مشروع */}
           <Route path="/Admin/projects" element={<Lazy><ProtectedRoute requiredRole="staff" signInPath="/admin/signin"><PlatformProjects /></ProtectedRoute></Lazy>} />
