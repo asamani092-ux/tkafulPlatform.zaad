@@ -16,7 +16,7 @@ const links = [
   { to: "/Admin/service-requests", label: "طلبات الخدمات", icon: HandHeart, superAdminOnly: true },
   { to: "/Admin/tasks", label: "إضافة مشروع", icon: FolderPlus, superAdminOnly: true },
   { to: "/Admin/reports", label: "التقارير", icon: FileBarChart, superAdminOnly: true },
-  { to: "/executive", label: "اللوحة التنفيذية", icon: BarChart3, superAdminOnly: true },
+  { to: "/Admin/executive", label: "اللوحة التنفيذية", icon: BarChart3, superAdminOnly: true },
 ];
 
 /** غلاف لوحات الإدارة (شريط جانبي) — role-scoped على design-system. */
@@ -47,7 +47,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
-          <button type="button" onClick={() => { void logout().then(() => nav("/admin/signin")); }}
+          <button type="button" onClick={() => { void logout().then(() => nav("/signin")); }}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-brand-gray">
             <LogOut size={16} /> خروج
           </button>

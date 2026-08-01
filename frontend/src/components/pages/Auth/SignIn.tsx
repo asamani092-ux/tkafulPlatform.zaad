@@ -53,7 +53,20 @@ export default function SignIn() {
       const userData = await profileRes.json();
       const role = userData.profile?.role || "user";
       login({ name: userData.profile?.name || userData.username, email: userData.email, role }, tokenData.access, tokenData.refresh);
-      navigate(role === "admin" ? "/Admin" : "/");
+      // التوجيه الموحّد حسب الصلاحية (D-17): مشرف عام → اللوحة؛ عضو مشروع → مشاريعه؛ غير ذلك → صفحة المستخدم
+      if (role === "admin") {
+        navigate("/Admin");
+      } else {
+        try {
+          const membershipsRes = await fetch(`${API_BASE_URL}/api/platform/my-memberships/`, {
+            headers: { Authorization: `Bearer ${tokenData.access}` },
+          });
+          const memberships = membershipsRes.ok ? (await membershipsRes.json()).memberships || [] : [];
+          navigate(memberships.length > 0 ? "/Admin/projects" : "/user/main");
+        } catch {
+          navigate("/user/main");
+        }
+      }
     } catch {
       setErrors({ form: "حدث خطأ غير متوقع، حاول مرة أخرى." });
       setIsSubmitting(false);
@@ -68,7 +81,7 @@ export default function SignIn() {
           <div className="mb-4 flex justify-center">
             <img src="/logo-alzad.svg" alt="جمعية الزاد" style={{ height: 72, width: "auto" }} />
           </div>
-          <h2 className="mb-6 text-center text-2xl font-bold text-primary">تسجيل الدخول — تكافل وأثر</h2>
+          <h2 className="mb-6 text-center text-2xl font-bold text-primary">الدخول الموحّد — تكافل وأثر</h2>
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <Input type="email" dir="ltr" label="البريد الإلكتروني" placeholder="example@mail.com"
               value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} error={errors.email} required />
@@ -85,7 +98,7 @@ export default function SignIn() {
           </form>
           <div className="mt-4 space-y-1 text-center text-sm text-brand-gray">
             <p>ليس لديك حساب؟ <Link to="/signup" className="font-semibold text-primary">تسجيل جديد</Link></p>
-            <Link to="/admin/signin" className="font-semibold" style={{ color: "var(--tmkeen-secondary-dark)" }}>هل أنت مشرف؟ سجّل من هنا</Link>
+            <p className="text-xs">دخول موحّد للجميع — يوجَّه كل مستخدم تلقائياً حسب صلاحيته.</p>
           </div>
         </Card>
       </main>

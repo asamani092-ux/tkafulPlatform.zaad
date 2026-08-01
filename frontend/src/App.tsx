@@ -22,7 +22,6 @@ import RequestService from "./components/pages/RequestService";
 import WaterSupplyRequestPage from "./components/pages/WaterSupplyRequestPage";
 import SignIn from "./components/pages/Auth/SignIn";
 import SignUp from "./components/pages/Auth/SignUp";
-import AdminSignIn from "./components/pages/admin/AdminSignIn";
 
 // Code-split heavy portals
 const UserMain = lazy(() => import("./components/pages/user/Main"));
@@ -60,12 +59,11 @@ function AppContent() {
   const pathname = location.pathname.toLowerCase();
   const isUserPage = pathname.startsWith("/user");
   const isAdminPage = pathname.startsWith("/admin");
-  const isAdminSignIn = pathname === "/admin/signin";
   const isSaqyaPage =
     pathname.startsWith("/saqya") ||
     (pathname.startsWith("/projects/") && pathname.endsWith("/sponsorships"));
   const isErrorPage = pathname === "/403" || pathname === "/404";
-  const hideChrome = isUserPage || isSaqyaPage || (isAdminPage && !isAdminSignIn) || isErrorPage;
+  const hideChrome = isUserPage || isSaqyaPage || isAdminPage || isErrorPage;
 
   return (
     <div className="flex min-h-screen flex-col bg-surface-muted" dir="rtl">
@@ -82,7 +80,8 @@ function AppContent() {
           <Route path="/services/water-supply" element={<WaterSupplyRequestPage />} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<SignUp />} />
-          <Route path="/admin/signin" element={<AdminSignIn />} />
+          {/* دخول موحّد (D-17): المسار القديم يحوّل لصفحة الدخول الواحدة */}
+          <Route path="/admin/signin" element={<Navigate to="/signin" replace />} />
           <Route path="/403" element={<ForbiddenPage />} />
           <Route path="/404" element={<NotFoundPage />} />
 
@@ -91,17 +90,21 @@ function AppContent() {
           <Route path="/user/settings" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserSettings /></ProtectedRoute></Lazy>} />
           <Route path="/user/personal-info" element={<Lazy><ProtectedRoute requiredRole="authenticated"><PersonalInfo /></ProtectedRoute></Lazy>} />
 
-          <Route path="/Admin" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><AdminMain /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/requests" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><VolunteerRequests /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/applications" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><VolunteerApplications /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/management" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><VolunteerManagement /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/tasks" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><AddProjectPage /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/ideas" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><ProjectIdeas /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/reports" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><Reports /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/service-requests" element={<Lazy><ProtectedRoute requiredRole="admin" signInPath="/admin/signin"><ServiceRequests /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin" element={<Lazy><ProtectedRoute requiredRole="admin"><AdminMain /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/requests" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerRequests /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/applications" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerApplications /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/management" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerManagement /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/tasks" element={<Lazy><ProtectedRoute requiredRole="admin"><AddProjectPage /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/ideas" element={<Lazy><ProtectedRoute requiredRole="admin"><ProjectIdeas /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/reports" element={<Lazy><ProtectedRoute requiredRole="admin"><Reports /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/service-requests" element={<Lazy><ProtectedRoute requiredRole="admin"><ServiceRequests /></ProtectedRoute></Lazy>} />
 
-          <Route path="/executive" element={<Lazy><ExecutiveDashboard /></Lazy>} />
-          <Route path="/executive/manage" element={<Lazy><ManageDashboard /></Lazy>} />
+          {/* اللوحة التنفيذية مدموجة في اللوحة الموحّدة (D-19) — طاقم المؤسسة فقط */}
+          <Route path="/Admin/executive" element={<Lazy><ProtectedRoute requiredRole="orgStaff"><ExecutiveDashboard /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/executive/manage" element={<Lazy><ProtectedRoute requiredRole="orgStaff"><ManageDashboard /></ProtectedRoute></Lazy>} />
+          {/* توافق خلفي: المسارات القديمة تحوّل للموقع الجديد */}
+          <Route path="/executive" element={<Navigate to="/Admin/executive" replace />} />
+          <Route path="/executive/manage" element={<Navigate to="/Admin/executive/manage" replace />} />
 
           {/* project-first: صفحات المشاريع والخرائط */}
           <Route path="/projects/:slug" element={<Lazy><ProjectLanding /></Lazy>} />
@@ -116,8 +119,8 @@ function AppContent() {
           <Route path="/uat" element={<Lazy><UatPage /></Lazy>} />
 
           {/* الأدمن الموحّد role-scoped: مشرف عام أو عضو مشروع */}
-          <Route path="/Admin/projects" element={<Lazy><ProtectedRoute requiredRole="staff" signInPath="/admin/signin"><PlatformProjects /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/maps" element={<Lazy><ProtectedRoute requiredRole="staff" signInPath="/admin/signin"><MapsAdmin /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/projects" element={<Lazy><ProtectedRoute requiredRole="staff"><PlatformProjects /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/maps" element={<Lazy><ProtectedRoute requiredRole="staff"><MapsAdmin /></ProtectedRoute></Lazy>} />
           {/* توافق خلفي: مسار إدارة الخارطة القديم → إدارة الخرائط الجديدة */}
           <Route path="/Admin/map" element={<Navigate to="/Admin/maps" replace />} />
 

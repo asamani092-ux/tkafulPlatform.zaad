@@ -59,7 +59,7 @@ export default function ManageDashboard() {
             <h1 className="text-3xl font-extrabold">تغذية اللوحة التنفيذية</h1>
             <p className="mt-2" style={{ opacity: 0.9 }}>إضافة أقسام وموظفين ومهام منجزة — {user?.name}</p>
           </div>
-          <Link to="/executive" className="rounded-lg px-4 py-2 font-bold text-white" style={{ background: "rgba(255,255,255,.15)" }}>عرض اللوحة</Link>
+          <Link to="/Admin/executive" className="rounded-lg px-4 py-2 font-bold text-white" style={{ background: "rgba(255,255,255,.15)" }}>عرض اللوحة</Link>
         </div>
       </header>
 

@@ -64,7 +64,7 @@ export default function ExecutiveDashboard() {
             <h1 className="text-3xl font-extrabold">إدارة التكافل المجتمعي</h1>
             <p className="mt-2" style={{ opacity: 0.9 }}>اللوحة التنفيذية الموحّدة — منصة التكافل والمبادرات</p>
           </div>
-          <Link to="/executive/manage" className="rounded-lg px-4 py-2 font-bold text-white" style={{ background: "rgba(255,255,255,.15)" }}>تغذية اللوحة</Link>
+          <Link to="/Admin/executive/manage" className="rounded-lg px-4 py-2 font-bold text-white" style={{ background: "rgba(255,255,255,.15)" }}>تغذية اللوحة</Link>
         </div>
       </header>
 

@@ -5,7 +5,10 @@ import { useMemberships } from "../../hooks/useMemberships";
 import { LoadingState } from "../feedback/PageStates";
 
 // staff = مشرف عام أو عضو مشروع (project_admin/editor/viewer) — للوحة الأدمن الموحّدة
-type RequiredRole = "admin" | "authenticated" | "staff";
+// orgStaff = طاقم المؤسسة (admin/manager/employee) — اللوحة التنفيذية (يطابق IsStaffOrReadOnly في الباك إند)
+type RequiredRole = "admin" | "authenticated" | "staff" | "orgStaff";
+
+const ORG_STAFF_ROLES = ["admin", "manager", "employee"];
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -45,6 +48,10 @@ export default function ProtectedRoute({
   }
 
   if (requiredRole === "admin" && user?.role !== "admin") {
+    return <Navigate to="/403" replace />;
+  }
+
+  if (requiredRole === "orgStaff" && !ORG_STAFF_ROLES.includes(user?.role || "")) {
     return <Navigate to="/403" replace />;
   }
 
