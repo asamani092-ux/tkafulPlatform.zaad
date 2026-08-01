@@ -20,7 +20,7 @@ export const UAT_SECTIONS: UatSection[] = [
     scenarios: [
       { id: "1.1", title: "فتح /", expected: "قسم «مشاريع المنصّة» يعرض 3 مشاريع بألوان هويتها + الخدمات والإحصاءات" },
       { id: "1.2", title: "فتح /projects/saqya و /projects/tafaqqadhum و /projects/takaful-athar", expected: "صفحة هبوط لكل مشروع: الهوية + الأدوات المفعّلة فقط" },
-      { id: "1.3", title: "فتح /map", expected: "المجمّع الموحّد: كل الطبقات العامة + فلترة «كل المشاريع/تفقدهم»" },
+      { id: "1.3", title: "فتح /map", expected: "المجمّع الموحّد: KPI مجمّعة + فلترة بالمشروع + فلاتر ديناميكية + وسيلة إيضاح + «ساهم هنا» من العنصر المحدد" },
       { id: "1.4", title: "فتح /projects/tafaqqadhum/map", expected: "20 عنصراً (12 منطقة + 8 منافذ)، فلاتر ديناميكية (النوع/الأولوية/نوع المنفذ/المنتج)" },
       { id: "1.5", title: "النقر على عنصر في الخريطة", expected: "بطاقة تفاصيل بدون «ساعات العمل (داخلي)» و«الأسر المستهدفة (داخلي)»" },
       { id: "1.6", title: "إرسال تعهد من الخريطة (اسم + 05XXXXXXXX + كمية)", expected: "«تم استلام تعهدكم بنجاح» وحالته pending" },
@@ -70,8 +70,9 @@ export const UAT_SECTIONS: UatSection[] = [
       { id: "5.1", title: "طلبات الانضمام/التطوع والقبول والمهام (/Admin/*, /user/*)", expected: "كما قبل إعادة الهيكلة" },
       { id: "5.2", title: "طلب خدمة عام + إدارتها", expected: "كما قبل" },
       { id: "5.3", title: "توليد تقرير شامل من /Admin/reports", expected: "يعمل" },
-      { id: "5.4", title: "اللوحة التنفيذية /executive", expected: "تعمل" },
-      { id: "5.5", title: "تسجيل مستخدم جديد + دخول/خروج JWT", expected: "بلا أي تغيير" },
+      { id: "5.4", title: "اللوحة التنفيذية /Admin/executive (والقديم /executive يحوّل إليها)", expected: "تعمل لطاقم المؤسسة فقط (admin/manager/employee)؛ الزائر → دخول/403" },
+      { id: "5.5", title: "الدخول الموحّد /signin لكل الأدوار (و/admin/signin يحوّل إليه)", expected: "admin → /Admin · مدير مشروع → /Admin/projects · متطوع → /user/main" },
+      { id: "5.6", title: "تسجيل مستخدم جديد + دخول/خروج JWT", expected: "بلا أي تغيير" },
     ],
   },
   {
