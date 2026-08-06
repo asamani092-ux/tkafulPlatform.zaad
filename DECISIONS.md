@@ -131,6 +131,15 @@
   `logo-alzad.svg` — اعتُمد الأصل الرسمي وكل المراجع (Navbar، اللوحات، الدخول، favicon)
   تشير الآن إلى `/logo.png`.
 
+## D-21 — اعتماد `@zaad/design-system` v1.2.0 وحذف النسخ المحلية
+- **المشكلة**: مصدر التصميم مكرّر محلياً (`design-system/` + `Design_system_f/`) بينما المصدر
+  الرسمي الموحّد هو `asamani092-ux/designSystemFinal`.
+- **القرار**: ربط الحزمة عبر npm (`github:...#v1.2.0`)، استيراد `tokens.css` + `components.css` +
+  `tailwind.preset`، جذر `zad-root` + `dir=rtl`، ثم حذف النسخ المحلية بعد نجاح البناء.
+- **التطبيق**: تنفيذ عقود `components.md` كمكوّنات React إضافية على الشاشات القائمة فقط
+  (بدون توسيع API/DB وبدون إعادة تسمية props مربوطة بالواجهة).
+- **التعقيد**: الربط O(1)؛ تطبيق المكوّنات O(S×C).
+
 ## D-12 — `check --deploy` تحت بيئة إنتاج
 - يُشغَّل بـ `DEBUG=False` و`SECRET_KEY` عشوائي قوي و`SECURE_*` المفعّلة افتراضاً في settings عند
   `DEBUG=False`. النتيجة مسجلة في التقرير النهائي.
