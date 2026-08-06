@@ -9,8 +9,6 @@ import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Button from "../../ui/Button";
 import Badge from "../../ui/Badge";
-import HeroBand from "../../ui/HeroBand";
-
 const educationOptions = [
   { value: "bachelor", label: "بكالوريوس" },
   { value: "diploma", label: "دبلوم" },
@@ -25,12 +23,9 @@ function Chip({ selected, onClick, children }: { selected: boolean; onClick: () 
     <button
       type="button"
       onClick={onClick}
-      className="rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors"
-      style={{
-        borderColor: selected ? "var(--tmkeen-primary)" : "var(--tmkeen-surface-border)",
-        background: selected ? "var(--tmkeen-primary)" : "var(--tmkeen-surface)",
-        color: selected ? "#fff" : "var(--tmkeen-brand-gray)",
-      }}
+      className={`zad-chip${selected ? " zad-chip--active" : ""}`}
+      data-active={selected ? "true" : "false"}
+      aria-pressed={selected}
     >
       {children}
     </button>
@@ -137,11 +132,11 @@ export default function SignUp() {
   };
 
   return (
-    <div>
-      <HeroBand title="انضم إلينا" subtitle="سجّل البيانات التالية لتكون جزءًا من صناعة الأثر." />
+    <div className="page-shell min-h-screen" data-theme="light">
       <main className="mx-auto max-w-4xl px-4 py-10">
         <Card>
-          <h2 className="mb-6 text-center text-2xl font-bold text-primary">تسجيل متطوع جديد</h2>
+          <h1 className="mb-2 text-center text-2xl font-bold text-primary">انضم إلينا</h1>
+          <p className="mb-6 text-center text-sm text-brand-gray">سجّل البيانات التالية لتكون جزءًا من صناعة الأثر.</p>
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <Input label="الاسم كامل" value={formData.fullName} onChange={(e) => set("fullName", e.target.value)} error={errors.fullName} />

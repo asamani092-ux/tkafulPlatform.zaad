@@ -6,22 +6,19 @@ interface HeroBandProps {
   children?: ReactNode;
 }
 
-/** شريط رأس موحّد على توكنات نظام الزاد. */
+/**
+ * رأس صفحة وفق نموذج نظام الزاد:
+ * خلفية فاتحة (surface) + عنوان بنص العلامة (text-brand) — لا خلفية مارون ممتلئة.
+ */
 export default function HeroBand({ title, subtitle, children }: HeroBandProps) {
   return (
     <header
-      className="px-4 py-12 text-center"
-      style={{ background: "var(--action-primary-surface)", color: "var(--text-inverse)" }}
+      className="border-b border-surface-border bg-surface px-4 py-10 text-center"
+      style={{ borderBlockEndWidth: "var(--border-hairline)" }}
     >
       <div className="mx-auto max-w-page">
-        <h1 className="text-3xl md:text-4xl" style={{ fontWeight: "var(--weight-black)" }}>
-          {title}
-        </h1>
-        {subtitle && (
-          <p className="mt-3" style={{ opacity: 0.9 }}>
-            {subtitle}
-          </p>
-        )}
+        <h1 className="text-3xl font-extrabold text-primary md:text-4xl">{title}</h1>
+        {subtitle && <p className="mt-3 text-base text-brand-gray md:text-lg">{subtitle}</p>}
         {children}
       </div>
     </header>

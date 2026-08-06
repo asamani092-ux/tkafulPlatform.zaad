@@ -4,6 +4,7 @@ import { HandHeart, Lightbulb } from "lucide-react";
 import { API_BASE_URL } from "../../config";
 import Card from "../ui/Card";
 import Button from "../ui/Button";
+import KpiCard from "../ui/KpiCard";
 
 interface Stats {
   beneficiaries: number;
@@ -42,25 +43,23 @@ export default function Home() {
   ];
 
   return (
-    <div>
-      {/* Hero */}
-      <header className="px-4 py-16 text-center text-white" style={{ background: "var(--tmkeen-primary)" }}>
+    <div className="bg-surface-muted">
+      {/* رأس فاتح + عنوان بنص العلامة — وفق Typography Scale للنموذج */}
+      <header className="border-b border-surface-border bg-surface px-4 py-14 text-center">
         <div className="mx-auto max-w-page">
-          <h1 className="text-4xl font-extrabold md:text-5xl">منصة تكافل وأثر</h1>
-          <p className="mt-3 text-lg" style={{ opacity: 0.9 }}>حيث يلتقي العطاء بالأثر — انضم إلى مجتمع المتكافلين واصنع أثرًا يدوم</p>
+          <h1 className="text-4xl font-extrabold text-primary md:text-5xl">منصة تكافل وأثر</h1>
+          <p className="mt-3 text-lg text-brand-gray">
+            حيث يلتقي العطاء بالأثر — انضم إلى مجتمع المتكافلين واصنع أثرًا يدوم
+          </p>
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {display.map((s) => (
-              <div key={s.label} className="rounded-xl border px-6 py-6" style={{ background: "rgba(255,255,255,.12)", borderColor: "rgba(255,255,255,.25)" }}>
-                <div className="text-3xl font-extrabold">{s.value.toLocaleString("en-US")} +</div>
-                <div className="mt-1 text-sm" style={{ opacity: 0.9 }}>{s.label}</div>
-              </div>
+              <KpiCard key={s.label} label={s.label} value={`${s.value.toLocaleString("en-US")} +`} />
             ))}
           </div>
           <Link to="/about" className="btn-register mt-8 inline-flex">اعرف أكثر</Link>
         </div>
       </header>
 
-      {/* مشاريع المنصّة (project-first): كل مشروع له صفحة هبوط خاصة */}
       {platformProjects.length > 0 && (
         <section className="mx-auto max-w-page px-4 py-12">
           <h2 className="mb-8 text-center text-3xl font-bold text-primary">مشاريع المنصّة</h2>
@@ -69,7 +68,16 @@ export default function Home() {
               <Link key={p.slug} to={`/projects/${p.slug}`} className="block">
                 <Card className="h-full">
                   <div className="mb-2 flex items-center gap-2">
-                    <span style={{ width: 14, height: 14, borderRadius: 4, background: p.brand_color, display: "inline-block" }} />
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 14,
+                        height: 14,
+                        borderRadius: "var(--radius-sm)",
+                        background: p.brand_color || "var(--brand-primary)",
+                        display: "inline-block",
+                      }}
+                    />
                     <h3 className="text-lg font-bold text-primary">{p.name}</h3>
                   </div>
                   <p className="mb-3 text-sm text-brand-gray">{p.description}</p>
@@ -95,7 +103,7 @@ export default function Home() {
                 <h3 className="mb-2 text-xl font-bold text-primary">شارك في مشروع تكافلي</h3>
                 <p className="text-sm text-brand-gray">اكتشف مشاريعنا المتنوعة واختر ما يناسب اهتماماتك للمشاركة في صنع الأثر.</p>
               </div>
-              <HandHeart className="text-secondary" size={32} />
+              <HandHeart className="text-secondary" size={32} aria-hidden />
             </div>
             <Link to="/projects"><Button>المشاريع</Button></Link>
           </Card>
@@ -105,14 +113,14 @@ export default function Home() {
                 <h3 className="mb-2 text-xl font-bold text-primary">اقترح مبادرة تكافلية</h3>
                 <p className="text-sm text-brand-gray">شاركنا أفكارك لمبادرات جديدة تُحدث أثرًا إيجابيًا في المجتمع.</p>
               </div>
-              <Lightbulb className="text-secondary" size={32} />
+              <Lightbulb className="text-secondary" size={32} aria-hidden />
             </div>
             <Link to="/suggest"><Button variant="secondary">شارك اقتراحك</Button></Link>
           </Card>
         </div>
       </section>
 
-      <section className="bg-surface-muted py-12">
+      <section className="bg-surface py-12">
         <div className="mx-auto max-w-page px-4">
           <h2 className="mb-8 text-center text-3xl font-bold text-primary">خدماتنا الأساسية المؤثّرة</h2>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">

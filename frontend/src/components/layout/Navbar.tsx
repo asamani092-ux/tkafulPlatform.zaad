@@ -13,7 +13,7 @@ const navLinks = [
   { to: "/about", label: "من نحن" },
 ];
 
-/** شريط التنقّل الموحّد على design-system. */
+/** شريط التنقّل الموحّد — TopBar فاتح بنص العلامة وفق النموذج. */
 export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();

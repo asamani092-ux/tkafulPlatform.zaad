@@ -515,3 +515,10 @@ body {
 .zad-nav-link:focus-visible { box-shadow: var(--shadow-focus); }
 
 .modal-overlay { z-index: var(--z-modal); }
+
+/* تجاوز قيم صريحة في components.css للحزمة — نص على الأزرار/التبويب من التوكن */
+.btn-primary,
+.tab-bar button[data-active="true"],
+.tab-bar button.active {
+  color: var(--action-primary-text);
+}

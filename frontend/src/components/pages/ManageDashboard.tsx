@@ -52,14 +52,16 @@ export default function ManageDashboard() {
   }
 
   return (
-    <div className="page-shell">
-      <header className="px-6 py-8 text-white" style={{ background: "var(--tmkeen-primary)" }}>
-        <div className="mx-auto flex max-w-page items-center justify-between">
+    <div className="page-shell zad-root" data-theme="light">
+      <header className="border-b border-surface-border bg-surface px-6 py-8">
+        <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold">تغذية اللوحة التنفيذية</h1>
-            <p className="mt-2" style={{ opacity: 0.9 }}>إضافة أقسام وموظفين ومهام منجزة — {user?.name}</p>
+            <h1 className="text-3xl font-extrabold text-primary">تغذية اللوحة التنفيذية</h1>
+            <p className="mt-2 text-brand-gray">إضافة أقسام وموظفين ومهام منجزة — {user?.name}</p>
           </div>
-          <Link to="/Admin/executive" className="rounded-lg px-4 py-2 font-bold text-white" style={{ background: "rgba(255,255,255,.15)" }}>عرض اللوحة</Link>
+          <Link to="/Admin/executive" className="btn-secondary inline-flex items-center" style={{ minHeight: "var(--touch-min)" }}>
+            عرض اللوحة
+          </Link>
         </div>
       </header>
 

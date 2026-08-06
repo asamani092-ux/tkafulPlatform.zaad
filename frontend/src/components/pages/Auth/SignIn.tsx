@@ -5,8 +5,6 @@ import { API_BASE_URL } from "../../../config";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
 import Button from "../../ui/Button";
-import HeroBand from "../../ui/HeroBand";
-
 export default function SignIn() {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -74,14 +72,14 @@ export default function SignIn() {
   };
 
   return (
-    <div>
-      <HeroBand title="نورتنا من جديد" subtitle="سجّل دخولك وأكمل رحلتك في صناعة الأثر." />
-      <main className="mx-auto max-w-md px-4 py-12">
+    <div className="page-shell min-h-screen" data-theme="light">
+      <main className="page-container-narrow py-12">
         <Card>
           <div className="mb-4 flex justify-center">
             <img src="/logo.png" alt="جمعية الزاد" style={{ height: 72, width: "auto" }} />
           </div>
-          <h2 className="mb-6 text-center text-2xl font-bold text-primary">الدخول الموحّد — تكافل وأثر</h2>
+          <h1 className="mb-2 text-center text-2xl font-bold text-primary">نورتنا من جديد</h1>
+          <p className="mb-6 text-center text-sm text-brand-gray">سجّل دخولك وأكمل رحلتك في صناعة الأثر.</p>
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <Input type="email" dir="ltr" label="البريد الإلكتروني" placeholder="example@mail.com"
               value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} error={errors.email} required />

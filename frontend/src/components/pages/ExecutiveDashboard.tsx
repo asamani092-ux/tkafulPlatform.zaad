@@ -59,24 +59,14 @@ export default function ExecutiveDashboard() {
   if (!data) return <div className="page-shell p-10"><EmptyState title="لا توجد بيانات" /></div>;
 
   return (
-    <div className="page-shell zad-root">
-      <header className="px-6 py-8" style={{ background: "var(--action-primary-surface)", color: "var(--text-inverse)" }}>
-        <div className="mx-auto flex max-w-page items-center justify-between gap-4">
+    <div className="page-shell zad-root" data-theme="light">
+      <header className="border-b border-surface-border bg-surface px-6 py-8">
+        <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold">إدارة التكافل المجتمعي</h1>
-            <p className="mt-2" style={{ opacity: 0.9 }}>اللوحة التنفيذية الموحّدة — منصة التكافل والمبادرات</p>
+            <h1 className="text-3xl font-extrabold text-primary">إدارة التكافل المجتمعي</h1>
+            <p className="mt-2 text-brand-gray">اللوحة التنفيذية الموحّدة — منصة التكافل والمبادرات</p>
           </div>
-          <Link
-            to="/Admin/executive/manage"
-            className="rounded-lg px-4 py-2 font-bold"
-            style={{
-              background: "color-mix(in srgb, var(--text-inverse) 15%, transparent)",
-              color: "var(--text-inverse)",
-              minHeight: "var(--touch-min)",
-              display: "inline-flex",
-              alignItems: "center",
-            }}
-          >
+          <Link to="/Admin/executive/manage" className="btn-secondary inline-flex items-center" style={{ minHeight: "var(--touch-min)" }}>
             تغذية اللوحة
           </Link>
         </div>
