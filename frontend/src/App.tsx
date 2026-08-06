@@ -66,7 +66,7 @@ function AppContent() {
   const hideChrome = isUserPage || isSaqyaPage || isAdminPage || isErrorPage;
 
   return (
-    <div className="zad-root flex min-h-screen flex-col bg-surface-muted" dir="rtl" lang="ar">
+    <div className="zad-root flex min-h-screen flex-col bg-surface-muted" dir="rtl" lang="ar" data-theme="light">
       {!hideChrome && <Navbar />}
       <main className="flex-1 overflow-x-hidden">
         <Routes>
