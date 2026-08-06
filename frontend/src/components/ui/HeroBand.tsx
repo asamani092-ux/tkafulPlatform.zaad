@@ -6,15 +6,15 @@ interface HeroBandProps {
   children?: ReactNode;
 }
 
-/** شريط رأس متدرّج (maroon→gold) موحّد على ألوان design-system. */
+/** شريط رأس موحّد على توكنات نظام الزاد. */
 export default function HeroBand({ title, subtitle, children }: HeroBandProps) {
   return (
     <header
-      className="px-4 py-12 text-center text-white"
-      style={{ background: "var(--tmkeen-primary)" }}
+      className="px-4 py-12 text-center"
+      style={{ background: "var(--action-primary-surface)", color: "var(--text-inverse)" }}
     >
       <div className="mx-auto max-w-page">
-        <h1 className="text-3xl md:text-4xl" style={{ fontWeight: 800 }}>
+        <h1 className="text-3xl md:text-4xl" style={{ fontWeight: "var(--weight-black)" }}>
           {title}
         </h1>
         {subtitle && (

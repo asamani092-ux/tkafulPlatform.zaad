@@ -6,7 +6,10 @@ import UserShell from "../../layout/UserShell";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Badge from "../../ui/Badge";
-import Modal from "../../ui/Modal";
+import KpiCard from "../../ui/KpiCard";
+import ConfirmDialog from "../../ui/ConfirmDialog";
+import TaskCard from "../../ui/TaskCard";
+import { EmptyState } from "../../feedback/PageStates";
 
 interface Stats { volunteer_hours: number; rating: number; completed_tasks: number; points: number }
 interface Opportunity { id: number; title: string; category: string; location: string; estimated_hours: number; organization: string }
@@ -61,7 +64,7 @@ export default function UserMain() {
       <h1 className="mb-4 text-2xl font-bold text-primary">إحصائيات المتطوع</h1>
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         {statCards.map((s) => (
-          <Card key={s.label}><div className="text-center"><div className="text-3xl font-extrabold text-primary">{s.value}</div><div className="mt-1 text-xs text-brand-gray">{s.label}</div></div></Card>
+          <KpiCard key={s.label} label={s.label} value={s.value} />
         ))}
       </div>
 
@@ -69,7 +72,9 @@ export default function UserMain() {
         <div>
           <h2 className="mb-3 text-xl font-bold text-primary">فرص تطوعية مقترحة</h2>
           <div className="space-y-3">
-            {opportunities.length === 0 ? <Card><p className="text-center text-sm text-brand-gray">لا توجد فرص متاحة حاليًا.</p></Card> :
+            {opportunities.length === 0 ? (
+              <EmptyState title="لا توجد فرص متاحة حاليًا." />
+            ) : (
               opportunities.map((o) => (
                 <Card key={o.id}>
                   <div className="mb-2 flex items-center justify-between">
@@ -80,36 +85,50 @@ export default function UserMain() {
                   <p className="mb-3 text-xs text-brand-gray">{o.organization} · {o.location}</p>
                   <Button onClick={() => setApplyTarget(o)}>التقدّم الآن</Button>
                 </Card>
-              ))}
+              ))
+            )}
           </div>
         </div>
 
         <div>
           <h2 className="mb-3 text-xl font-bold text-primary">المهام الحالية</h2>
           <div className="space-y-3">
-            {tasks.length === 0 ? <Card><p className="text-center text-sm text-brand-gray">لا توجد مهام مُسندة لك حاليًا.</p></Card> :
+            {tasks.length === 0 ? (
+              <EmptyState title="لا توجد مهام مُسندة لك حاليًا." />
+            ) : (
               tasks.map((t) => (
-                <Card key={t.id}>
-                  <div className="mb-1 flex items-center justify-between">
-                    <h3 className="font-bold text-primary">{t.title}</h3>
-                    <Badge variant="warning">{t.status}</Badge>
-                  </div>
-                  <p className="mb-3 text-xs text-brand-gray">{t.project_name}</p>
-                  <Button variant="secondary" onClick={() => setWithdrawTarget(t)}>انسحاب</Button>
-                </Card>
-              ))}
+                <TaskCard
+                  key={t.id}
+                  title={t.title}
+                  status={t.status}
+                  projectName={t.project_name}
+                  actions={<Button variant="secondary" onClick={() => setWithdrawTarget(t)}>انسحاب</Button>}
+                />
+              ))
+            )}
           </div>
         </div>
       </div>
 
-      <Modal open={!!applyTarget} onClose={() => setApplyTarget(null)} title="تأكيد التقدّم">
-        <p className="mb-4 text-sm text-brand-gray">هل أنت متأكد من التقدّم لـ «{applyTarget?.title}»؟</p>
-        <div className="flex gap-2"><Button onClick={confirmApply}>نعم، تأكيد</Button><Button variant="secondary" onClick={() => setApplyTarget(null)}>إلغاء</Button></div>
-      </Modal>
-      <Modal open={!!withdrawTarget} onClose={() => setWithdrawTarget(null)} title="تأكيد الانسحاب">
-        <p className="mb-4 text-sm text-brand-gray">هل أنت متأكد من الانسحاب من «{withdrawTarget?.title}»؟</p>
-        <div className="flex gap-2"><Button onClick={confirmWithdraw}>نعم، انسحاب</Button><Button variant="secondary" onClick={() => setWithdrawTarget(null)}>إلغاء</Button></div>
-      </Modal>
+      <ConfirmDialog
+        open={!!applyTarget}
+        onClose={() => setApplyTarget(null)}
+        onConfirm={confirmApply}
+        title="تأكيد التقدّم"
+        confirmLabel="نعم، تأكيد"
+      >
+        هل أنت متأكد من التقدّم لـ «{applyTarget?.title}»؟
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={!!withdrawTarget}
+        onClose={() => setWithdrawTarget(null)}
+        onConfirm={confirmWithdraw}
+        title="تأكيد الانسحاب"
+        confirmLabel="نعم، انسحاب"
+        destructive
+      >
+        هل أنت متأكد من الانسحاب من «{withdrawTarget?.title}»؟
+      </ConfirmDialog>
     </UserShell>
   );
 }

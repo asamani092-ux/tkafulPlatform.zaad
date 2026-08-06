@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { HandHeart, Map as MapIcon, Users, FileBarChart, LayoutGrid } from "lucide-react";
 import Card from "../../ui/Card";
 import Badge from "../../ui/Badge";
+import Breadcrumb from "../../ui/Breadcrumb";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { fetchPublicProject } from "./api";
 import { TOOL_LABELS, type PublicProjectDetail } from "./types";
@@ -51,7 +52,10 @@ export default function ProjectLanding() {
 
   return (
     <div dir="rtl">
-      <header className="px-4 py-14 text-center text-white" style={{ background: project.brand_color }}>
+      <div className="mx-auto max-w-page px-4 pt-4">
+        <Breadcrumb items={[{ label: "الرئيسية", href: "/" }, { label: "المشاريع", href: "/projects" }, { label: project.name }]} />
+      </div>
+      <header className="px-4 py-14 text-center" style={{ background: project.brand_color || "var(--action-primary-surface)", color: "var(--text-inverse)" }}>
         <div className="mx-auto max-w-page">
           <h1 className="text-4xl font-extrabold">{project.name}</h1>
           {project.description && <p className="mt-3 text-lg" style={{ opacity: 0.92 }}>{project.description}</p>}

@@ -3,10 +3,13 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
 import UserShell from "../../layout/UserShell";
-import Card from "../../ui/Card";
 import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Button from "../../ui/Button";
+import DetailCard from "../../ui/DetailCard";
+import Drawer from "../../ui/Drawer";
+import Breadcrumb from "../../ui/Breadcrumb";
+import Skeleton from "../../ui/Skeleton";
 
 interface Profile {
   name: string; gender: string; age: string; city: string; phone: string;
@@ -49,32 +52,59 @@ export default function PersonalInfo() {
     } catch { error({ title: "حدث خطأ", description: "تعذّر حفظ التغييرات" }); }
   };
 
-  if (loading) return <UserShell><p className="text-center text-brand-gray">جاري تحميل البيانات…</p></UserShell>;
+  if (loading) {
+    return (
+      <UserShell>
+        <Skeleton lines={6} height="var(--space-10)" />
+      </UserShell>
+    );
+  }
 
   return (
     <UserShell>
+      <Breadcrumb items={[{ label: "لوحتي", href: "/user/main" }, { label: "معلوماتي" }]} />
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-primary">المعلومات الشخصية</h1>
-        {editing ? (
-          <div className="flex gap-2"><Button onClick={save}>حفظ</Button><Button variant="secondary" onClick={() => { setEditing(false); load(); }}>إلغاء</Button></div>
-        ) : (
-          <Button onClick={() => setEditing(true)}>تعديل</Button>
-        )}
+        <Button onClick={() => setEditing(true)}>تعديل</Button>
       </div>
-      <Card>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Input label="الاسم" value={data.name} onChange={(e) => setData({ ...data, name: e.target.value })} disabled={!editing} />
-          <Select label="الجنس" value={data.gender} onChange={(e) => setData({ ...data, gender: e.target.value })} disabled={!editing}>
+      <DetailCard
+        title="بطاقة العرض التفصيلي"
+        fields={[
+          { label: "الاسم", value: data.name },
+          { label: "الجنس", value: data.gender },
+          { label: "العمر", value: data.age },
+          { label: "المدينة", value: data.city },
+          { label: "رقم الجوال", value: data.phone },
+          { label: "المؤهل", value: data.qualification },
+          { label: "البريد الإلكتروني", value: data.email },
+          { label: "تاريخ الإنضمام", value: data.joinDate },
+        ]}
+      />
+
+      <Drawer
+        open={editing}
+        onClose={() => { setEditing(false); load(); }}
+        title="تعديل الملف الشخصي"
+        footer={
+          <div className="flex gap-2">
+            <Button onClick={save}>حفظ</Button>
+            <Button variant="secondary" onClick={() => { setEditing(false); load(); }}>إلغاء</Button>
+          </div>
+        }
+      >
+        <div className="grid grid-cols-1 gap-4">
+          <Input label="الاسم" value={data.name} onChange={(e) => setData({ ...data, name: e.target.value })} />
+          <Select label="الجنس" value={data.gender} onChange={(e) => setData({ ...data, gender: e.target.value })}>
             <option value="">غير محدد</option><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option>
           </Select>
-          <Input type="number" label="العمر" value={data.age} onChange={(e) => setData({ ...data, age: e.target.value })} disabled={!editing} />
-          <Input label="المدينة" value={data.city} onChange={(e) => setData({ ...data, city: e.target.value })} disabled={!editing} />
-          <Input dir="ltr" label="رقم الجوال" value={data.phone} onChange={(e) => setData({ ...data, phone: e.target.value })} disabled={!editing} />
-          <Input label="المؤهل" value={data.qualification} onChange={(e) => setData({ ...data, qualification: e.target.value })} disabled={!editing} />
+          <Input type="number" label="العمر" value={data.age} onChange={(e) => setData({ ...data, age: e.target.value })} />
+          <Input label="المدينة" value={data.city} onChange={(e) => setData({ ...data, city: e.target.value })} />
+          <Input dir="ltr" label="رقم الجوال" value={data.phone} onChange={(e) => setData({ ...data, phone: e.target.value })} />
+          <Input label="المؤهل" value={data.qualification} onChange={(e) => setData({ ...data, qualification: e.target.value })} />
           <Input dir="ltr" label="البريد الإلكتروني" value={data.email} disabled />
           <Input label="تاريخ الإنضمام" value={data.joinDate} disabled />
         </div>
-      </Card>
+      </Drawer>
     </UserShell>
   );
 }

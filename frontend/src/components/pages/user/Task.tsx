@@ -3,11 +3,12 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
 import UserShell from "../../layout/UserShell";
-import Card from "../../ui/Card";
 import Button from "../../ui/Button";
-import Badge from "../../ui/Badge";
 import Tabs from "../../ui/Tabs";
-import ProgressBar from "../../ui/ProgressBar";
+import TaskCard from "../../ui/TaskCard";
+import Accordion from "../../ui/Accordion";
+import Breadcrumb from "../../ui/Breadcrumb";
+import { EmptyState } from "../../feedback/PageStates";
 
 interface Subtask { id?: number; title: string; completed: boolean }
 interface Task {
@@ -72,37 +73,54 @@ export default function UserTasks() {
 
   return (
     <UserShell>
+      <Breadcrumb items={[{ label: "لوحتي", href: "/user/main" }, { label: "مهامي" }]} />
       <h1 className="mb-4 text-2xl font-bold text-primary">مهامي</h1>
       <div className="mb-6"><Tabs tabs={TABS} active={tab} onChange={setTab} /></div>
       <div className="space-y-4">
         {filtered.length === 0 ? (
-          <Card><p className="text-center text-sm text-brand-gray">لا توجد مهام في هذه الحالة.</p></Card>
+          <EmptyState title="لا توجد مهام في هذه الحالة." />
         ) : (
           filtered.map((task) => (
-            <Card key={task.id}>
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-primary">{task.title}</h3>
-                <Badge variant="primary">{task.project_name}</Badge>
-              </div>
-              <p className="mb-3 text-sm text-brand-gray">{task.description}</p>
-              <div className="mb-3"><span className="me-2 text-sm">{task.progress}%</span><ProgressBar value={task.progress} /></div>
-              {task.subtasks.length > 0 && (
-                <ul className="mb-3 space-y-2">
-                  {task.subtasks.map((s, i) => (
-                    <li key={i} className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={s.completed} onChange={() => toggleSub(task.id, i)} disabled={task.status === "مكتملة" || task.status === "ملغاة"} />
-                      <span style={{ textDecoration: s.completed ? "line-through" : "none", color: "var(--tmkeen-brand-gray)" }}>{s.title}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {task.status !== "مكتملة" && task.status !== "ملغاة" && (
-                <div className="flex gap-2">
+            <TaskCard
+              key={task.id}
+              title={task.title}
+              description={task.description}
+              projectName={task.project_name}
+              status={task.status}
+              progress={task.progress}
+              tags={task.subtasks.length ? [`${task.subtasks.filter((s) => s.completed).length}/${task.subtasks.length} مهام فرعية`] : undefined}
+              actions={task.status !== "مكتملة" && task.status !== "ملغاة" ? (
+                <>
                   <Button onClick={() => saveTask(task)}>حفظ التقدّم</Button>
                   <Button variant="secondary" onClick={() => withdraw(task)}>انسحاب</Button>
-                </div>
+                </>
+              ) : undefined}
+            >
+              {task.subtasks.length > 0 && (
+                <Accordion
+                  items={[{
+                    id: `subs-${task.id}`,
+                    title: "المهام الفرعية",
+                    body: (
+                      <ul className="space-y-2">
+                        {task.subtasks.map((s, i) => (
+                          <li key={i} className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={s.completed}
+                              onChange={() => toggleSub(task.id, i)}
+                              disabled={task.status === "مكتملة" || task.status === "ملغاة"}
+                              style={{ width: "var(--touch-min)", height: "var(--touch-min)", maxWidth: "1.25rem", maxHeight: "1.25rem" }}
+                            />
+                            <span style={{ textDecoration: s.completed ? "line-through" : "none", color: "var(--text-secondary)" }}>{s.title}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ),
+                  }]}
+                />
               )}
-            </Card>
+            </TaskCard>
           ))
         )}
       </div>

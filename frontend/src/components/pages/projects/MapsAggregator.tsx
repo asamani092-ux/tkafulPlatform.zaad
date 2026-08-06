@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
+import KpiCard from "../../ui/KpiCard";
+import Chip from "../../ui/Chip";
+import Breadcrumb from "../../ui/Breadcrumb";
 import { LoadingState, EmptyState, ErrorState } from "../../feedback/PageStates";
 import { fetchPublicMapDetail, fetchPublicMapsIndex, fetchPublicMapSummary } from "./api";
 import {
@@ -109,11 +112,9 @@ export default function MapsAggregator() {
   if (error) return <ErrorState title="تعذّر تحميل البيانات" message="تحقّق من اتصال الخادم وحاول مجدداً." />;
   if (!index.length) return <EmptyState title="لا توجد خرائط منشورة" message="ستظهر الخرائط بعد نشرها من إدارة المشاريع." />;
 
-  const chipClass = (active: boolean) =>
-    `rounded-full px-3 py-1 text-xs font-bold${active ? " bg-primary text-white" : " bg-surface border border-surface-border"}`;
-
   return (
     <div className="mx-auto max-w-page px-3 py-4 sm:px-4" dir="rtl">
+      <Breadcrumb items={[{ label: "الرئيسية", href: "/" }, { label: "الخارطة الموحّدة" }]} />
       <header className="mb-4">
         <h1 className="text-2xl font-extrabold text-primary sm:text-3xl">خارطة المنصّة الموحّدة</h1>
         <p className="mt-1 text-sm text-brand-gray">كل الطبقات العامة لخرائط المشاريع النشطة — بدون بيانات شخصية</p>
@@ -121,21 +122,27 @@ export default function MapsAggregator() {
 
       {/* KPI مجمّعة — الأعداد الحسّاسة تبقى مقنّعة (<5) */}
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-        <Card><div className="text-center"><div className="text-lg font-extrabold text-primary sm:text-xl">{kpis.items}</div><div className="text-xs text-brand-gray">عنصر معروض</div></div></Card>
-        <Card><div className="text-center"><div className="text-lg font-extrabold text-primary sm:text-xl">{kpis.fulfilledDisplay}</div><div className="text-xs text-brand-gray">تعهد منفّذ</div></div></Card>
-        <Card><div className="text-center"><div className="text-lg font-extrabold text-primary sm:text-xl">{kpis.quantity.toLocaleString("en-US")}</div><div className="text-xs text-brand-gray">كمية موزّعة</div></div></Card>
-        <Card><div className="text-center"><div className="text-lg font-extrabold text-primary sm:text-xl">{kpis.pending}</div><div className="text-xs text-brand-gray">تعهد قيد المراجعة</div></div></Card>
+        <KpiCard label="عنصر معروض" value={kpis.items} />
+        <KpiCard label="تعهد منفّذ" value={kpis.fulfilledDisplay} />
+        <KpiCard label="كمية موزّعة" value={kpis.quantity.toLocaleString("en-US")} />
+        <KpiCard label="تعهد قيد المراجعة" value={kpis.pending} />
       </div>
 
-      {/* فلترة بالمشروع */}
-      <div className="mb-3 flex flex-wrap gap-2">
-        <button type="button" className={chipClass(!projectFilter)} onClick={() => setProjectFilter(null)}>كل المشاريع</button>
-        {projects.map((p) => (
-          <button key={p.slug} type="button" className={chipClass(projectFilter === p.slug)}
-            onClick={() => setProjectFilter(projectFilter === p.slug ? null : p.slug)}>
-            {p.name}
-          </button>
-        ))}
+      {/* فلترة بالمشروع — Chips */}
+      <div className="zad-filter-bar mb-3">
+        <div className="zad-filter-bar__row">
+          <span className="zad-filter-bar__label">المشروع:</span>
+          <Chip active={!projectFilter} onClick={() => setProjectFilter(null)}>كل المشاريع</Chip>
+          {projects.map((p) => (
+            <Chip
+              key={p.slug}
+              active={projectFilter === p.slug}
+              onClick={() => setProjectFilter(projectFilter === p.slug ? null : p.slug)}
+            >
+              {p.name}
+            </Chip>
+          ))}
+        </div>
       </div>
 
       {/* فلاتر ديناميكية موحّدة من مخططات MapItemField */}

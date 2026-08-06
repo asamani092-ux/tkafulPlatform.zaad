@@ -10,33 +10,47 @@ const links = [
   { to: "/user/settings", label: "الإعدادات", icon: Settings },
 ];
 
-/** غلاف صفحات المتطوّع (شريط جانبي) على design-system. */
+/** غلاف صفحات المتطوّع (شريط جانبي) على نظام الزاد. */
 export default function UserShell({ children }: { children: ReactNode }) {
   const loc = useLocation();
   const nav = useNavigate();
   const { user, logout } = useAuth();
 
   return (
-    <div className="flex min-h-screen bg-surface-muted" dir="rtl">
-      <aside className="w-60 shrink-0 border-l border-surface-border bg-surface p-5">
+    <div className="zad-root flex min-h-screen bg-surface-muted" dir="rtl">
+      <aside
+        className="shrink-0 bg-surface p-5"
+        style={{
+          width: "var(--sidebar)",
+          borderInlineEnd: "var(--border-hairline) solid var(--border-subtle)",
+        }}
+      >
         <div className="mb-6 flex items-center gap-2 text-lg font-extrabold text-primary">
           <img src="/logo.png" alt="جمعية الزاد" style={{ height: 36, width: "auto" }} />
           تكافل وأثر
         </div>
         <div className="mb-4 text-sm text-brand-gray">مرحبًا {user?.name || "متطوّع"}</div>
-        <nav className="space-y-1">
+        <nav className="space-y-1" aria-label="قائمة المتطوّع">
           {links.map((l) => {
             const active = loc.pathname === l.to;
             return (
-              <Link key={l.to} to={l.to} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold"
-                style={{ background: active ? "var(--tmkeen-primary)" : "transparent", color: active ? "#fff" : "var(--tmkeen-brand-gray)" }}>
-                <l.icon size={16} /> {l.label}
+              <Link
+                key={l.to}
+                to={l.to}
+                className="zad-nav-link"
+                aria-current={active ? "page" : undefined}
+                data-active={active ? "true" : "false"}
+              >
+                <l.icon size={16} aria-hidden /> {l.label}
               </Link>
             );
           })}
-          <button type="button" onClick={() => { void logout().then(() => nav("/signin")); }}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-brand-gray">
-            <LogOut size={16} /> خروج
+          <button
+            type="button"
+            onClick={() => { void logout().then(() => nav("/signin")); }}
+            className="zad-nav-link"
+          >
+            <LogOut size={16} aria-hidden /> خروج
           </button>
         </nav>
       </aside>

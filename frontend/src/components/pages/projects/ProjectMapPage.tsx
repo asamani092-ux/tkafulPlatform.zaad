@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
+import Breadcrumb from "../../ui/Breadcrumb";
+import Chip from "../../ui/Chip";
+import KpiCard from "../../ui/KpiCard";
 import { LoadingState, EmptyState, ErrorState } from "../../feedback/PageStates";
 import { fetchPublicMapDetail, fetchPublicMapsIndex, fetchPublicMapSummary } from "./api";
 import { applyDynamicFilters, type DynamicFilters } from "./filters";
@@ -67,9 +70,16 @@ export default function ProjectMapPage() {
 
   return (
     <div className="mx-auto max-w-page px-3 py-4 sm:px-4" dir="rtl">
+      <Breadcrumb
+        items={[
+          { label: "الرئيسية", href: "/" },
+          { label: detail.project.name, href: `/projects/${detail.project.slug}` },
+          { label: detail.title },
+        ]}
+      />
       <header className="mb-4">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-extrabold sm:text-3xl" style={{ color: detail.project.brand_color }}>
+          <h1 className="text-2xl font-extrabold sm:text-3xl" style={{ color: detail.project.brand_color || "var(--text-brand)" }}>
             {detail.title}
           </h1>
           <Link to={`/projects/${detail.project.slug}`} className="text-xs font-bold text-brand-gray hover:text-primary">
@@ -80,23 +90,27 @@ export default function ProjectMapPage() {
       </header>
 
       {index.length > 1 && (
-        <div className="mb-3 flex flex-wrap gap-2">
-          {index.map((m) => (
-            <button key={m.id} type="button"
-              className={`rounded-full px-3 py-1 text-xs font-bold${m.id === detail.id ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
-              onClick={() => setSearchParams({ map: String(m.id) })}>
-              {m.title}
-            </button>
-          ))}
+        <div className="zad-filter-bar mb-3">
+          <div className="zad-filter-bar__row">
+            {index.map((m) => (
+              <Chip
+                key={m.id}
+                active={m.id === detail.id}
+                onClick={() => setSearchParams({ map: String(m.id) })}
+              >
+                {m.title}
+              </Chip>
+            ))}
+          </div>
         </div>
       )}
 
       {summary && (
         <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-          <Card><div className="text-center"><div className="text-lg font-extrabold text-primary">{summary.items_active}</div><div className="text-xs text-brand-gray">عنصر معروض</div></div></Card>
-          <Card><div className="text-center"><div className="text-lg font-extrabold text-primary">{summary.contributions_fulfilled}</div><div className="text-xs text-brand-gray">تعهد منفّذ</div></div></Card>
-          <Card><div className="text-center"><div className="text-lg font-extrabold text-primary">{summary.quantity_fulfilled}</div><div className="text-xs text-brand-gray">كمية موزّعة</div></div></Card>
-          <Card><div className="text-center"><div className="text-lg font-extrabold text-primary">{summary.contributions_pending}</div><div className="text-xs text-brand-gray">تعهد قيد المراجعة</div></div></Card>
+          <KpiCard label="عنصر معروض" value={summary.items_active} />
+          <KpiCard label="تعهد منفّذ" value={summary.contributions_fulfilled} />
+          <KpiCard label="كمية موزّعة" value={summary.quantity_fulfilled} />
+          <KpiCard label="تعهد قيد المراجعة" value={summary.contributions_pending} />
         </div>
       )}
 
