@@ -1,6 +1,6 @@
 # DEPRECATIONS — الكود المهمل ومسار حذفه
 
-آخر تحديث: فرع `refactor/project-first-architecture`.
+آخر تحديث: فرع `cursor/zaad-ds-additive-ui-069a` (D-21).
 
 ## حُذف في هذا الفرع (كان مؤجلاً)
 
@@ -11,6 +11,8 @@
 - `frontend/src/components/pages/map/` (صفحة خارطة تفقدهم القديمة) — حلّ محلها
   المجمّع الموحّد `/map` وخرائط المشاريع `/projects/{slug}/map` (نظام maps الجديد).
 - `frontend/src/components/pages/admin/ImpactMapAdmin.tsx` — حلّت محلها `/Admin/maps`.
+- **`design-system/` المحلي** و**`Design_system_f/`** — حُذفا بعد ربط
+  `@zaad/design-system@v1.2.0` ونجاح `npm run build` (D-21 / AGENT_COMMAND).
 
 ## مهمل حالياً (يُحذف في PR لاحق بعد استقرار إعادة الهيكلة)
 

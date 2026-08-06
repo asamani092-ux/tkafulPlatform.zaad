@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { API_BASE_URL } from "../../config";
-import Card from "../ui/Card";
 import HeroBand from "../ui/HeroBand";
-import { LoadingState, ErrorState } from "../feedback/PageStates";
+import KpiCard from "../ui/KpiCard";
+import AvatarGroup from "../ui/AvatarGroup";
+import Breadcrumb from "../ui/Breadcrumb";
+import { LoadingState, ErrorState, EmptyState } from "../feedback/PageStates";
 
 interface AggStats {
   total_volunteers: number;
@@ -34,23 +36,32 @@ export default function Volunteers() {
     { label: "إناث", value: data.by_gender.female },
   ] : [];
 
+  const avatars = Array.from({ length: Math.min(6, data?.total_volunteers || 0) }, (_, i) => ({
+    name: `متطوّع ${i + 1}`,
+  }));
+
   return (
     <div>
       <HeroBand title="المتطوعون" subtitle="مجتمع العطاء وأثره في أرقام." />
       <main className="mx-auto max-w-page px-4 py-10">
+        <Breadcrumb items={[{ label: "الرئيسية", href: "/" }, { label: "المتطوعون" }]} />
         {loading && <LoadingState />}
         {error && !loading && <ErrorState title="خطأ" message={error} />}
+        {!loading && !error && !data && <EmptyState title="لا توجد إحصاءات بعد" />}
         {!loading && !error && data && (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-            {cards.map((c) => (
-              <Card key={c.label}>
-                <div className="text-center">
-                  <div className="text-2xl font-extrabold text-primary">{c.value.toLocaleString("en-US")}</div>
-                  <div className="mt-1 text-xs text-brand-gray">{c.label}</div>
-                </div>
-              </Card>
-            ))}
-          </div>
+          <>
+            {avatars.length > 0 && (
+              <div className="mb-6 flex items-center gap-3">
+                <AvatarGroup people={avatars} max={5} />
+                <span className="text-sm text-brand-gray">مجتمع المتطوعين النشط</span>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+              {cards.map((c) => (
+                <KpiCard key={c.label} label={c.label} value={c.value.toLocaleString("en-US")} />
+              ))}
+            </div>
+          </>
         )}
       </main>
     </div>

@@ -7,6 +7,9 @@ import Card from "../../ui/Card";
 import Badge from "../../ui/Badge";
 import Button from "../../ui/Button";
 import Tabs from "../../ui/Tabs";
+import KpiCard from "../../ui/KpiCard";
+import Breadcrumb from "../../ui/Breadcrumb";
+import { EmptyState } from "../../feedback/PageStates";
 
 interface Stats { total_donations: number; total_beneficiaries: number; active_projects: number; completed_projects: number; total_projects: number }
 interface Project { id: number; title: string; status_display: string; category: string; progress: number }
@@ -55,17 +58,18 @@ export default function AdminMain() {
 
   return (
     <AdminShell>
+      <Breadcrumb items={[{ label: "الإدارة" }]} />
       <h1 className="mb-4 text-2xl font-bold text-primary">لوحة الإدارة</h1>
       <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {kpis.map((k) => (
-          <Card key={k.label}><div className="text-center"><div className="text-2xl font-extrabold text-primary">{k.value}</div><div className="mt-1 text-xs text-brand-gray">{k.label}</div></div></Card>
+          <KpiCard key={k.label} label={k.label} value={k.value} />
         ))}
       </div>
 
       <h2 className="mb-3 text-xl font-bold text-primary">المشاريع</h2>
       <div className="mb-4"><Tabs tabs={TABS} active={tab} onChange={setTab} /></div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {projects.length === 0 ? <Card><p className="text-center text-sm text-brand-gray">لا توجد مشاريع.</p></Card> :
+        {projects.length === 0 ? <EmptyState title="لا توجد مشاريع." /> :
           projects.map((p) => (
             <Card key={p.id}>
               <div className="mb-2 flex items-center justify-between">

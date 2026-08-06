@@ -4,6 +4,7 @@ interface StateProps {
   title?: string;
   message?: string;
   children?: ReactNode;
+  action?: ReactNode;
 }
 
 export function LoadingState({ title = "جاري التحميل…", message }: StateProps) {
@@ -16,12 +17,13 @@ export function LoadingState({ title = "جاري التحميل…", message }: 
   );
 }
 
-export function EmptyState({ title = "لا توجد بيانات", message }: StateProps) {
+/** حالة فراغ — عقد EmptyState (title/body/action). */
+export function EmptyState({ title = "لا توجد بيانات", message, children, action }: StateProps) {
   return (
     <div className="state-panel" role="status">
       <p className="state-title">{title}</p>
       {message && <p className="state-message">{message}</p>}
-      {/** children optional action slot */}
+      {action || children}
     </div>
   );
 }

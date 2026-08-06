@@ -142,9 +142,14 @@ export default function PlatformProjects() {
                 const tool = p.tools.find((t) => t.tool_key === toolKey);
                 const enabled = !!tool?.is_enabled;
                 return (
-                  <button key={toolKey} type="button" disabled={!isSuperAdmin}
-                    className={`m-1 rounded-full px-3 py-1 text-xs font-bold${enabled ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
-                    onClick={() => isSuperAdmin && setTool(p, toolKey, !enabled)}>
+                  <button
+                    key={toolKey}
+                    type="button"
+                    disabled={!isSuperAdmin}
+                    className={`zad-chip m-1${enabled ? " zad-chip--active" : ""}`}
+                    data-active={enabled ? "true" : "false"}
+                    onClick={() => isSuperAdmin && setTool(p, toolKey, !enabled)}
+                  >
                     {TOOL_LABELS[toolKey]}
                   </button>
                 );

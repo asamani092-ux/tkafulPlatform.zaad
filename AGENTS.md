@@ -2,9 +2,10 @@
 
 ## Cursor Cloud specific instructions
 
-Takaful Platform is a full-stack Arabic RTL volunteering app. It is a monorepo with three parts:
-`backend/` (Django REST API), `frontend/` (React + Vite + TypeScript SPA), and `design-system/`
-(static CSS/token package, no runtime service).
+Takaful Platform is a full-stack Arabic RTL volunteering app. It is a monorepo with two runtime parts:
+`backend/` (Django REST API) and `frontend/` (React + Vite + TypeScript SPA).
+Design tokens/components come from the npm package `@zaad/design-system`
+(`github:asamani092-ux/designSystemFinal#v1.2.0`) — no local design-system copy.
 
 ### Services
 

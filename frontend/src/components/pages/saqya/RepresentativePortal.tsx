@@ -9,6 +9,7 @@ import Badge from "../../ui/Badge";
 import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Modal from "../../ui/Modal";
+import Dropzone from "../../ui/Dropzone";
 
 interface Order { id: number; sponsorship_type: string; status: string; }
 
@@ -81,10 +82,12 @@ export default function RepresentativePortal() {
             <Input label="خط الطول (lng)" value={doc.longitude} onChange={(e) => setDoc({ ...doc, longitude: e.target.value })} />
           </div>
           <Input label="اسم الموقع" value={doc.location_name} onChange={(e) => setDoc({ ...doc, location_name: e.target.value })} />
-          <div>
-            <label className="label-field">الملف</label>
-            <input type="file" className="input-field" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-          </div>
+          <Dropzone
+            label={file ? `تم اختيار: ${file.name}` : "اسحب ملف التوثيق أو استعرض"}
+            hint="صورة أو مستند ميداني"
+            accept="image/*,application/pdf,video/*"
+            onFiles={(files) => setFile(files[0] || null)}
+          />
           <div className="flex gap-2"><Button onClick={submitDoc}>رفع</Button><Button variant="secondary" onClick={() => setDocFor(null)}>إلغاء</Button></div>
         </div>
       </Modal>

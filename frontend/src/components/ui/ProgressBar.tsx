@@ -1,19 +1,16 @@
-/** شريط تقدّم موحّد يعتمد رموز design-system. */
+/** شريط تقدّم موحّد — عقد Progress. يحافظ على prop `value`. */
 export default function ProgressBar({ value }: { value: number }) {
   const v = Math.max(0, Math.min(100, value));
   return (
     <span
-      style={{
-        display: "inline-block",
-        width: "100%",
-        height: "8px",
-        background: "var(--tmkeen-surface-muted)",
-        borderRadius: "9999px",
-        overflow: "hidden",
-        verticalAlign: "middle",
-      }}
+      className="zad-progress"
+      role="progressbar"
+      aria-valuenow={v}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={`التقدّم ${v}%`}
     >
-      <span style={{ display: "block", height: "100%", width: `${v}%`, background: "var(--tmkeen-success)" }} />
+      <span className="zad-progress__bar" style={{ width: `${v}%` }} />
     </span>
   );
 }

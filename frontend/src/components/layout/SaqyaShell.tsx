@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Droplets, LogOut } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import Button from "../ui/Button";
 
 const ROLE_LABEL: Record<string, string> = {
   admin: "مشرف السقيا",
@@ -10,27 +11,32 @@ const ROLE_LABEL: Record<string, string> = {
   representative: "مندوب",
 };
 
-/** غلاف وحدة كفالات السقيا على design-system. */
+/** غلاف كفالات السقيا — TopBar فاتح بنص العلامة وفق النموذج. */
 export default function SaqyaShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const nav = useNavigate();
   return (
-    <div className="page-shell" dir="rtl">
-      <header className="px-6 py-6 text-white" style={{ background: "var(--tmkeen-primary)" }}>
-        <div className="mx-auto flex max-w-page items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Droplets size={26} />
+    <div className="page-shell zad-root" dir="rtl" data-theme="light">
+      <header className="border-b border-surface-border bg-surface px-6 py-5">
+        <div className="mx-auto flex max-w-page items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-primary">
+            <Droplets size={26} aria-hidden />
             <div>
-              <h1 className="text-2xl font-extrabold">كفالات السقيا</h1>
-              <p className="text-sm" style={{ opacity: 0.9 }}>{ROLE_LABEL[user?.role || ""] || ""} · {user?.name}</p>
+              <h1 className="text-2xl font-extrabold text-primary">كفالات السقيا</h1>
+              <p className="text-sm text-brand-gray">{ROLE_LABEL[user?.role || ""] || ""} · {user?.name}</p>
             </div>
           </div>
-          <button type="button" onClick={() => { void logout().then(() => nav("/signin")); }} className="flex items-center gap-2 rounded-lg px-3 py-2 font-bold text-white" style={{ background: "rgba(255,255,255,.15)" }}>
-            <LogOut size={16} /> خروج
-          </button>
+          <Button
+            variant="secondary"
+            type="button"
+            onClick={() => { void logout().then(() => nav("/signin")); }}
+            className="inline-flex items-center gap-2"
+          >
+            <LogOut size={16} aria-hidden /> خروج
+          </Button>
         </div>
       </header>
-      <main className="mx-auto max-w-page px-4 py-8">{children}</main>
+      <main className="mx-auto max-w-page space-y-6 px-4 py-8">{children}</main>
     </div>
   );
 }

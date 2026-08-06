@@ -8,6 +8,8 @@ import Button from "../../ui/Button";
 import Badge from "../../ui/Badge";
 import Input from "../../ui/Input";
 import Modal from "../../ui/Modal";
+import Dropzone from "../../ui/Dropzone";
+import { EmptyState } from "../../feedback/PageStates";
 
 interface Order { id: number; sponsorship_type: string; status: string; }
 
@@ -53,7 +55,7 @@ export default function SupplierPortal() {
     <SaqyaShell>
       <h2 className="mb-4 text-xl font-bold text-primary">طلبات التوريد المسندة</h2>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {orders.length === 0 ? <Card><p className="text-center text-sm text-brand-gray">لا توجد طلبات مسندة.</p></Card> :
+        {orders.length === 0 ? <EmptyState title="لا توجد طلبات مسندة." /> :
           orders.map((o) => (
             <Card key={o.id}>
               <div className="mb-2 flex items-center justify-between">
@@ -74,10 +76,12 @@ export default function SupplierPortal() {
           <Input label="رقم الفاتورة" value={inv.invoice_number} onChange={(e) => setInv({ ...inv, invoice_number: e.target.value })} />
           <Input type="number" label="المبلغ" value={inv.amount} onChange={(e) => setInv({ ...inv, amount: e.target.value })} />
           <Input type="number" label="الإجمالي" value={inv.total_amount} onChange={(e) => setInv({ ...inv, total_amount: e.target.value })} />
-          <div>
-            <label className="label-field">ملف الفاتورة</label>
-            <input type="file" className="input-field" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-          </div>
+          <Dropzone
+            label={file ? `تم اختيار: ${file.name}` : "اسحب ملف الفاتورة أو استعرض"}
+            hint="PDF أو صورة — حد أقصى معقول للرفع"
+            accept="image/*,application/pdf"
+            onFiles={(files) => setFile(files[0] || null)}
+          />
           <div className="flex gap-2"><Button onClick={submitInvoice}>رفع</Button><Button variant="secondary" onClick={() => setInvoiceFor(null)}>إلغاء</Button></div>
         </div>
       </Modal>

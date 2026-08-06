@@ -7,6 +7,7 @@ import Button from "../../ui/Button";
 import Badge from "../../ui/Badge";
 import Select from "../../ui/Select";
 import Tabs from "../../ui/Tabs";
+import KpiCard from "../../ui/KpiCard";
 import SaqyaMap from "./SaqyaMap";
 import type { MapPoint } from "./SaqyaMap";
 
@@ -63,7 +64,7 @@ export default function AdminPortal() {
     <SaqyaShell>
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {kpis.map((k) => (
-          <Card key={k.label}><div className="text-center"><div className="text-2xl font-extrabold text-primary">{k.value.toLocaleString("en-US")}</div><div className="mt-1 text-xs text-brand-gray">{k.label}</div></div></Card>
+          <KpiCard key={k.label} label={k.label} value={k.value.toLocaleString("en-US")} />
         ))}
       </div>
 

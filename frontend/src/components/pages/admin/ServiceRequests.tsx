@@ -3,10 +3,12 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
 import AdminShell from "../../layout/AdminShell";
-import Card from "../../ui/Card";
-import Badge from "../../ui/Badge";
 import Button from "../../ui/Button";
 import Tabs from "../../ui/Tabs";
+import Breadcrumb from "../../ui/Breadcrumb";
+import BeneficiaryCard from "../../ui/BeneficiaryCard";
+import { EmptyState } from "../../feedback/PageStates";
+import Skeleton from "../../ui/Skeleton";
 
 interface ServiceRequest { id: number; service_title: string; beneficiary_name: string; beneficiary_contact: string; details: string; status: string }
 
@@ -23,10 +25,16 @@ export default function ServiceRequests() {
   const { success, error } = useToast();
   const [items, setItems] = useState<ServiceRequest[]>([]);
   const [tab, setTab] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const load = (status: string) => {
+    setLoading(true);
     const url = status ? `/api/service-requests/?status=${status}` : `/api/service-requests/`;
-    authFetch(url).then((r) => (r.ok ? r.json() : [])).then((d) => setItems(Array.isArray(d) ? d : d.results || [])).catch(() => {});
+    authFetch(url)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setItems(Array.isArray(d) ? d : d.results || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (access) load(tab); }, [tab, access]);
@@ -42,28 +50,36 @@ export default function ServiceRequests() {
 
   return (
     <AdminShell>
+      <Breadcrumb items={[{ label: "الإدارة", href: "/Admin" }, { label: "طلبات الخدمات" }]} />
       <h1 className="mb-4 text-2xl font-bold text-primary">طلبات الخدمات</h1>
       <div className="mb-4"><Tabs tabs={TABS} active={tab} onChange={setTab} /></div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {items.length === 0 ? <Card><p className="text-center text-sm text-brand-gray">لا توجد طلبات.</p></Card> :
-          items.map((r) => (
-            <Card key={r.id}>
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="font-bold text-primary">{r.service_title}</h3>
-                <Badge variant={r.status === "DONE" || r.status === "APPROVED" ? "success" : r.status === "REJECTED" ? "danger" : "warning"}>{statusLabel[r.status] || r.status}</Badge>
-              </div>
-              <p className="text-sm text-brand-gray">{r.beneficiary_name} · {r.beneficiary_contact}</p>
-              {r.details && <p className="mb-3 mt-1 text-xs text-brand-gray">{r.details}</p>}
-              {r.status === "PENDING" && (
-                <div className="flex gap-2">
-                  <Button onClick={() => act(r.id, "approve")}>قبول</Button>
-                  <Button variant="secondary" onClick={() => act(r.id, "reject")}>رفض</Button>
-                  <Button variant="secondary" onClick={() => act(r.id, "mark_done")}>إنجاز</Button>
-                </div>
-              )}
-            </Card>
-          ))}
-      </div>
+      {loading ? (
+        <Skeleton lines={4} height="var(--space-16)" />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {items.length === 0 ? (
+            <EmptyState title="لا توجد طلبات" message="ستظهر طلبات الخدمات هنا بعد استقبالها." />
+          ) : (
+            items.map((r) => (
+              <BeneficiaryCard
+                key={r.id}
+                name={r.beneficiary_name}
+                contact={`${r.service_title} · ${r.beneficiary_contact}`}
+                details={r.details}
+                status={statusLabel[r.status] || r.status}
+                statusTone={r.status === "DONE" || r.status === "APPROVED" ? "success" : r.status === "REJECTED" ? "danger" : "warning"}
+                actions={r.status === "PENDING" ? (
+                  <>
+                    <Button onClick={() => act(r.id, "approve")}>قبول</Button>
+                    <Button variant="secondary" onClick={() => act(r.id, "reject")}>رفض</Button>
+                    <Button variant="secondary" onClick={() => act(r.id, "mark_done")}>إنجاز</Button>
+                  </>
+                ) : undefined}
+              />
+            ))
+          )}
+        </div>
+      )}
     </AdminShell>
   );
 }

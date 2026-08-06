@@ -143,15 +143,21 @@ export default function MapsAdmin() {
         </Card>
       )}
 
-      <div className="mb-3 flex flex-wrap gap-2">
-        {maps.map((m) => (
-          <button key={m.id} type="button"
-            className={`rounded-full px-3 py-1 text-xs font-bold${m.id === selectedId ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
-            onClick={() => setSelectedId(m.id)}>
-            {m.title} — {m.project_name}
-          </button>
-        ))}
-        {maps.length === 0 && <p className="text-brand-gray">لا خرائط ضمن نطاقك.</p>}
+      <div className="zad-filter-bar mb-3">
+        <div className="zad-filter-bar__row">
+          {maps.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              className={`zad-chip${m.id === selectedId ? " zad-chip--active" : ""}`}
+              data-active={m.id === selectedId ? "true" : "false"}
+              onClick={() => setSelectedId(m.id)}
+            >
+              {m.title} — {m.project_name}
+            </button>
+          ))}
+          {maps.length === 0 && <p className="text-brand-gray">لا خرائط ضمن نطاقك.</p>}
+        </div>
       </div>
 
       {selected && (

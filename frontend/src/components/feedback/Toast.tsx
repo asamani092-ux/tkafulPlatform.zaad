@@ -10,13 +10,13 @@ export interface ToastProps {
   onClose: (id: string) => void;
 }
 
-const STYLES: Record<ToastProps["type"], { bg: string; fg: string }> = {
-  success: { bg: "var(--tmkeen-success-bg)", fg: "var(--tmkeen-success)" },
-  error: { bg: "var(--tmkeen-danger-bg)", fg: "var(--tmkeen-danger)" },
-  info: { bg: "var(--tmkeen-warning-bg)", fg: "var(--tmkeen-warning)" },
+const TONE: Record<ToastProps["type"], { bg: string; fg: string; role: "status" | "alert" }> = {
+  success: { bg: "var(--success-surface)", fg: "var(--success-text)", role: "status" },
+  error: { bg: "var(--danger-surface)", fg: "var(--danger-text)", role: "alert" },
+  info: { bg: "var(--info-surface)", fg: "var(--info-text)", role: "status" },
 };
 
-/** إشعار Toast موحّد بألوان design-system الدلالية. */
+/** إشعار Toast — عقد Alert/Toast بألوان التوكنات. */
 export default function Toast({ id, type, title, description, duration = 4500, onClose }: ToastProps) {
   const [visible, setVisible] = useState(false);
 
@@ -32,30 +32,40 @@ export default function Toast({ id, type, title, description, duration = 4500, o
     }
   }, [duration, id, onClose]);
 
-  const s = STYLES[type];
+  const s = TONE[type];
   const icon = type === "success" ? <Check size={20} /> : type === "error" ? <AlertCircle size={20} /> : <Info size={20} />;
 
   return (
     <div
       dir="rtl"
+      role={s.role}
       style={{
         maxWidth: "24rem",
-        transition: "all .2s ease",
+        transition: `transform var(--duration-base) var(--ease-standard), opacity var(--duration-base) var(--ease-standard)`,
         transform: visible ? "translateX(0)" : "translateX(100%)",
         opacity: visible ? 1 : 0,
       }}
     >
-      <div className="card" style={{ background: s.bg, color: s.fg, padding: "1rem" }}>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
-          <span style={{ color: s.fg, flexShrink: 0 }}>{icon}</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h4 style={{ fontWeight: 600, fontSize: "0.875rem", margin: 0 }}>{title}</h4>
-            {description && <p style={{ fontSize: "0.875rem", marginTop: "0.25rem", opacity: 0.9 }}>{description}</p>}
+      <div className="card" style={{ background: s.bg, color: s.fg, padding: "var(--space-4)" }}>
+        <div className="flex items-start gap-3">
+          <span style={{ color: s.fg, flexShrink: 0 }} aria-hidden>{icon}</span>
+          <div className="min-w-0 flex-1">
+            <h4 className="m-0 text-sm font-semibold">{title}</h4>
+            {description && <p className="mt-1 text-sm" style={{ opacity: 0.9 }}>{description}</p>}
           </div>
           <button
+            type="button"
             onClick={() => onClose(id)}
             aria-label="إغلاق"
-            style={{ background: "transparent", border: 0, cursor: "pointer", color: s.fg, flexShrink: 0 }}
+            style={{
+              background: "transparent",
+              border: 0,
+              cursor: "pointer",
+              color: s.fg,
+              flexShrink: 0,
+              minWidth: "var(--touch-min)",
+              minHeight: "var(--touch-min)",
+            }}
           >
             <X size={16} />
           </button>

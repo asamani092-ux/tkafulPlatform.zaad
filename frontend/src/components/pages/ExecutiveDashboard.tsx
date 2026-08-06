@@ -6,6 +6,8 @@ import Donut from "../ui/Donut";
 import DataTable from "../ui/DataTable";
 import type { Column } from "../ui/DataTable";
 import ProgressBar from "../ui/ProgressBar";
+import KpiCard from "../ui/KpiCard";
+import Breadcrumb from "../ui/Breadcrumb";
 import { LoadingState, ErrorState, EmptyState } from "../feedback/PageStates";
 
 type Section = {
@@ -57,18 +59,21 @@ export default function ExecutiveDashboard() {
   if (!data) return <div className="page-shell p-10"><EmptyState title="لا توجد بيانات" /></div>;
 
   return (
-    <div className="page-shell">
-      <header className="px-6 py-8 text-white" style={{ background: "var(--tmkeen-primary)" }}>
-        <div className="mx-auto flex max-w-page items-center justify-between">
+    <div className="page-shell zad-root" data-theme="light">
+      <header className="border-b border-surface-border bg-surface px-6 py-8">
+        <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold">إدارة التكافل المجتمعي</h1>
-            <p className="mt-2" style={{ opacity: 0.9 }}>اللوحة التنفيذية الموحّدة — منصة التكافل والمبادرات</p>
+            <h1 className="text-3xl font-extrabold text-primary">إدارة التكافل المجتمعي</h1>
+            <p className="mt-2 text-brand-gray">اللوحة التنفيذية الموحّدة — منصة التكافل والمبادرات</p>
           </div>
-          <Link to="/Admin/executive/manage" className="rounded-lg px-4 py-2 font-bold text-white" style={{ background: "rgba(255,255,255,.15)" }}>تغذية اللوحة</Link>
+          <Link to="/Admin/executive/manage" className="btn-secondary inline-flex items-center" style={{ minHeight: "var(--touch-min)" }}>
+            تغذية اللوحة
+          </Link>
         </div>
       </header>
 
       <main className="mx-auto max-w-page space-y-6 px-4 py-8">
+        <Breadcrumb items={[{ label: "الإدارة", href: "/Admin" }, { label: "اللوحة التنفيذية" }]} />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {data.sections.map((s) => (
             <Card key={s.id}>
@@ -80,15 +85,22 @@ export default function ExecutiveDashboard() {
               <div className="mt-4 flex flex-wrap justify-center gap-3">
                 {STATUS.map((st) => (
                   <div key={st.key} className="text-center text-[11px] text-brand-gray">
-                    <div className="mx-auto mb-1 flex h-9 w-9 items-center justify-center rounded-full font-bold"
-                      style={{ background: st.color, color: st.key === "not_started" || st.key === "near" ? "var(--tmkeen-brand-gray)" : "#fff" }}>
+                    <div
+                      className="mx-auto mb-1 flex items-center justify-center rounded-full font-bold"
+                      style={{
+                        width: "var(--touch-min)",
+                        height: "var(--touch-min)",
+                        background: st.color,
+                        color: st.key === "not_started" || st.key === "near" ? "var(--text-secondary)" : "var(--text-inverse)",
+                      }}
+                    >
                       {s[st.key as keyof Section] as number}
                     </div>
                     {st.label}
                   </div>
                 ))}
               </div>
-              <hr className="my-4" style={{ borderColor: "var(--tmkeen-surface-border)" }} />
+              <hr className="my-4" style={{ borderColor: "var(--border-subtle)" }} />
               <h3 className="text-center text-lg font-bold text-primary">{s.title}</h3>
             </Card>
           ))}
@@ -107,13 +119,7 @@ export default function ExecutiveDashboard() {
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {data.kpis.map((k) => (
-            <Card key={k.id}>
-              <div className="text-center">
-                <div className="text-2xl font-extrabold text-primary">{k.value}</div>
-                <div className="mt-1 font-bold">{k.title}</div>
-                <div className="text-xs text-brand-gray">{k.subtitle}</div>
-              </div>
-            </Card>
+            <KpiCard key={k.id} label={`${k.title}${k.subtitle ? ` — ${k.subtitle}` : ""}`} value={k.value} />
           ))}
         </div>
       </main>

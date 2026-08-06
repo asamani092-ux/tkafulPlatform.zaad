@@ -22,10 +22,10 @@ function loadState(): UatState {
   }
 }
 
-const STATUS_BUTTONS: Array<{ value: UatStatus; label: string; color: string }> = [
-  { value: "pass", label: "✅ ناجح", color: "#16a34a" },
-  { value: "warn", label: "⚠️ ملاحظة", color: "#f2b824" },
-  { value: "fail", label: "❌ فشل", color: "#dc2626" },
+const STATUS_BUTTONS: Array<{ value: UatStatus; label: string; bg: string; fg: string }> = [
+  { value: "pass", label: "ناجح", bg: "var(--success-solid)", fg: "var(--action-primary-text)" },
+  { value: "warn", label: "ملاحظة", bg: "var(--warning-solid)", fg: "var(--action-accent-text)" },
+  { value: "fail", label: "فشل", bg: "var(--danger-solid)", fg: "var(--action-primary-text)" },
 ];
 
 /** نموذج تقييم القبول (UAT) — حفظ تلقائي في المتصفح + نسخ/تنزيل التقرير. */
@@ -132,12 +132,15 @@ export default function UatPage() {
                   <p className="mb-2 text-xs text-brand-gray">المتوقع: {sc.expected}</p>
                   <div className="flex flex-wrap items-center gap-2">
                     {STATUS_BUTTONS.map((b) => (
-                      <button key={b.value} type="button"
-                        className="rounded-full px-3 py-1 text-xs font-bold"
+                      <button
+                        key={b.value}
+                        type="button"
+                        className="zad-chip"
                         style={status === b.value
-                          ? { background: b.color, color: "#fff", border: `1px solid ${b.color}` }
-                          : { background: "var(--tmkeen-surface)", color: "var(--tmkeen-brand-gray)", border: "1px solid var(--tmkeen-surface-border)" }}
-                        onClick={() => setStatus(sc.id, b.value)}>
+                          ? { background: b.bg, color: b.fg, borderColor: b.bg }
+                          : undefined}
+                        onClick={() => setStatus(sc.id, b.value)}
+                      >
                         {b.label}
                       </button>
                     ))}
@@ -160,9 +163,13 @@ export default function UatPage() {
         <h2 className="mb-2 text-base font-bold text-primary">الحكم النهائي</h2>
         <div className="mb-3 flex flex-wrap gap-2">
           {["قبول", "قبول بملاحظات", "رفض"].map((v) => (
-            <button key={v} type="button"
-              className={`rounded-full px-4 py-1.5 text-sm font-bold${state.verdict === v ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
-              onClick={() => setState({ ...state, verdict: state.verdict === v ? "" : v })}>
+            <button
+              key={v}
+              type="button"
+              className={`zad-chip${state.verdict === v ? " zad-chip--active" : ""}`}
+              data-active={state.verdict === v ? "true" : "false"}
+              onClick={() => setState({ ...state, verdict: state.verdict === v ? "" : v })}
+            >
               {v}
             </button>
           ))}

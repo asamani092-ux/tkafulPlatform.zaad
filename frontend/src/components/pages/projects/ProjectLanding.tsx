@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { HandHeart, Map as MapIcon, Users, FileBarChart, LayoutGrid } from "lucide-react";
 import Card from "../../ui/Card";
 import Badge from "../../ui/Badge";
+import Breadcrumb from "../../ui/Breadcrumb";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { fetchPublicProject } from "./api";
 import { TOOL_LABELS, type PublicProjectDetail } from "./types";
@@ -50,15 +51,28 @@ export default function ProjectLanding() {
   };
 
   return (
-    <div dir="rtl">
-      <header className="px-4 py-14 text-center text-white" style={{ background: project.brand_color }}>
+    <div className="bg-surface-muted" dir="rtl" data-theme="light">
+      <div className="mx-auto max-w-page px-4 pt-4">
+        <Breadcrumb items={[{ label: "الرئيسية", href: "/" }, { label: "المشاريع", href: "/projects" }, { label: project.name }]} />
+      </div>
+      <header className="border-b border-surface-border bg-surface px-4 py-12 text-center">
         <div className="mx-auto max-w-page">
-          <h1 className="text-4xl font-extrabold">{project.name}</h1>
-          {project.description && <p className="mt-3 text-lg" style={{ opacity: 0.92 }}>{project.description}</p>}
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
+          <div
+            className="mx-auto mb-4"
+            aria-hidden
+            style={{
+              width: "var(--space-12)",
+              height: "var(--space-2)",
+              borderRadius: "var(--radius-full)",
+              background: project.brand_color || "var(--brand-primary)",
+            }}
+          />
+          <h1 className="text-4xl font-extrabold text-primary">{project.name}</h1>
+          {project.description && <p className="mt-3 text-lg text-brand-gray">{project.description}</p>}
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm text-brand-gray">
             <Badge variant="success">{project.status === "active" ? "نشط" : project.status}</Badge>
-            {project.start_date && <span style={{ opacity: 0.9 }}>البداية: {project.start_date}</span>}
-            {project.end_date && <span style={{ opacity: 0.9 }}>النهاية: {project.end_date}</span>}
+            {project.start_date && <span>البداية: {project.start_date}</span>}
+            {project.end_date && <span>النهاية: {project.end_date}</span>}
           </div>
         </div>
       </header>
