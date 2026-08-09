@@ -19,6 +19,8 @@ export default function Footer() {
               <li><Link to="/">الرئيسية</Link></li>
               <li><Link to="/projects">المشاريع</Link></li>
               <li><Link to="/services">الخدمات</Link></li>
+              <li><Link to="/volunteers">المتطوعون</Link></li>
+              <li><Link to="/map">الخرائط</Link></li>
               <li><Link to="/about">من نحن</Link></li>
               <li><Link to="/suggest">شارك اقتراحك</Link></li>
             </ul>

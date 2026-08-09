@@ -8,6 +8,7 @@ router = DefaultRouter()
 router.register(r"services", views.ServiceViewSet, basename="service")
 router.register(r"service-requests", views.ServiceRequestViewSet, basename="service-request")
 router.register(r"suggestions", views.SuggestionViewSet, basename="suggestion")
+router.register(r"water-supply-requests", views.WaterSupplyRequestViewSet, basename="water-supply-request")
 
 urlpatterns = [
     path("public-suggestions/", views.public_submit_suggestion, name="public-suggestions"),

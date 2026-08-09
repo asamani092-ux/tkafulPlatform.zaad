@@ -44,7 +44,7 @@ export default function AddProjectPage() {
 
   return (
     <AdminShell>
-      <h1 className="mb-4 text-2xl font-bold text-primary">إضافة مشروع</h1>
+      <h1 className="mb-4 text-2xl font-bold text-primary">إنشاء مشروع</h1>
       <Card>
         <form onSubmit={submit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Input label="اسم المشروع" value={form.title} onChange={(e) => set("title", e.target.value)} />

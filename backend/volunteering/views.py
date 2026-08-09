@@ -721,6 +721,13 @@ class SuggestionViewSet(viewsets.ModelViewSet):
         return super().get_throttles()
 
 
+class WaterSupplyRequestViewSet(viewsets.ReadOnlyModelViewSet):
+    """قائمة/تفاصيل طلبات سقيا الماء لنطاق الطلبات في لوحة الإدارة (Phase B)."""
+    queryset = WaterSupplyRequest.objects.all()
+    serializer_class = WaterSupplyRequestSerializer
+    permission_classes = [IsAdmin]
+
+
 class ProjectAssignmentViewSet(viewsets.ModelViewSet):
     queryset = ProjectAssignment.objects.all()
     serializer_class = ProjectAssignmentSerializer

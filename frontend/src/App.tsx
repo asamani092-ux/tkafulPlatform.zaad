@@ -10,6 +10,7 @@ import { ForbiddenPage, NotFoundPage } from "./components/pages/ErrorPages";
 
 import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer";
+import { ACTIVE_LEGACY_REDIRECTS } from "./admin/domains";
 
 // Public / general (eager — small landing pages)
 import Home from "./components/pages/Home";
@@ -37,12 +38,13 @@ const AddProjectPage = lazy(() => import("./components/pages/admin/AddProject"))
 const ProjectIdeas = lazy(() => import("./components/pages/admin/ProjectIdeas"));
 const Reports = lazy(() => import("./components/pages/admin/Reports"));
 const ServiceRequests = lazy(() => import("./components/pages/admin/ServiceRequests"));
+const WaterSupplyRequests = lazy(() => import("./components/pages/admin/WaterSupplyRequests"));
+const SponsorshipsHub = lazy(() => import("./components/pages/admin/SponsorshipsHub"));
 
 const ExecutiveDashboard = lazy(() => import("./components/pages/ExecutiveDashboard"));
 const ManageDashboard = lazy(() => import("./components/pages/ManageDashboard"));
 const SaqyaHome = lazy(() => import("./components/pages/saqya"));
 
-// project-first: صفحات المشاريع ونظام الخرائط المتعددة
 const ProjectLanding = lazy(() => import("./components/pages/projects/ProjectLanding"));
 const ProjectMapPage = lazy(() => import("./components/pages/projects/ProjectMapPage"));
 const MapsAggregator = lazy(() => import("./components/pages/projects/MapsAggregator"));
@@ -70,6 +72,7 @@ function AppContent() {
       {!hideChrome && <Navbar />}
       <main className="flex-1 overflow-x-hidden">
         <Routes>
+          {/* —— الموقع العام —— */}
           <Route path="/" element={<Home />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/services" element={<Services />} />
@@ -80,8 +83,6 @@ function AppContent() {
           <Route path="/services/water-supply" element={<WaterSupplyRequestPage />} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<SignUp />} />
-          {/* دخول موحّد (D-17): المسار القديم يحوّل لصفحة الدخول الواحدة */}
-          <Route path="/admin/signin" element={<Navigate to="/signin" replace />} />
           <Route path="/403" element={<ForbiddenPage />} />
           <Route path="/404" element={<NotFoundPage />} />
 
@@ -90,39 +91,48 @@ function AppContent() {
           <Route path="/user/settings" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserSettings /></ProtectedRoute></Lazy>} />
           <Route path="/user/personal-info" element={<Lazy><ProtectedRoute requiredRole="authenticated"><PersonalInfo /></ProtectedRoute></Lazy>} />
 
+          {/* —— لوحة الإدارة بنطاقات العمل —— */}
           <Route path="/Admin" element={<Lazy><ProtectedRoute requiredRole="admin"><AdminMain /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/requests" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerRequests /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/applications" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerApplications /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/management" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerManagement /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/tasks" element={<Lazy><ProtectedRoute requiredRole="admin"><AddProjectPage /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/ideas" element={<Lazy><ProtectedRoute requiredRole="admin"><ProjectIdeas /></ProtectedRoute></Lazy>} />
+
+          {/* 1. المشاريع */}
+          <Route path="/Admin/projects" element={<Lazy><ProtectedRoute requiredRole="staff"><PlatformProjects /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/projects/create" element={<Lazy><ProtectedRoute requiredRole="admin"><AddProjectPage /></ProtectedRoute></Lazy>} />
+
+          {/* 2. المتطوعون */}
+          <Route path="/Admin/volunteers" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerManagement /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/volunteers/applications" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerApplications /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/volunteers/join-requests" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerRequests /></ProtectedRoute></Lazy>} />
+
+          {/* 3. الطلبات */}
+          <Route path="/Admin/requests" element={<Lazy><ProtectedRoute requiredRole="admin"><ServiceRequests /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/requests/water-supply" element={<Lazy><ProtectedRoute requiredRole="admin"><WaterSupplyRequests /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/requests/suggestions" element={<Lazy><ProtectedRoute requiredRole="admin"><ProjectIdeas /></ProtectedRoute></Lazy>} />
+
+          {/* 4. الكفالات */}
+          <Route path="/Admin/sponsorships" element={<Lazy><ProtectedRoute requiredRole="staff"><SponsorshipsHub /></ProtectedRoute></Lazy>} />
+
+          {/* 5. الخرائط */}
+          <Route path="/Admin/maps" element={<Lazy><ProtectedRoute requiredRole="staff"><MapsAdmin /></ProtectedRoute></Lazy>} />
+
+          {/* 6. الكادر */}
+          <Route path="/Admin/staff" element={<Lazy><ProtectedRoute requiredRole="orgStaff"><ExecutiveDashboard /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/staff/manage" element={<Lazy><ProtectedRoute requiredRole="orgStaff"><ManageDashboard /></ProtectedRoute></Lazy>} />
+
+          {/* 7. التقارير */}
           <Route path="/Admin/reports" element={<Lazy><ProtectedRoute requiredRole="admin"><Reports /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/service-requests" element={<Lazy><ProtectedRoute requiredRole="admin"><ServiceRequests /></ProtectedRoute></Lazy>} />
 
-          {/* اللوحة التنفيذية مدموجة في اللوحة الموحّدة (D-19) — طاقم المؤسسة فقط */}
-          <Route path="/Admin/executive" element={<Lazy><ProtectedRoute requiredRole="orgStaff"><ExecutiveDashboard /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/executive/manage" element={<Lazy><ProtectedRoute requiredRole="orgStaff"><ManageDashboard /></ProtectedRoute></Lazy>} />
-          {/* توافق خلفي: المسارات القديمة تحوّل للموقع الجديد */}
-          <Route path="/executive" element={<Navigate to="/Admin/executive" replace />} />
-          <Route path="/executive/manage" element={<Navigate to="/Admin/executive/manage" replace />} />
+          {/* توافق خلفي: كل المسارات القديمة */}
+          {ACTIVE_LEGACY_REDIRECTS.map((r) => (
+            <Route key={r.from} path={r.from} element={<Navigate to={r.to} replace />} />
+          ))}
 
-          {/* project-first: صفحات المشاريع والخرائط */}
+          {/* —— صفحات المشاريع العامة —— */}
           <Route path="/projects/:slug" element={<Lazy><ProjectLanding /></Lazy>} />
           <Route path="/projects/:slug/map" element={<Lazy><ProjectMapPage /></Lazy>} />
           <Route path="/projects/:slug/sponsorships" element={<Lazy><SaqyaHome /></Lazy>} />
           <Route path="/map" element={<Lazy><MapsAggregator /></Lazy>} />
 
-          {/* توافق خلفي: المسار القديم /saqya → المسار الجديد داخل المشروع */}
-          <Route path="/saqya" element={<Navigate to="/projects/saqya/sponsorships" replace />} />
-
-          {/* نموذج تقييم القبول (UAT) — حفظ محلي + نسخ/تنزيل التقرير */}
           <Route path="/uat" element={<Lazy><UatPage /></Lazy>} />
-
-          {/* الأدمن الموحّد role-scoped: مشرف عام أو عضو مشروع */}
-          <Route path="/Admin/projects" element={<Lazy><ProtectedRoute requiredRole="staff"><PlatformProjects /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/maps" element={<Lazy><ProtectedRoute requiredRole="staff"><MapsAdmin /></ProtectedRoute></Lazy>} />
-          {/* توافق خلفي: مسار إدارة الخارطة القديم → إدارة الخرائط الجديدة */}
-          <Route path="/Admin/map" element={<Navigate to="/Admin/maps" replace />} />
 
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

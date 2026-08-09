@@ -1,86 +1,125 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../../contexts/AuthContext";
-import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
+import { API_BASE_URL } from "../../../config";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
-import Badge from "../../ui/Badge";
-import Button from "../../ui/Button";
-import Tabs from "../../ui/Tabs";
+import { LoadingState, ErrorState } from "../../feedback/PageStates";
+import { ADMIN_DOMAINS } from "../../../admin/domains";
+import { useMemberships } from "../../../hooks/useMemberships";
 
-interface Stats { total_donations: number; total_beneficiaries: number; active_projects: number; completed_projects: number; total_projects: number }
-interface Project { id: number; title: string; status_display: string; category: string; progress: number }
+interface DomainCounts {
+  projects: number | null;
+  volunteers: number | null;
+  requests: number | null;
+  sponsorships: number | null;
+  maps: number | null;
+  staff: number | null;
+  reports: number | null;
+}
 
-const TABS = [
-  { key: "pending", label: "قيد المراجعة" },
-  { key: "active", label: "نشطة" },
-  { key: "completed", label: "مكتملة" },
-];
+async function countList(url: string, access: string | null): Promise<number | null> {
+  try {
+    const res = access
+      ? await authFetch(url)
+      : await fetch(`${API_BASE_URL}${url}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (Array.isArray(data)) return data.length;
+    if (typeof data.count === "number") return data.count;
+    if (Array.isArray(data.results)) return data.results.length;
+    if (Array.isArray(data.memberships)) return data.memberships.length;
+    if (Array.isArray(data.maps)) return data.maps.length;
+    if (Array.isArray(data.sections)) return data.sections.length;
+    return null;
+  } catch {
+    return null;
+  }
+}
 
+/** نظرة عامة — بطاقة KPI واحدة لكل نطاق عمل. */
 export default function AdminMain() {
-  const { access } = useAuth();
-  const { success, error } = useToast();
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [tab, setTab] = useState("pending");
-  const [projects, setProjects] = useState<Project[]>([]);
+  const { access, user } = useAuth();
+  const { isSuperAdmin } = useMemberships();
+  const isAdmin = user?.role === "admin" || isSuperAdmin;
+  const [counts, setCounts] = useState<DomainCounts | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!access) return;
-    authFetch(`/api/stats/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setStats(d)).catch(() => {});
+    let cancelled = false;
+    (async () => {
+      try {
+        const [projects, volunteers, requests, maps, staff, suggestions] = await Promise.all([
+          countList("/api/platform/projects/", access),
+          countList("/api/volunteers/", access),
+          countList("/api/service-requests/?status=PENDING", access),
+          countList("/api/maps/", access),
+          countList("/api/dashboard/executive/", access),
+          countList("/api/suggestions/", access),
+        ]);
+        // كفالات: عدد المشاريع التي تفعّل أداة الكفالات
+        let sponsorships: number | null = null;
+        try {
+          const pr = await authFetch("/api/platform/projects/");
+          if (pr.ok) {
+            const list = await pr.json();
+            const arr = Array.isArray(list) ? list : list.results || [];
+            sponsorships = arr.filter((p: { tools?: string[] }) => (p.tools || []).includes("sponsorships")).length;
+          }
+        } catch { /* ignore */ }
+
+        if (!cancelled) {
+          setCounts({
+            projects,
+            volunteers,
+            requests: requests != null || suggestions != null
+              ? (requests || 0) + (suggestions || 0)
+              : null,
+            sponsorships,
+            maps,
+            staff,
+            reports: null,
+          });
+        }
+      } catch {
+        if (!cancelled) setError(true);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [access]);
 
-  const loadProjects = (status: string) => {
-    authFetch(`/api/projects/?status=${status}`)
-      .then((r) => (r.ok ? r.json() : [])).then((d) => setProjects(Array.isArray(d) ? d : d.results || [])).catch(() => {});
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (access) loadProjects(tab); }, [tab, access]);
-
-  const act = async (id: number, action: "approve" | "reject") => {
-    try {
-      const res = await authFetch(`/api/projects/${id}/${action}/`, { method: "POST" });
-      if (!res.ok) throw new Error();
-      success({ title: action === "approve" ? "تم اعتماد المشروع" : "تم رفض المشروع" });
-      loadProjects(tab);
-    } catch { error({ title: "خطأ", description: "تعذّر تنفيذ العملية" }); }
-  };
-
-  const kpis = stats ? [
-    { label: "إجمالي التبرعات", value: stats.total_donations.toLocaleString("en-US") },
-    { label: "المستفيدون", value: stats.total_beneficiaries },
-    { label: "مشاريع نشطة", value: stats.active_projects },
-    { label: "مشاريع مكتملة", value: stats.completed_projects },
-    { label: "إجمالي المشاريع", value: stats.total_projects },
-  ] : [];
+  const visible = ADMIN_DOMAINS.filter((d) => !d.superAdminOnly || isAdmin);
 
   return (
     <AdminShell>
-      <h1 className="mb-4 text-2xl font-bold text-primary">لوحة الإدارة</h1>
-      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        {kpis.map((k) => (
-          <Card key={k.label}><div className="text-center"><div className="text-2xl font-extrabold text-primary">{k.value}</div><div className="mt-1 text-xs text-brand-gray">{k.label}</div></div></Card>
-        ))}
-      </div>
+      <h1 className="mb-2 text-2xl font-bold text-primary">نظرة عامة</h1>
+      <p className="mb-6 text-sm text-brand-gray">ملخص سريع لكل نطاق عمل — التفاصيل داخل النطاق.</p>
 
-      <h2 className="mb-3 text-xl font-bold text-primary">المشاريع</h2>
-      <div className="mb-4"><Tabs tabs={TABS} active={tab} onChange={setTab} /></div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {projects.length === 0 ? <Card><p className="text-center text-sm text-brand-gray">لا توجد مشاريع.</p></Card> :
-          projects.map((p) => (
-            <Card key={p.id}>
-              <div className="mb-2 flex items-center justify-between">
-                {p.category && <Badge variant="primary">{p.category}</Badge>}
-                <Badge variant="success">{p.status_display}</Badge>
-              </div>
-              <h3 className="mb-2 font-bold text-primary">{p.title}</h3>
-              {tab === "pending" && (
-                <div className="flex gap-2">
-                  <Button onClick={() => act(p.id, "approve")}>اعتماد</Button>
-                  <Button variant="secondary" onClick={() => act(p.id, "reject")}>رفض</Button>
+      {error && <ErrorState title="تعذّر تحميل الملخص" message="تحقّق من الاتصال ثم أعد المحاولة." />}
+      {!counts && !error && <LoadingState title="جاري تحميل الملخص…" />}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {visible.map((d) => {
+          const key = d.id as keyof DomainCounts;
+          const n = counts ? counts[key] : null;
+          return (
+            <Link key={d.id} to={d.to} className="block">
+              <Card className="h-full transition-shadow hover:shadow-md">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-bold text-primary">{d.label}</h2>
+                    <p className="mt-1 text-xs text-brand-gray">{d.blurb}</p>
+                  </div>
+                  <div className="text-3xl font-extrabold text-primary tabular-nums">
+                    {n == null ? "—" : n.toLocaleString("en-US")}
+                  </div>
                 </div>
-              )}
-            </Card>
-          ))}
+              </Card>
+            </Link>
+          );
+        })}
       </div>
     </AdminShell>
   );

@@ -43,7 +43,10 @@ export default function ProjectLanding() {
       case "volunteering":
         return "/volunteers";
       case "services":
-        return "/services";
+        // سقيا الماء مربوطة بمشروع السقيا؛ بقية المشاريع → صفحة الخدمات العامة
+        return project.slug === "saqya"
+          ? `/services/water-supply?project=${project.slug}`
+          : "/services";
       default:
         return null;
     }

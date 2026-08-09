@@ -40,7 +40,7 @@ export default function VolunteerManagement() {
 
   return (
     <AdminShell>
-      <h1 className="mb-4 text-2xl font-bold text-primary">إدارة المتطوعين</h1>
+      <h1 className="mb-4 text-2xl font-bold text-primary">المتطوعون</h1>
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         {kpis.map((k) => (
           <Card key={k.label}><div className="text-center"><div className="text-2xl font-extrabold text-primary">{k.value}</div><div className="mt-1 text-xs text-brand-gray">{k.label}</div></div></Card>

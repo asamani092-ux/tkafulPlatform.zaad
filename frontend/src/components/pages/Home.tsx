@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { HandHeart, Lightbulb } from "lucide-react";
+import { HandHeart, Lightbulb, Droplets } from "lucide-react";
 import { API_BASE_URL } from "../../config";
 import Card from "../ui/Card";
 import Button from "../ui/Button";
+import { LoadingState } from "../feedback/PageStates";
 
 interface Stats {
   beneficiaries: number;
@@ -21,106 +22,147 @@ interface PlatformProjectCard {
   slug: string;
   description: string;
   brand_color: string;
+  donation_url?: string;
+  donation_label?: string;
   tools: string[];
 }
 
+const TOOL_AR: Record<string, string> = {
+  map: "خريطة",
+  sponsorships: "كفالات",
+  volunteering: "تطوع",
+  services: "خدمات",
+  reports: "تقارير",
+};
+
+/** الصفحة الرئيسية العامة — منصّة موحّدة، مشاريع نشطة، خدمات، أثر، CTA. */
 export default function Home() {
   const [stats, setStats] = useState<Stats>({ beneficiaries: 0, potential_projects: 0, donations: 0 });
   const [services, setServices] = useState<BeneficiaryService[]>([]);
   const [platformProjects, setPlatformProjects] = useState<PlatformProjectCard[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/public-home-stats/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setStats(d)).catch(() => {});
-    fetch(`${API_BASE_URL}/api/beneficiary-services/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setServices(d.results || d)).catch(() => {});
-    fetch(`${API_BASE_URL}/api/platform/public/projects/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setPlatformProjects(d)).catch(() => {});
+    Promise.all([
+      fetch(`${API_BASE_URL}/api/public-home-stats/`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`${API_BASE_URL}/api/beneficiary-services/`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`${API_BASE_URL}/api/platform/public/projects/`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ]).then(([st, sv, pr]) => {
+      if (st) setStats(st);
+      if (sv) setServices(sv.results || sv);
+      if (pr) setPlatformProjects(Array.isArray(pr) ? pr : pr.results || []);
+    }).finally(() => setLoading(false));
   }, []);
 
   const display = [
     { label: "مستفيد", value: stats.beneficiaries },
-    { label: "مشروع محتمل", value: stats.potential_projects },
+    { label: "مشروع", value: stats.potential_projects || platformProjects.length },
     { label: "متبرع", value: Math.floor((stats.donations || 0) / 100) },
   ];
 
   return (
     <div>
-      {/* Hero */}
       <header className="px-4 py-16 text-center text-white" style={{ background: "var(--tmkeen-primary)" }}>
         <div className="mx-auto max-w-page">
-          <h1 className="text-4xl font-extrabold md:text-5xl">منصة تكافل وأثر</h1>
-          <p className="mt-3 text-lg" style={{ opacity: 0.9 }}>حيث يلتقي العطاء بالأثر — انضم إلى مجتمع المتكافلين واصنع أثرًا يدوم</p>
+          <h1 className="text-4xl font-extrabold md:text-5xl">تكافل وأثر</h1>
+          <p className="mt-3 text-lg" style={{ opacity: 0.9 }}>
+            منصّة واحدة للعمل الخيري والتطوعي — مشاريع، كفالات، خرائط أثر، وخدمات مجتمعية.
+          </p>
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {display.map((s) => (
               <div key={s.label} className="rounded-xl border px-6 py-6" style={{ background: "rgba(255,255,255,.12)", borderColor: "rgba(255,255,255,.25)" }}>
-                <div className="text-3xl font-extrabold">{s.value.toLocaleString("en-US")} +</div>
+                <div className="text-3xl font-extrabold">{Number(s.value || 0).toLocaleString("en-US")} +</div>
                 <div className="mt-1 text-sm" style={{ opacity: 0.9 }}>{s.label}</div>
               </div>
             ))}
           </div>
-          <Link to="/about" className="btn-register mt-8 inline-flex">اعرف أكثر</Link>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <Link to="/projects" className="btn-register inline-flex">استكشف المشاريع</Link>
+            <Link to="/map" className="inline-flex rounded-lg border border-white/40 px-5 py-2 text-sm font-bold text-white">خارطة الأثر</Link>
+          </div>
         </div>
       </header>
 
-      {/* مشاريع المنصّة (project-first): كل مشروع له صفحة هبوط خاصة */}
-      {platformProjects.length > 0 && (
-        <section className="mx-auto max-w-page px-4 py-12">
-          <h2 className="mb-8 text-center text-3xl font-bold text-primary">مشاريع المنصّة</h2>
+      <section className="mx-auto max-w-page px-4 py-12">
+        <h2 className="mb-2 text-center text-3xl font-bold text-primary">المشاريع النشطة</h2>
+        <p className="mb-8 text-center text-sm text-brand-gray">كل مشروع يعرض أدواته المفعّلة فقط — تبرّع إن وُجد رابط.</p>
+        {loading && <LoadingState title="جاري التحميل…" />}
+        {!loading && (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {platformProjects.map((p) => (
-              <Link key={p.slug} to={`/projects/${p.slug}`} className="block">
-                <Card className="h-full">
+              <Card key={p.slug} className="flex h-full flex-col">
+                <Link to={`/projects/${p.slug}`} className="block flex-1">
                   <div className="mb-2 flex items-center gap-2">
                     <span style={{ width: 14, height: 14, borderRadius: 4, background: p.brand_color, display: "inline-block" }} />
                     <h3 className="text-lg font-bold text-primary">{p.name}</h3>
                   </div>
                   <p className="mb-3 text-sm text-brand-gray">{p.description}</p>
                   <div className="flex flex-wrap gap-1">
-                    {p.tools.map((t) => (
-                      <span key={t} className="rounded-full border border-surface-border bg-surface px-2 py-0.5 text-xs font-bold text-brand-gray">
-                        {{ map: "خريطة", sponsorships: "كفالات", volunteering: "تطوع", services: "خدمات", reports: "تقارير" }[t] || t}
+                    {(p.tools || []).map((t) => (
+                      <span key={t} className="rounded border border-surface-border bg-surface px-2 py-0.5 text-xs font-bold text-brand-gray">
+                        {TOOL_AR[t] || t}
                       </span>
                     ))}
                   </div>
-                </Card>
-              </Link>
+                </Link>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link to={`/projects/${p.slug}`}><Button variant="secondary">التفاصيل</Button></Link>
+                  {p.donation_url ? (
+                    <a href={p.donation_url} target="_blank" rel="noopener noreferrer">
+                      <Button>{p.donation_label || "تبرع الآن"}</Button>
+                    </a>
+                  ) : null}
+                </div>
+              </Card>
             ))}
           </div>
-        </section>
-      )}
+        )}
+      </section>
 
-      <section className="mx-auto max-w-page px-4 py-12">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <section className="mx-auto max-w-page px-4 py-8">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <Card>
             <div className="mb-4 flex items-start justify-between">
               <div>
-                <h3 className="mb-2 text-xl font-bold text-primary">شارك في مشروع تكافلي</h3>
-                <p className="text-sm text-brand-gray">اكتشف مشاريعنا المتنوعة واختر ما يناسب اهتماماتك للمشاركة في صنع الأثر.</p>
+                <h3 className="mb-2 text-xl font-bold text-primary">تطوّع معنا</h3>
+                <p className="text-sm text-brand-gray">انضم للمتطوعين وساهم في تنفيذ المشاريع.</p>
               </div>
               <HandHeart className="text-secondary" size={32} />
             </div>
-            <Link to="/projects"><Button>المشاريع</Button></Link>
+            <Link to="/volunteers"><Button>المتطوعون</Button></Link>
           </Card>
           <Card>
             <div className="mb-4 flex items-start justify-between">
               <div>
-                <h3 className="mb-2 text-xl font-bold text-primary">اقترح مبادرة تكافلية</h3>
-                <p className="text-sm text-brand-gray">شاركنا أفكارك لمبادرات جديدة تُحدث أثرًا إيجابيًا في المجتمع.</p>
+                <h3 className="mb-2 text-xl font-bold text-primary">اقترح مبادرة</h3>
+                <p className="text-sm text-brand-gray">شاركنا فكرة تصل لنطاق الطلبات في لوحة الإدارة.</p>
               </div>
               <Lightbulb className="text-secondary" size={32} />
             </div>
             <Link to="/suggest"><Button variant="secondary">شارك اقتراحك</Button></Link>
+          </Card>
+          <Card>
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="mb-2 text-xl font-bold text-primary">طلب سقيا الماء</h3>
+                <p className="text-sm text-brand-gray">نموذج مرتبط بمشروع السقيا ويظهر في نطاق الطلبات.</p>
+              </div>
+              <Droplets className="text-secondary" size={32} />
+            </div>
+            <Link to="/services/water-supply?project=saqya"><Button variant="secondary">قدّم طلباً</Button></Link>
           </Card>
         </div>
       </section>
 
       <section className="bg-surface-muted py-12">
         <div className="mx-auto max-w-page px-4">
-          <h2 className="mb-8 text-center text-3xl font-bold text-primary">خدماتنا الأساسية المؤثّرة</h2>
+          <h2 className="mb-8 text-center text-3xl font-bold text-primary">الخدمات</h2>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {services.length > 0 ? services.map((s) => (
               <Card key={s.id}>
                 <h3 className="mb-2 text-lg font-bold text-primary">{s.title}</h3>
                 <p className="mb-4 text-sm text-brand-gray">{s.desc}</p>
-                <Link to={`/request-service`}><Button variant="secondary">اطلب الخدمة</Button></Link>
+                <Link to="/request-service"><Button variant="secondary">اطلب الخدمة</Button></Link>
               </Card>
             )) : <p className="text-center text-brand-gray">لا توجد خدمات حالياً.</p>}
           </div>

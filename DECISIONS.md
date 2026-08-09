@@ -189,3 +189,28 @@
   عند توفر الرابط؛ كفالات السقيا (`checkout_url`) تفضّل `sponsorship.project.donation_url` على
   `EXTERNAL_STORE_URL` كاحتياطي منصّة فقط.
 - **المبرر**: تخصيص رابط التبرع لكل مشروع دون كسر التوافق مع المتجر الخارجي الافتراضي.
+
+## D-28 — قاعدة فرع Phase B على Phase A غير المدموج
+- `main` عند بدء Phase B لا يزال عند `39c89fe` (قبل Phase A). PR #9 (Phase A) مفتوح وغير مدمج.
+- **القرار**: قطع `refactor/phase-b-ui` من `refactor/phase-a-cleanup` @ `f57404a` لاستخدام
+  `donation_url` ومسارات المنصّة. عند دمج Phase A في `main` يُعاد استهداف قاعدة الـ PR أو يُدمَج بالتسلسل.
+
+## D-29 — إعادة استخدام `/Admin/requests` لنطاق الطلبات
+- سابقاً: `/Admin/requests` = طلبات انضمام المتطوعين، و`/Admin/service-requests` = طلبات الخدمات.
+- **القرار**: `/Admin/requests` = نطاق **الطلبات** (خدمات + سقيا + اقتراحات). طلبات الانضمام →
+  `/Admin/volunteers/join-requests`. `/Admin/service-requests` و`/Admin/ideas` redirects.
+- **المبرر**: تسمية عربية موحّدة بلا ازدواج ideas/suggest أو requests/service-requests.
+
+## D-30 — لا واجهة تنفيذية عامة
+- بعد D-19 أصبحت `/executive` تحويلاً للإدارة. Phase B ينقلها إلى `/Admin/staff`.
+- **القرار**: لا مسار عام للقراءة فقط للوحة الكادر — بيانات تشغيلية تبقى تحت حارس `orgStaff`.
+
+## D-31 — قائمة طلبات سقيا للإدارة بلا تغيير نموذج
+- **القرار**: `WaterSupplyRequestViewSet` (ReadOnly) على `/api/water-supply-requests/` — بدون حقول/جداول جديدة.
+- الصفحة العامة `/services/water-supply?project=saqya` تربط النموذج بمشروع السقيا في الواجهة؛
+  الطلبات تظهر في نطاق الطلبات.
+
+## D-32 — قائمة المشاريع العامة من منصّة المشاريع
+- `/projects` كانت تعرض `/api/public-projects/` (تطوّع قديم) بلا روابط هبوط.
+- **القرار**: نفس مصدر Home — `/api/platform/public/projects/` مع رابط صفحة المشروع وCTA تبرع
+  يُخفى إن لم يُضبط `donation_url`.

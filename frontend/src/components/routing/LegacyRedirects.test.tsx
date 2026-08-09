@@ -1,58 +1,63 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
+import { ACTIVE_LEGACY_REDIRECTS } from "../../admin/domains";
 
-/** التوافق الخلفي للمسارات القديمة — نفس خريطة التحويلات في App.tsx. */
+const TARGETS: Record<string, string> = {
+  "/Admin/maps": "maps-admin",
+  "/Admin/projects/create": "projects-create",
+  "/Admin/requests/suggestions": "suggestions",
+  "/Admin/volunteers/applications": "vol-apps",
+  "/Admin/volunteers": "volunteers",
+  "/Admin/requests": "requests",
+  "/Admin/volunteers/join-requests": "join-requests",
+  "/Admin/staff": "staff",
+  "/Admin/staff/manage": "staff-manage",
+  "/signin": "unified-signin",
+  "/projects/saqya/sponsorships": "saqya-portal",
+};
+
+/** التوافق الخلفي — نفس خريطة ACTIVE_LEGACY_REDIRECTS في App.tsx. */
 function LegacyRoutes() {
   return (
     <Routes>
-      <Route path="/saqya" element={<Navigate to="/projects/saqya/sponsorships" replace />} />
-      <Route path="/Admin/map" element={<Navigate to="/Admin/maps" replace />} />
-      <Route path="/admin/signin" element={<Navigate to="/signin" replace />} />
-      <Route path="/executive" element={<Navigate to="/Admin/executive" replace />} />
-      <Route path="/projects/:slug/sponsorships" element={<div>saqya-portal</div>} />
-      <Route path="/Admin/maps" element={<div>maps-admin</div>} />
-      <Route path="/signin" element={<div>unified-signin</div>} />
-      <Route path="/Admin/executive" element={<div>executive-admin</div>} />
+      {ACTIVE_LEGACY_REDIRECTS.map((r) => (
+        <Route key={r.from} path={r.from} element={<Navigate to={r.to} replace />} />
+      ))}
+      {Object.entries(TARGETS).map(([path, label]) => (
+        <Route key={path} path={path} element={<div>{label}</div>} />
+      ))}
       <Route path="*" element={<div>not-found</div>} />
     </Routes>
   );
 }
 
-describe("legacy route redirects", () => {
-  it("redirects /saqya to the project sponsorships portal", () => {
+describe("legacy route redirects (Phase B)", () => {
+  it.each([
+    ["/saqya", "saqya-portal"],
+    ["/Admin/map", "maps-admin"],
+    ["/admin/signin", "unified-signin"],
+    ["/executive", "staff"],
+    ["/executive/manage", "staff-manage"],
+    ["/Admin/executive", "staff"],
+    ["/Admin/executive/manage", "staff-manage"],
+    ["/Admin/tasks", "projects-create"],
+    ["/Admin/ideas", "suggestions"],
+    ["/Admin/applications", "vol-apps"],
+    ["/Admin/management", "volunteers"],
+    ["/Admin/service-requests", "requests"],
+  ])("redirects %s", (from, label) => {
     render(
-      <MemoryRouter initialEntries={["/saqya"]}>
+      <MemoryRouter initialEntries={[from]}>
         <LegacyRoutes />
       </MemoryRouter>,
     );
-    expect(screen.getByText("saqya-portal")).toBeInTheDocument();
+    expect(screen.getByText(label)).toBeInTheDocument();
   });
 
-  it("redirects /Admin/map to the new maps admin", () => {
-    render(
-      <MemoryRouter initialEntries={["/Admin/map"]}>
-        <LegacyRoutes />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText("maps-admin")).toBeInTheDocument();
-  });
-
-  it("redirects /admin/signin to the unified sign-in", () => {
-    render(
-      <MemoryRouter initialEntries={["/admin/signin"]}>
-        <LegacyRoutes />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText("unified-signin")).toBeInTheDocument();
-  });
-
-  it("redirects /executive to the merged admin dashboard", () => {
-    render(
-      <MemoryRouter initialEntries={["/executive"]}>
-        <LegacyRoutes />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText("executive-admin")).toBeInTheDocument();
+  it("exposes every ACTIVE_LEGACY_REDIRECT target", () => {
+    for (const r of ACTIVE_LEGACY_REDIRECTS) {
+      expect(TARGETS[r.to], `missing target stub for ${r.to}`).toBeTruthy();
+    }
   });
 });
