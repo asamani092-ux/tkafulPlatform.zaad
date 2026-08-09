@@ -1,3 +1,6 @@
+"""
+اختبارات واجهة /api/map/* القديمة (محول legacy — maps مصدر الحقيقة).
+"""
 import json
 from copy import deepcopy
 
@@ -8,8 +11,17 @@ from django.test import override_settings
 from rest_framework.settings import api_settings
 from rest_framework.test import APITestCase
 
-from impact_map.models import Region, Product, Contribution, DistributionRecord
-from impact_map.serializers import mask_families_count
+from maps.legacy_serializers import mask_families_count
+from maps.legacy_services import find_region_item_by_slug, get_legacy_map
+from maps.models import MapContribution, MapDistributionRecord, MapItem, MapProduct
+
+
+def region_by_slug(slug):
+    return find_region_item_by_slug(get_legacy_map(), slug)
+
+
+def product_by_slug(slug):
+    return MapProduct.objects.get(map=get_legacy_map(), slug=slug)
 
 
 class MaskFamiliesTests(APITestCase):
@@ -25,9 +37,11 @@ class MaskFamiliesTests(APITestCase):
 class PublicPrivacyTests(APITestCase):
     def setUp(self):
         call_command("seed_impact_map")
-        Contribution.objects.create(
-            name="سري", phone="512345678", region=Region.objects.first(),
-            product=Product.objects.first(), quantity=1,
+        region = region_by_slug("al-nakheel")
+        product = product_by_slug("winter-bag")
+        MapContribution.objects.create(
+            map=get_legacy_map(), item=region, category=product.slug,
+            name="سري", phone="512345678", quantity=1,
             mode="self_distribution", status="pending",
         )
 
@@ -100,13 +114,11 @@ class AdminPermissionTests(APITestCase):
 class ContributionValidationTests(APITestCase):
     def setUp(self):
         call_command("seed_impact_map")
-        self.region = Region.objects.get(slug="al-nakheel")
-        self.product = Product.objects.get(slug="winter-bag")
 
     def _payload(self, **overrides):
         base = {
-            "name": "متبرع", "phone": "0512345678", "region": self.region.slug,
-            "product": self.product.slug, "quantity": 5, "mode": "self_distribution",
+            "name": "متبرع", "phone": "0512345678", "region": "al-nakheel",
+            "product": "winter-bag", "quantity": 5, "mode": "self_distribution",
         }
         base.update(overrides)
         return base
@@ -131,7 +143,7 @@ class ContributionValidationTests(APITestCase):
         self.client.force_authenticate(user)
         res = self.client.post("/api/map/contributions/", self._payload(), format="json")
         self.assertEqual(res.status_code, 201)
-        c = Contribution.objects.get(id=res.data["id"])
+        c = MapContribution.objects.get(id=res.data["id"])
         self.assertEqual(c.user_id, user.id)
 
 
@@ -152,13 +164,11 @@ class ContributionThrottleTests(APITestCase):
         api_settings.reload()
         self.addCleanup(self._override.disable)
         self.addCleanup(api_settings.reload)
-        self.region = Region.objects.get(slug="al-nakheel")
-        self.product = Product.objects.get(slug="winter-bag")
 
     def test_throttle_on_contributions(self):
         payload = {
-            "name": "x", "phone": "0512345678", "region": self.region.slug,
-            "product": self.product.slug, "quantity": 1, "mode": "self_distribution",
+            "name": "x", "phone": "0512345678", "region": "al-nakheel",
+            "product": "winter-bag", "quantity": 1, "mode": "self_distribution",
         }
         for _ in range(2):
             self.client.post("/api/map/contributions/", payload, format="json")
@@ -172,9 +182,11 @@ class ContributionStatusActionTests(APITestCase):
         self.admin = User.objects.create_user(username="a@x.com", email="a@x.com", password="Hello12345!")
         self.admin.profile.role = "admin"
         self.admin.profile.save()
-        self.contrib = Contribution.objects.create(
-            name="ت", phone="512345678", region=Region.objects.first(),
-            product=Product.objects.first(), quantity=1,
+        region = region_by_slug("al-nakheel")
+        product = product_by_slug("winter-bag")
+        self.contrib = MapContribution.objects.create(
+            map=get_legacy_map(), item=region, category=product.slug,
+            name="ت", phone="512345678", quantity=1,
             mode="self_distribution", status="pending",
         )
 
@@ -192,10 +204,11 @@ class ContributionStatusActionTests(APITestCase):
 class SeedIdempotencyTests(APITestCase):
     def test_seed_runs_twice_without_duplicates(self):
         call_command("seed_impact_map")
-        n1 = Region.objects.count()
+        map_obj = get_legacy_map()
+        n1 = MapItem.objects.filter(map=map_obj, data__kind="region").count()
         call_command("seed_impact_map")
-        n2 = Region.objects.count()
+        n2 = MapItem.objects.filter(map=map_obj, data__kind="region").count()
         self.assertEqual(n1, n2)
         self.assertEqual(n1, 12)
-        self.assertEqual(Product.objects.count(), 4)
-        self.assertEqual(DistributionRecord.objects.count(), 12)
+        self.assertEqual(MapProduct.objects.filter(map=map_obj).count(), 4)
+        self.assertEqual(MapDistributionRecord.objects.filter(map=map_obj).count(), 12)

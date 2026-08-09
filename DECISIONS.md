@@ -134,3 +134,15 @@
 ## D-12 — `check --deploy` تحت بيئة إنتاج
 - يُشغَّل بـ `DEBUG=False` و`SECRET_KEY` عشوائي قوي و`SECURE_*` المفعّلة افتراضاً في settings عند
   `DEBUG=False`. النتيجة مسجلة في التقرير النهائي.
+
+## D-23 — maps مصدر الحقيقة الوحيد؛ إزالة impact_map (Phase A1)
+- **القرار**: إضافة `maps.MapProduct` (كتالوج منتجات لكل خريطة) و`maps.MapDistributionRecord`
+  (سجلات توزيع مرتبطة بـ MapItem منطقة + MapProduct). المناطق/المنافذ تبقى `MapItem`؛ المساهمات
+  `MapContribution`. هجرة `maps.0003` تنقل Product/DistributionRecord من impact_map؛ هجرة
+  `impact_map.0002` تحذف النماذج الخمسة (stub app يبقى للتاريخ).
+- **واجهة API**: `/api/map/*` تُخدم بمحول رفيع (`maps/legacy_urls|views|serializers`) يقرأ/يكتب
+  نماذج maps مع الحفاظ على أشكال JSON السابقة (ثبات الواجهات — D-05).
+- **البذر**: `seed_impact_map` ينتقل إلى `maps/management/commands/` ويكتب مباشرة إلى maps؛
+  `sync_impact_map_to_maps` يُزال (sync.py يرفع RuntimeError؛ منطق تاريخي في migrations فقط).
+- **فحص السلامة**: `check_migration_integrity` يعدّ جداول maps بدل impact_map كثوابت بعد A1.
+- **المبرر**: إنهاء ازدواجية المصدر/النسخة؛ تبسيط الصيانة مع توافق خلفي كامل لـ UAT والواجهة.

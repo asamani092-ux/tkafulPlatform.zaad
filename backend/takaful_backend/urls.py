@@ -26,7 +26,7 @@ urlpatterns = [
     path("api/notifications/", include("notifications.urls")),  # الإشعارات
     path("api/saqya/", include("saqya.urls")),               # مسار قديم متوافق → sponsorships (D-05)
     path("api/sponsorships/", include(("sponsorships.urls", "sponsorships"), namespace="sponsorships")),
-    path("api/map/", include("impact_map.urls")),            # خارطة تفقدهم (قديم — يبقى حياً، D-05)
+    path("api/map/", include("maps.legacy_urls")),            # خارطة تفقدهم — محول legacy (D-23)
     path("api/platform/", include("projects.urls")),         # المشاريع (project-first)
     path("api/maps/", include("maps.urls")),                 # نظام الخرائط المتعددة
 ]
