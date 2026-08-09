@@ -170,3 +170,13 @@
 - **حذف**: جدول `takaful_app_project` (نموذج volunteering.Project) بعد نقل البيانات — مع عكس قابل للتنفيذ.
 - **واجهة API**: `/api/projects/` تُرجع نفس شكل JSON (title/desc/status) عبر ProjectSerializer المُكيَّف
   على VolunteeringProfile؛ المعرّف `id` = `projects.Project.id`.
+
+## D-26 — تقسيم volunteering وظيفياً: services + reporting (Phase A4)
+- **القرار**: تطبيقان جديدان — `services` (Service, ServiceRequest, ServiceVolunteerApplication,
+  WaterSupplyRequest, Suggestion) و`reporting` (AdminReport, VolunteerStatistics, QuarterlyTarget,
+  DepartmentHours, TopVolunteer). يبقى في `volunteering`: Volunteer, VolunteerApplication,
+  ProjectAssignment, Task, Subtask, VolunteeringProfile.
+- **الهجرة**: `SeparateDatabaseAndState` فقط — `db_table` يبقى `takaful_app_*`؛ صفر نقل بيانات.
+- **المسارات**: `volunteering.urls` يضمّن `services.urls` و`reporting.urls` — كل مسارات `/api/*`
+  القديمة تعمل دون تغيير.
+- **المبرر**: فصل المسؤوليات (تطوّع / خدمات / تقارير) مع الحفاظ على التوافق الخلفي الكامل.

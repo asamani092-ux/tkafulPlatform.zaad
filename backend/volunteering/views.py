@@ -12,10 +12,13 @@ from django.contrib.auth.models import User
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
 
+from services.models import Service, ServiceRequest, ServiceVolunteerApplication, Suggestion, WaterSupplyRequest
+from reporting.models import (
+    AdminReport, VolunteerStatistics, QuarterlyTarget, DepartmentHours, TopVolunteer,
+)
 from .models import (
-    VolunteeringProfile, Service, ServiceRequest, ServiceVolunteerApplication, Suggestion,
-    ProjectAssignment, Task, Subtask, AdminReport, VolunteerApplication,
-    VolunteerStatistics, QuarterlyTarget, DepartmentHours, TopVolunteer, WaterSupplyRequest
+    VolunteeringProfile, Volunteer,
+    ProjectAssignment, Task, Subtask, VolunteerApplication,
 )
 from . import project_helpers
 import openpyxl

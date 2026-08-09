@@ -2,11 +2,13 @@ from rest_framework import serializers
 from django.utils.text import slugify
 
 from projects.models import Project
+from services.models import Service, ServiceRequest, ServiceVolunteerApplication, Suggestion, WaterSupplyRequest
+from reporting.models import (
+    AdminReport, VolunteerStatistics, QuarterlyTarget, DepartmentHours, TopVolunteer,
+)
 from .models import (
-    VolunteeringProfile, Service, ServiceRequest, ServiceVolunteerApplication, Volunteer, Suggestion,
-    ProjectAssignment, Task, Subtask, AdminReport, VolunteerApplication,
-    VolunteerStatistics, QuarterlyTarget, DepartmentHours, TopVolunteer,
-    WaterSupplyRequest, PLATFORM_STATUS_MAP,
+    VolunteeringProfile, Volunteer, ProjectAssignment, Task, Subtask, VolunteerApplication,
+    PLATFORM_STATUS_MAP,
 )
 from . import project_helpers
 from django.contrib.auth.models import User
