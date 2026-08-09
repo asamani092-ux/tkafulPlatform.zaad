@@ -40,9 +40,9 @@ class VolunteeringProfileMigrationTests(APITestCase):
         self.assertEqual(task.project_id, platform.id)
         self.assertEqual(task.project.name, "مهام")
 
-    def test_volunteering_tool_enabled_on_seed_match(self):
-        """Known slug tafaqqadhum from seed should accept volunteering profile."""
-        platform = Project.objects.get(slug="tafaqqadhum")
+    def test_volunteering_tool_on_seed_project(self):
+        """Seed project takaful-athar has volunteering tool enabled."""
+        platform = Project.objects.get(slug="takaful-athar")
         self.assertTrue(
             ProjectTool.objects.filter(project=platform, tool_key="volunteering", is_enabled=True).exists()
         )

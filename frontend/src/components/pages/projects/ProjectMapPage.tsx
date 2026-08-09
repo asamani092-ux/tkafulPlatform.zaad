@@ -124,7 +124,8 @@ export default function ProjectMapPage() {
       )}
 
       <MapContributionModal open={modalOpen} onClose={() => setModalOpen(false)} mapId={detail.id}
-        item={selectedItem} fields={detail.fields} />
+        item={selectedItem} fields={detail.fields}
+        donationUrl={detail.project.donation_url} donationLabel={detail.project.donation_label} />
     </div>
   );
 }

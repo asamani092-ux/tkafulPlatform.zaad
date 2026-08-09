@@ -6,6 +6,8 @@
 from django.conf import settings
 from django.db import models
 
+from .validators import validate_https_donation_url
+
 
 class Project(models.Model):
     STATUS_CHOICES = [
@@ -22,6 +24,12 @@ class Project(models.Model):
     brand_color = models.CharField(max_length=20, default="#8b1538")
     # رابط صورة الغلاف (URL) — لا اعتماد على Pillow (انظر DECISIONS.md D-13)
     cover_image = models.URLField(blank=True)
+    donation_url = models.URLField(
+        blank=True,
+        validators=[validate_https_donation_url],
+        help_text="رابط تبرع خاص بالمشروع (HTTPS فقط)",
+    )
+    donation_label = models.CharField(max_length=100, blank=True, default="تبرع الآن")
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")

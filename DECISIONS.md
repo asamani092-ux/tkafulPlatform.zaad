@@ -180,3 +180,12 @@
 - **المسارات**: `volunteering.urls` يضمّن `services.urls` و`reporting.urls` — كل مسارات `/api/*`
   القديمة تعمل دون تغيير.
 - **المبرر**: فصل المسؤوليات (تطوّع / خدمات / تقارير) مع الحفاظ على التوافق الخلفي الكامل.
+
+## D-27 — روابط تبرع لكل مشروع (Phase A5)
+- **القرار**: `projects.Project` يحصل على `donation_url` (HTTPS فقط) و`donation_label` (افتراضي «تبرع الآن»).
+- **التحقق**: `projects/validators.validate_https_donation_url` على النموذج والـ serializer.
+- **الواجهة**: تُعرض في serializers العامة والإدارية؛ تُحرَّر في `PlatformProjects.tsx`.
+- **CTAs**: خريطة التعهد تستخدم `project.donation_url` من بيانات الخريطة؛ صفحة هبوط المشروع تعرض زر التبرع
+  عند توفر الرابط؛ كفالات السقيا (`checkout_url`) تفضّل `sponsorship.project.donation_url` على
+  `EXTERNAL_STORE_URL` كاحتياطي منصّة فقط.
+- **المبرر**: تخصيص رابط التبرع لكل مشروع دون كسر التوافق مع المتجر الخارجي الافتراضي.

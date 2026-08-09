@@ -174,7 +174,9 @@ export default function MapsAggregator() {
 
       {selectedEntry && (
         <MapContributionModal open={modalOpen} onClose={() => setModalOpen(false)}
-          mapId={selectedEntry.detail.id} item={selectedEntry.item} fields={selectedEntry.detail.fields} />
+          mapId={selectedEntry.detail.id} item={selectedEntry.item} fields={selectedEntry.detail.fields}
+          donationUrl={selectedEntry.detail.project.donation_url}
+          donationLabel={selectedEntry.detail.project.donation_label} />
       )}
     </div>
   );

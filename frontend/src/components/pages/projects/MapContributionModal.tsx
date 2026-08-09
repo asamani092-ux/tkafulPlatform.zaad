@@ -15,10 +15,15 @@ interface Props {
   mapId: number;
   item: PublicMapItem | null;
   fields: MapFieldDef[];
+  donationUrl?: string;
+  donationLabel?: string;
 }
 
 /** نافذة التعهد للخرائط الجديدة — تُرسل إلى /api/maps/public/{id}/contributions/. */
-export default function MapContributionModal({ open, onClose, mapId, item, fields }: Props) {
+export default function MapContributionModal({
+  open, onClose, mapId, item, fields, donationUrl = "", donationLabel = "تبرع الآن",
+}: Props) {
+  const storeUrl = donationUrl || EXTERNAL_STORE_URL;
   const categoryField = fields.find((f) => f.key === "product" && f.type === "select");
   const [mode, setMode] = useState<"self_distribution" | "delegate_association">("self_distribution");
   const [form, setForm] = useState({
@@ -54,8 +59,8 @@ export default function MapContributionModal({ open, onClose, mapId, item, field
   };
 
   const delegate = () => {
-    if (!EXTERNAL_STORE_URL) return;
-    const url = new URL(EXTERNAL_STORE_URL);
+    if (!storeUrl) return;
+    const url = new URL(storeUrl);
     if (form.category) url.searchParams.set("product", form.category);
     if (item) url.searchParams.set("item", String(item.id));
     window.location.href = url.toString();
@@ -77,8 +82,8 @@ export default function MapContributionModal({ open, onClose, mapId, item, field
               onClick={() => setMode("delegate_association")}>تفويض للجمعية</button>
           </div>
 
-          {!EXTERNAL_STORE_URL && mode === "delegate_association" && (
-            <div className="mb-3"><Badge variant="warning">تجريبي — بانتظار رابط المتجر</Badge></div>
+          {mode === "delegate_association" && !storeUrl && (
+            <div className="mb-3"><Badge variant="warning">تجريبي — بانتظار رابط التبرع (يُضبط من إدارة المشاريع)</Badge></div>
           )}
 
           {categoryField && (
@@ -103,8 +108,10 @@ export default function MapContributionModal({ open, onClose, mapId, item, field
             </form>
           ) : (
             <div className="mt-4 space-y-3">
-              <p className="text-sm text-brand-gray">سيتم تحويلك للمتجر الخارجي لإتمام التبرّع نيابة عن الجمعية.</p>
-              <Button onClick={delegate} disabled={!EXTERNAL_STORE_URL}>الانتقال للمتجر</Button>
+              <p className="text-sm text-brand-gray">سيتم تحويلك لإتمام التبرّع نيابة عن الجمعية.</p>
+              {storeUrl ? (
+                <Button onClick={delegate}>{donationLabel}</Button>
+              ) : null}
             </div>
           )}
         </>

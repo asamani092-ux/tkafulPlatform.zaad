@@ -131,7 +131,7 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
             amount_dec = Decimal(str(amount))
         except (InvalidOperation, TypeError):
             return Response({"detail": "مبلغ غير صالح"}, status=400)
-        provider = get_payment_provider()
+        provider = get_payment_provider(sp)
         result = provider.create_checkout(CheckoutRequest(
             sponsorship_id=sp.id,
             amount=amount_dec,
