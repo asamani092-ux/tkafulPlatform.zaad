@@ -122,7 +122,7 @@ export default function MapsAdmin() {
 
   return (
     <AdminShell>
-      <h1 className="mb-4 text-2xl font-extrabold text-primary">إدارة الخرائط</h1>
+      <h1 className="mb-4 text-2xl font-extrabold text-primary">الخرائط</h1>
 
       {isSuperAdmin && (
         <Card className="mb-4">
