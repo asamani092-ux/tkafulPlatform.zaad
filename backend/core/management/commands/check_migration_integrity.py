@@ -54,7 +54,7 @@ def _counts():
         "sponsorships.SupplierProfile": SupplierProfile.objects.count(),
         "sponsorships.RepresentativeProfile": RepresentativeProfile.objects.count(),
         # ---- التطوع ----
-        "volunteering.Project": vol.Project.objects.count(),
+        "volunteering.VolunteeringProfile": vol.VolunteeringProfile.objects.count(),
         "volunteering.Service": vol.Service.objects.count(),
         "volunteering.ServiceRequest": vol.ServiceRequest.objects.count(),
         "volunteering.ServiceVolunteerApplication": vol.ServiceVolunteerApplication.objects.count(),
@@ -80,7 +80,7 @@ INVARIANT_KEYS = [
     "sponsorships.Sponsorship", "sponsorships.Order", "sponsorships.Invoice",
     "sponsorships.Payment", "sponsorships.Documentation",
     "sponsorships.SupplierProfile", "sponsorships.RepresentativeProfile",
-    "volunteering.Project", "volunteering.Service", "volunteering.ServiceRequest",
+    "volunteering.VolunteeringProfile", "volunteering.Service", "volunteering.ServiceRequest",
     "volunteering.ServiceVolunteerApplication", "volunteering.Volunteer",
     "volunteering.Suggestion", "volunteering.ProjectAssignment", "volunteering.Task",
     "volunteering.Subtask", "volunteering.AdminReport",

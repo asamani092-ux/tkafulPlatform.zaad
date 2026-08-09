@@ -1,74 +1,90 @@
 """
 نماذج التطوع — منقولة من takaful_app بدون لمس البيانات (D-02):
 كل نموذج يثبّت db_table على اسم الجدول الأصلي takaful_app_*.
+بعد A3: volunteering.Project دُمج في projects.Project + VolunteeringProfile (D-25).
 """
 from django.db import models
-from django.contrib.auth.models import User 
+from django.contrib.auth.models import User
 
 
-class Project(models.Model):
-    STATUS_CHOICES = [
-        ("PLANNED", "Planned"),
-        ("ACTIVE", "Active"),
-        ("COMPLETED", "Completed"),
-        ("CANCELLED", "Cancelled"),
-    ]
+VOLUNTEER_STATUS_CHOICES = [
+    ("PLANNED", "Planned"),
+    ("ACTIVE", "Active"),
+    ("COMPLETED", "Completed"),
+    ("CANCELLED", "Cancelled"),
+]
 
-    # Basic Information
-    title = models.CharField(max_length=200)
-    desc = models.TextField(blank=True)
-    category = models.CharField(max_length=50, blank=True)  # أساسي, مجتمعي, مؤسسي
+PLATFORM_STATUS_MAP = {
+    "PLANNED": "draft",
+    "ACTIVE": "active",
+    "COMPLETED": "completed",
+    "CANCELLED": "archived",
+}
 
-    # Target & Impact
-    target_audience = models.CharField(max_length=200, blank=True)  # الفئة المستهدفة
+KNOWN_PROJECT_SLUGS = {
+    "تفقدهم": "tafaqqadhum",
+    "منصة تكافل وأثر": "takaful-athar",
+    "تكافل وأثر": "takaful-athar",
+    "سقيا الزاد": "saqya",
+}
+
+
+class VolunteeringProfile(models.Model):
+    """حقول التطوّع الخاصة بمشروع منصّة (OneToOne → projects.Project)."""
+    project = models.OneToOneField(
+        "projects.Project",
+        on_delete=models.CASCADE,
+        related_name="volunteering_profile",
+    )
+    category = models.CharField(max_length=50, blank=True)
+    target_audience = models.CharField(max_length=200, blank=True)
     beneficiaries = models.IntegerField(default=0)
-
-    # Location
     location = models.CharField(max_length=200, blank=True)
-
-    # Financial
-    donation_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # مبلغ التبرع
-
-    # Timeline
-    start_date = models.DateField(null=True, blank=True)
-    end_date = models.DateField(null=True, blank=True)
-
-    # Planning Details
-    implementation_requirements = models.TextField(blank=True)  # متطلبات التنفيذ
-    project_goals = models.TextField(blank=True)  # أهداف المشروع
-
-    # Volunteer Management
+    donation_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    implementation_requirements = models.TextField(blank=True)
+    project_goals = models.TextField(blank=True)
     estimated_hours = models.IntegerField(default=0)
     supervisor = models.CharField(max_length=200, blank=True)
     duration = models.CharField(max_length=100, blank=True)
-
-    # NEW FIELDS FOR ADMIN DASHBOARD
-    tags = models.JSONField(default=list, blank=True)  # ["متوسطة", "تسويق"]
-    progress = models.IntegerField(default=0)  # 0-100 percentage
-    organization = models.CharField(max_length=200, blank=True)  # "جمعية تمكين"
-    hours = models.CharField(max_length=50, blank=True)  # "40 ساعة"
-    is_hidden = models.BooleanField(default=False)  # Hide/show project in public views
-
-    # حقول موحّدة من مشاريع المشروع الثاني (GAS Projects sheet)
-    budget = models.DecimalField(max_digits=12, decimal_places=2, default=0)  # ميزانية (≠ donation_amount)
+    tags = models.JSONField(default=list, blank=True)
+    progress = models.IntegerField(default=0)
+    organization = models.CharField(max_length=200, blank=True)
+    hours = models.CharField(max_length=50, blank=True)
+    is_hidden = models.BooleanField(default=False)
+    budget = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     manager_employee = models.ForeignKey(
-        'analytics.Employee', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="managed_projects"
-    )  # Projects.manager
-    external_source = models.CharField(max_length=50, blank=True)  # 'gas' لمشاريع المشروع الثاني
+        "analytics.Employee",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="managed_volunteering_profiles",
+    )
+    external_source = models.CharField(max_length=50, blank=True)
     external_id = models.CharField(max_length=100, blank=True)
-
-    # Status & Tracking
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PLANNED")
+    volunteer_status = models.CharField(
+        max_length=20, choices=VOLUNTEER_STATUS_CHOICES, default="PLANNED"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "takaful_app_project"
-        ordering = ['-created_at']
+        db_table = "volunteering_profile"
+        ordering = ["-created_at"]
 
     def __str__(self):
-        return self.title
+        return self.project.name
+
+    @property
+    def title(self):
+        return self.project.name
+
+    @property
+    def desc(self):
+        return self.project.description
+
+    @property
+    def status(self):
+        return self.volunteer_status
 
 
 class Service(models.Model):
@@ -192,7 +208,9 @@ class ProjectAssignment(models.Model):
         ("ملغية", "Cancelled"),
     ]
     
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="assignments")
+    project = models.ForeignKey(
+        "projects.Project", on_delete=models.CASCADE, related_name="assignments"
+    )
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="project_assignments")
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="جديدة")
@@ -208,7 +226,7 @@ class ProjectAssignment(models.Model):
         ordering = ['-assigned_at']
     
     def __str__(self):
-        return f"{self.user.email} - {self.project.title} ({self.status})"
+        return f"{self.user.email} - {self.project.name} ({self.status})"
 
 
 class Task(models.Model):
@@ -232,7 +250,9 @@ class Task(models.Model):
     
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="tasks")
+    project = models.ForeignKey(
+        "projects.Project", on_delete=models.CASCADE, related_name="tasks"
+    )
     volunteer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_tasks")
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="في الانتظار")
@@ -250,7 +270,7 @@ class Task(models.Model):
         ordering = ['-created_at']
     
     def __str__(self):
-        return f"{self.title} - {self.project.title}"
+        return f"{self.title} - {self.project.name}"
     
     def calculate_progress(self):
         """Calculate progress based on completed subtasks"""
@@ -332,7 +352,9 @@ class VolunteerApplication(models.Model):
     ]
 
     volunteer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="volunteer_applications")
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="applications")
+    project = models.ForeignKey(
+        "projects.Project", on_delete=models.CASCADE, related_name="applications"
+    )
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="قيد المراجعة")
     message = models.TextField(blank=True)  # Optional message from volunteer
@@ -348,7 +370,7 @@ class VolunteerApplication(models.Model):
         ordering = ['-applied_at']
 
     def __str__(self):
-        return f"{self.volunteer.email} -> {self.project.title} ({self.status})"
+        return f"{self.volunteer.email} -> {self.project.name} ({self.status})"
 
 
 class VolunteerStatistics(models.Model):

@@ -1,57 +1,78 @@
 from rest_framework import serializers
+from django.utils.text import slugify
+
+from projects.models import Project
 from .models import (
-    Project, Service, ServiceRequest, ServiceVolunteerApplication, Volunteer, Suggestion,
+    VolunteeringProfile, Service, ServiceRequest, ServiceVolunteerApplication, Volunteer, Suggestion,
     ProjectAssignment, Task, Subtask, AdminReport, VolunteerApplication,
     VolunteerStatistics, QuarterlyTarget, DepartmentHours, TopVolunteer,
-    WaterSupplyRequest
+    WaterSupplyRequest, PLATFORM_STATUS_MAP,
 )
+from . import project_helpers
 from django.contrib.auth.models import User
 
 
 class ProjectSerializer(serializers.ModelSerializer):
+    """API serializer for volunteering projects (VolunteeringProfile + platform Project)."""
+    id = serializers.IntegerField(source="project.id", read_only=True)
+    title = serializers.CharField(source="project.name")
+    desc = serializers.CharField(source="project.description", required=False, allow_blank=True)
+    description = serializers.CharField(source="project.description", read_only=True)
+    start_date = serializers.DateField(source="project.start_date", required=False, allow_null=True)
+    end_date = serializers.DateField(source="project.end_date", required=False, allow_null=True)
+    status = serializers.CharField(source="volunteer_status")
     status_display = serializers.SerializerMethodField()
-    description = serializers.CharField(source='desc', read_only=True)  # Alias for frontend compatibility
 
     class Meta:
-        model = Project
+        model = VolunteeringProfile
         fields = [
-            'id',
-            'title',
-            'desc',
-            'description',  # Read-only alias for desc
-            'category',
-            'target_audience',
-            'beneficiaries',
-            'location',
-            'donation_amount',
-            'start_date',
-            'end_date',
-            'implementation_requirements',
-            'project_goals',
-            'estimated_hours',
-            'supervisor',
-            'duration',
-            'tags',
-            'progress',
-            'organization',
-            'hours',
-            'is_hidden',
-            'status',
-            'status_display',  # Arabic status for frontend
-            'created_at',
-            'updated_at',
+            'id', 'title', 'desc', 'description', 'category', 'target_audience',
+            'beneficiaries', 'location', 'donation_amount', 'start_date', 'end_date',
+            'implementation_requirements', 'project_goals', 'estimated_hours',
+            'supervisor', 'duration', 'tags', 'progress', 'organization', 'hours',
+            'is_hidden', 'status', 'status_display', 'created_at', 'updated_at',
         ]
         read_only_fields = ['created_at', 'updated_at', 'description', 'status_display']
 
     def get_status_display(self, obj):
-        """Return Arabic status display"""
         status_map = {
-            'ACTIVE': 'نشط',
-            'PLANNED': 'متوقف',
-            'COMPLETED': 'مكتمل',
-            'CANCELLED': 'ملغي'
+            'ACTIVE': 'نشط', 'PLANNED': 'متوقف',
+            'COMPLETED': 'مكتمل', 'CANCELLED': 'ملغي',
         }
-        return status_map.get(obj.status, 'نشط')
+        return status_map.get(obj.volunteer_status, 'نشط')
+
+    def create(self, validated_data):
+        project_data = validated_data.pop("project", {})
+        title = project_data.get("name", "")
+        desc = project_data.get("description", "")
+        start_date = project_data.get("start_date")
+        end_date = project_data.get("end_date")
+        status = validated_data.get("volunteer_status", "ACTIVE")
+        return project_helpers.create_volunteering_project(
+            title=title, desc=desc, status=status,
+            start_date=start_date, end_date=end_date, **validated_data,
+        )
+
+    def update(self, instance, validated_data):
+        project_data = validated_data.pop("project", {})
+        if "name" in project_data:
+            instance.project.name = project_data["name"]
+        if "description" in project_data:
+            instance.project.description = project_data["description"]
+        if "start_date" in project_data:
+            instance.project.start_date = project_data["start_date"]
+        if "end_date" in project_data:
+            instance.project.end_date = project_data["end_date"]
+        if "volunteer_status" in validated_data:
+            instance.volunteer_status = validated_data["volunteer_status"]
+            instance.project.status = PLATFORM_STATUS_MAP.get(
+                validated_data["volunteer_status"], instance.project.status
+            )
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.project.save()
+        instance.save()
+        return instance
 
 
 class ServiceSerializer(serializers.ModelSerializer):

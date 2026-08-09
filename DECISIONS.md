@@ -158,3 +158,15 @@
   `sponsorships` / `volunteering` (أو `services` / `reporting` بعد A4).
 - **المبرر**: إنهاء الازدواجية؛ التطبيقان الأصليان كانا shims فارغة بعد D-02.
 - **التوافق**: مسارات `/api/saqya/*` و`/api/projects/*` و`/api/stats/` تبقى كما هي (D-05).
+
+## D-25 — دمج volunteering.Project في projects.Project (Phase A3)
+- **الواقع**: `volunteering.Project` يحتوي **13 صفاً** (ليست صفراً) — مشاريع تطوّع فعلية من استيراد Excel.
+- **القرار**: `VolunteeringProfile` (OneToOne → `projects.Project`) يحمل الحقول الخاصة بالتطوّع
+  (category, beneficiaries, donation_amount, tags, progress, is_hidden, volunteer_status, …) بينما
+  `projects.Project` يحمل الهوية الموحّدة (name/slug/description/dates/status).
+- **هجرة البيانات**: لكل صف قديم — مطابقة بالاسم (تفقدهم→tafaqqadhum، منصة تكافل وأثر→takaful-athar،
+  سقيا الزاد→saqya) أو إنشاء slug جديد؛ إنشاء VolunteeringProfile؛ تفعيل أداة volunteering؛
+  إعادة توجيه FKs (Task, ProjectAssignment, VolunteerApplication, StaffTask) إلى `projects.Project`.
+- **حذف**: جدول `takaful_app_project` (نموذج volunteering.Project) بعد نقل البيانات — مع عكس قابل للتنفيذ.
+- **واجهة API**: `/api/projects/` تُرجع نفس شكل JSON (title/desc/status) عبر ProjectSerializer المُكيَّف
+  على VolunteeringProfile؛ المعرّف `id` = `projects.Project.id`.

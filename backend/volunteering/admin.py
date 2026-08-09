@@ -1,7 +1,7 @@
 from django.contrib import admin
-from .models import Project, Service, Suggestion, Volunteer, AdminReport, VolunteerApplication
+from .models import VolunteeringProfile, Service, Suggestion, Volunteer, AdminReport, VolunteerApplication
 
-admin.site.register(Project)
+admin.site.register(VolunteeringProfile)
 admin.site.register(Service)
 admin.site.register(Suggestion)
 admin.site.register(Volunteer)
