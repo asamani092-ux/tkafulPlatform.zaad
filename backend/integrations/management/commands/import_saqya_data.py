@@ -27,7 +27,7 @@ from django.contrib.auth.models import User
 from django.db import transaction
 
 from accounts.models import Profile
-from saqya.models import (
+from sponsorships.models import (
     SupplierProfile, RepresentativeProfile, Sponsorship, Order, Invoice, Payment, Documentation,
 )
 from integrations.base import BaseImporter

@@ -1,18 +1,5 @@
 """
 URL configuration for takaful_backend project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/5.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
 from django.urls import path, include
@@ -20,13 +7,13 @@ from django.urls import path, include
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("core.urls")),
-    path("api/", include("takaful_app.urls")),
-    path("api/accounts/", include("accounts.urls")),  # ← Make sure this line exists
-    path("api/dashboard/", include("analytics.urls")),       # اللوحة التنفيذية الموحّدة (المشروع الثاني)
-    path("api/notifications/", include("notifications.urls")),  # الإشعارات
-    path("api/saqya/", include("saqya.urls")),               # مسار قديم متوافق → sponsorships (D-05)
+    path("api/", include("volunteering.urls")),
+    path("api/accounts/", include("accounts.urls")),
+    path("api/dashboard/", include("analytics.urls")),
+    path("api/notifications/", include("notifications.urls")),
+    path("api/saqya/", include("sponsorships.urls")),  # legacy path → sponsorships (D-05, D-24)
     path("api/sponsorships/", include(("sponsorships.urls", "sponsorships"), namespace="sponsorships")),
-    path("api/map/", include("maps.legacy_urls")),            # خارطة تفقدهم — محول legacy (D-23)
-    path("api/platform/", include("projects.urls")),         # المشاريع (project-first)
-    path("api/maps/", include("maps.urls")),                 # نظام الخرائط المتعددة
+    path("api/map/", include("maps.legacy_urls")),
+    path("api/platform/", include("projects.urls")),
+    path("api/maps/", include("maps.urls")),
 ]

@@ -146,3 +146,15 @@
   `sync_impact_map_to_maps` يُزال (sync.py يرفع RuntimeError؛ منطق تاريخي في migrations فقط).
 - **فحص السلامة**: `check_migration_integrity` يعدّ جداول maps بدل impact_map كثوابت بعد A1.
 - **المبرر**: إنهاء ازدواجية المصدر/النسخة؛ تبسيط الصيانة مع توافق خلفي كامل لـ UAT والواجهة.
+
+## D-24 — إزالة أصداف saqya و takaful_app (Phase A2)
+- **القرار**: حذف وحدات Python غير الضرورية (views/urls/serializers/admin/tests) من `saqya` و
+  `takaful_app`؛ الإبقاء على `apps.py` + مجلد `migrations/` فقط لسلسلة الهجرات. `saqya/models.py`
+  يحتفظ بإعادة تصدير `invoice_upload_path` و`documentation_upload_path` لأن `saqya/0001_initial`
+  يستوردها.
+- **التوجيه**: `takaful_backend/urls.py` يضمّن `sponsorships.urls` مباشرة على `/api/saqya/` و
+  `volunteering.urls` على `/api/` — بدون وسيط takaful_app.urls.
+- **الاستيرادات**: كل `from saqya.models` / `from takaful_app.models` في الكود الحي تُستبدل بـ
+  `sponsorships` / `volunteering` (أو `services` / `reporting` بعد A4).
+- **المبرر**: إنهاء الازدواجية؛ التطبيقان الأصليان كانا shims فارغة بعد D-02.
+- **التوافق**: مسارات `/api/saqya/*` و`/api/projects/*` و`/api/stats/` تبقى كما هي (D-05).
