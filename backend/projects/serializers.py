@@ -2,6 +2,7 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from .models import Project, ProjectMember, ProjectTool
+from .validators import validate_https_donation_url
 
 
 class ProjectToolSerializer(serializers.ModelSerializer):
@@ -17,6 +18,7 @@ class PublicProjectSerializer(serializers.ModelSerializer):
         model = Project
         fields = [
             "id", "name", "slug", "description", "brand_color", "cover_image",
+            "donation_url", "donation_label",
             "start_date", "end_date", "status", "tools",
         ]
 
@@ -43,10 +45,16 @@ class ProjectAdminSerializer(serializers.ModelSerializer):
         model = Project
         fields = [
             "id", "name", "slug", "description", "brand_color", "cover_image",
+            "donation_url", "donation_label",
             "start_date", "end_date", "status", "is_active", "created_by",
             "created_at", "updated_at", "tools", "members", "my_role",
         ]
         read_only_fields = ["created_by", "created_at", "updated_at"]
+
+    def validate_donation_url(self, value):
+        if value:
+            validate_https_donation_url(value)
+        return value
 
     def get_my_role(self, obj):
         from . import services

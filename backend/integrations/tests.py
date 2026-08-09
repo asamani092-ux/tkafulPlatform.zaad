@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from saqya.models import Sponsorship
+from sponsorships.models import Sponsorship
 from integrations.management.commands.import_saqya_data import SaqyaImporter
 
 

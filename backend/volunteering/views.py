@@ -12,11 +12,15 @@ from django.contrib.auth.models import User
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
 
-from .models import (
-    Project, Service, ServiceRequest, ServiceVolunteerApplication, Suggestion,
-    ProjectAssignment, Task, Subtask, AdminReport, VolunteerApplication,
-    VolunteerStatistics, QuarterlyTarget, DepartmentHours, TopVolunteer, WaterSupplyRequest
+from services.models import Service, ServiceRequest, ServiceVolunteerApplication, Suggestion, WaterSupplyRequest
+from reporting.models import (
+    AdminReport, VolunteerStatistics, QuarterlyTarget, DepartmentHours, TopVolunteer,
 )
+from .models import (
+    VolunteeringProfile, Volunteer,
+    ProjectAssignment, Task, Subtask, VolunteerApplication,
+)
+from . import project_helpers
 import openpyxl
 from io import BytesIO
 from decimal import Decimal
@@ -43,17 +47,13 @@ def admin_stats(request):
     GET /api/admin/stats/
     Returns aggregated statistics for admin dashboard (main.tsx)
     """
-    active_projects_count = Project.objects.filter(status='ACTIVE').count()
-    completed_projects_count = Project.objects.filter(status='COMPLETED').count()
-    total_projects_count = Project.objects.count()
-    
-    total_donations = Project.objects.aggregate(
-        total=Sum('donation_amount')
-    )['total'] or 0
-    
-    total_beneficiaries = Project.objects.aggregate(
-        total=Sum('beneficiaries')
-    )['total'] or 0
+    active_projects_count = VolunteeringProfile.objects.filter(volunteer_status='ACTIVE').count()
+    completed_projects_count = VolunteeringProfile.objects.filter(volunteer_status='COMPLETED').count()
+    total_projects_count = VolunteeringProfile.objects.count()
+
+    total_donations = project_helpers.aggregate_donations()
+
+    total_beneficiaries = project_helpers.aggregate_beneficiaries()
     
     return Response({
         'total_donations': float(total_donations),
@@ -132,36 +132,36 @@ def get_my_active_project(request):
         # If specific project requested, return it (highest priority)
         if project_id:
             try:
-                project = Project.objects.get(id=project_id)
-                serializer = ProjectSerializer(project)
-                return Response(serializer.data)
-            except Project.DoesNotExist:
+                profile = project_helpers.profile_for_project_id(project_id)
+                if profile:
+                    serializer = ProjectSerializer(profile)
+                    return Response(serializer.data)
+            except VolunteeringProfile.DoesNotExist:
                 pass
 
         # If status filter provided, return most recent project with that status
         if status_filter:
-            # Convert Arabic status to English if needed
             english_status = status_map.get(status_filter, status_filter)
 
-            project = Project.objects.filter(
-                status=english_status
-            ).order_by('-updated_at').first()
+            profile = VolunteeringProfile.objects.filter(
+                volunteer_status=english_status
+            ).select_related("project").order_by('-updated_at').first()
 
-            if project:
-                serializer = ProjectSerializer(project)
+            if profile:
+                serializer = ProjectSerializer(profile)
                 return Response(serializer.data)
             else:
-                # No project found with this status
                 return Response(None, status=200)
 
-        # Default: Return most recent active project, fallback to any recent project
-        project = Project.objects.filter(status='ACTIVE').order_by('-updated_at').first()
+        profile = VolunteeringProfile.objects.filter(
+            volunteer_status='ACTIVE'
+        ).select_related("project").order_by('-updated_at').first()
 
-        if not project:
-            project = Project.objects.all().order_by('-updated_at').first()
+        if not profile:
+            profile = VolunteeringProfile.objects.select_related("project").order_by('-updated_at').first()
 
-        if project:
-            serializer = ProjectSerializer(project)
+        if profile:
+            serializer = ProjectSerializer(profile)
             return Response(serializer.data)
 
         # Return null only if there are absolutely no projects
@@ -176,13 +176,13 @@ def get_my_active_project(request):
 # ============================================================================
 class ProjectViewSet(viewsets.ModelViewSet):
     """
-    Admin endpoint for managing projects
-    Returns all projects (no pagination) filtered by status
+    Admin endpoint for managing volunteering projects (VolunteeringProfile).
+    URL pk = platform Project.id for backward compatibility.
     """
-    queryset = Project.objects.all()
+    queryset = project_helpers.volunteering_profiles_qs()
     serializer_class = ProjectSerializer
     permission_classes = [IsAdmin]
-    pagination_class = None  # Disable pagination to return all projects
+    pagination_class = None
 
     STATUS_MAPPING = {
         'نشط': 'ACTIVE',
@@ -192,18 +192,21 @@ class ProjectViewSet(viewsets.ModelViewSet):
         'حالة المشروع': 'PLANNED',
     }
 
+    def get_object(self):
+        return project_helpers.profile_for_project_id(self.kwargs["pk"])
+
     def get_queryset(self):
         queryset = super().get_queryset()
         status_param = self.request.query_params.get('status', None)
 
         if status_param == 'pending':
-            queryset = queryset.filter(status='PLANNED')
+            queryset = queryset.filter(volunteer_status='PLANNED')
         elif status_param == 'active':
-            queryset = queryset.filter(status='ACTIVE')
+            queryset = queryset.filter(volunteer_status='ACTIVE')
         elif status_param == 'completed':
-            queryset = queryset.filter(status='COMPLETED')
+            queryset = queryset.filter(volunteer_status='COMPLETED')
 
-        return queryset.order_by('-created_at')  # Most recent first
+        return queryset.order_by('-created_at')
 
     def create(self, request, *args, **kwargs):
         """
@@ -275,7 +278,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             )
         
         assignment, created = ProjectAssignment.objects.get_or_create(
-            project=project,
+            project=project.project,
             user=user,
             defaults={'status': 'جديدة'}
         )
@@ -295,22 +298,23 @@ class ProjectViewSet(viewsets.ModelViewSet):
         Approve a pending project idea - changes status from PLANNED to ACTIVE
         POST /api/admin/projects/{id}/approve/
         """
-        project = self.get_object()
+        profile = self.get_object()
 
-        if project.status != 'PLANNED':
+        if profile.volunteer_status != 'PLANNED':
             return Response(
                 {"error": "Only pending projects can be approved"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Change status from PLANNED (متوقف) to ACTIVE (نشط)
-        old_status = project.status
-        project.status = 'ACTIVE'
-        project.save()
+        old_status = profile.volunteer_status
+        profile.volunteer_status = 'ACTIVE'
+        profile.project.status = 'active'
+        profile.project.save()
+        profile.save()
 
-        logger.info("Project %s approved: %s -> ACTIVE", project.id, old_status)
+        logger.info("Project %s approved: %s -> ACTIVE", profile.project.id, old_status)
 
-        serializer = self.get_serializer(project)
+        serializer = self.get_serializer(profile)
         return Response({
             "message": "Project approved successfully",
             "project": serializer.data
@@ -318,16 +322,16 @@ class ProjectViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
-        project = self.get_object()
+        profile = self.get_object()
         
-        if project.status != 'PLANNED':
+        if profile.volunteer_status != 'PLANNED':
             return Response(
                 {"error": "Only pending projects can be rejected"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        project_title = project.title
-        project.delete()
+        project_title = profile.project.name
+        profile.project.delete()
         
         return Response({
             "message": f"Project '{project_title}' rejected successfully"
@@ -525,17 +529,17 @@ def projects_progress_report(request):
     GET /api/admin/reports/projects-progress/
     Returns progress report for all projects
     """
-    projects = Project.objects.filter(
-        status__in=['ACTIVE', 'COMPLETED']
-    ).values('title', 'progress')
+    profiles = VolunteeringProfile.objects.filter(
+        volunteer_status__in=['ACTIVE', 'COMPLETED']
+    ).select_related("project").values('project__name', 'progress')
     
     return Response({
         'projects': [
             {
-                'name': p['title'],
+                'name': p['project__name'],
                 'progress': p['progress']
             }
-            for p in projects
+            for p in profiles
         ]
     })
 
@@ -717,6 +721,13 @@ class SuggestionViewSet(viewsets.ModelViewSet):
         return super().get_throttles()
 
 
+class WaterSupplyRequestViewSet(viewsets.ReadOnlyModelViewSet):
+    """قائمة/تفاصيل طلبات سقيا الماء لنطاق الطلبات في لوحة الإدارة (Phase B)."""
+    queryset = WaterSupplyRequest.objects.all()
+    serializer_class = WaterSupplyRequestSerializer
+    permission_classes = [IsAdmin]
+
+
 class ProjectAssignmentViewSet(viewsets.ModelViewSet):
     queryset = ProjectAssignment.objects.all()
     serializer_class = ProjectAssignmentSerializer
@@ -792,52 +803,50 @@ def generate_report(request):
     # ========== COLLECT DATA ==========
 
     # Projects data
-    projects = Project.objects.filter(project_filter)
+    profiles = VolunteeringProfile.objects.filter(project_filter).select_related("project")
     projects_by_status = {
-        'active': projects.filter(status='ACTIVE').count(),
-        'completed': projects.filter(status='COMPLETED').count(),
-        'planned': projects.filter(status='PLANNED').count(),
-        'cancelled': projects.filter(status='CANCELLED').count(),
+        'active': profiles.filter(volunteer_status='ACTIVE').count(),
+        'completed': profiles.filter(volunteer_status='COMPLETED').count(),
+        'planned': profiles.filter(volunteer_status='PLANNED').count(),
+        'cancelled': profiles.filter(volunteer_status='CANCELLED').count(),
     }
     projects_by_category = {}
-    for category in projects.values_list('category', flat=True).distinct():
+    for category in profiles.values_list('category', flat=True).distinct():
         if category:
-            projects_by_category[category] = projects.filter(category=category).count()
+            projects_by_category[category] = profiles.filter(category=category).count()
 
-    # Projects list with details
     projects_list = []
-    for project in projects:
-        volunteers_count = ProjectAssignment.objects.filter(project=project).count()
-        tasks_count = Task.objects.filter(project=project).count()
-        tasks_completed = Task.objects.filter(project=project, status='مكتملة').count()
+    for profile in profiles:
+        platform = profile.project
+        volunteers_count = ProjectAssignment.objects.filter(project=platform).count()
+        tasks_count = Task.objects.filter(project=platform).count()
+        tasks_completed = Task.objects.filter(project=platform, status='مكتملة').count()
 
-        # Calculate automatic progress based on task completion
-        # If no tasks exist, use manual progress field as fallback
         if tasks_count > 0:
             automatic_progress = int((tasks_completed / tasks_count) * 100)
         else:
-            automatic_progress = project.progress  # Fallback to manual progress
+            automatic_progress = profile.progress
 
         projects_list.append({
-            'id': project.id,
-            'title': project.title,
-            'category': project.category,
-            'status': project.status,
+            'id': platform.id,
+            'title': platform.name,
+            'category': profile.category,
+            'status': profile.volunteer_status,
             'status_display': {
                 'ACTIVE': 'نشط',
                 'COMPLETED': 'مكتمل',
                 'PLANNED': 'متوقف',
                 'CANCELLED': 'ملغي'
-            }.get(project.status, project.status),
-            'progress': automatic_progress,  # ✅ Now using task-based calculation
-            'beneficiaries': project.beneficiaries,
-            'donation_amount': float(project.donation_amount),
-            'start_date': project.start_date.isoformat() if project.start_date else None,
-            'end_date': project.end_date.isoformat() if project.end_date else None,
+            }.get(profile.volunteer_status, profile.volunteer_status),
+            'progress': automatic_progress,
+            'beneficiaries': profile.beneficiaries,
+            'donation_amount': float(profile.donation_amount),
+            'start_date': platform.start_date.isoformat() if platform.start_date else None,
+            'end_date': platform.end_date.isoformat() if platform.end_date else None,
             'volunteers_assigned': volunteers_count,
             'tasks_total': tasks_count,
             'tasks_completed': tasks_completed,
-            'completion_rate': automatic_progress,  # Same value for consistency
+            'completion_rate': automatic_progress,
         })
 
     # Volunteers data
@@ -851,7 +860,7 @@ def generate_report(request):
         tasks = volunteer.assigned_tasks.all()
         tasks_completed = tasks.filter(status='مكتملة').count()
         tasks_in_progress = tasks.exclude(status='مكتملة').count()
-        current_projects = list(set([task.project.title for task in tasks.exclude(status='مكتملة')]))
+        current_projects = list(set([task.project.name for task in tasks.exclude(status='مكتملة')]))
 
         volunteers_list.append({
             'id': volunteer.id,
@@ -893,7 +902,7 @@ def generate_report(request):
     overdue_tasks_list = [{
         'id': task.id,
         'title': task.title,
-        'project': task.project.title,
+        'project': task.project.name,
         'volunteer': task.volunteer.profile.name if task.volunteer else None,
         'due_date': task.due_date.isoformat() if task.due_date else None,
         'status': task.status,
@@ -901,8 +910,8 @@ def generate_report(request):
     } for task in overdue_tasks[:10]]  # Top 10 overdue
 
     # Totals
-    total_beneficiaries = projects.aggregate(total=Sum('beneficiaries'))['total'] or 0
-    total_donations = projects.aggregate(total=Sum('donation_amount'))['total'] or 0
+    total_beneficiaries = profiles.aggregate(total=Sum('beneficiaries'))['total'] or 0
+    total_donations = profiles.aggregate(total=Sum('donation_amount'))['total'] or 0
     total_volunteer_hours = volunteers.aggregate(
         total=Sum('profile__total_volunteer_hours')
     )['total'] or 0
@@ -910,7 +919,7 @@ def generate_report(request):
     # Build report data structure
     report_data = {
         'summary': {
-            'total_projects': projects.count(),
+            'total_projects': profiles.count(),
             'total_volunteers': volunteers.count(),
             'total_tasks': tasks.count(),
             'total_beneficiaries': total_beneficiaries,
@@ -1079,11 +1088,11 @@ def public_projects(request):
     No authentication required
     """
     # Get all visible projects (not hidden)
-    projects = Project.objects.filter(
+    profiles = VolunteeringProfile.objects.filter(
         is_hidden=False
-    ).order_by('-created_at')
+    ).select_related("project").order_by('-created_at')
 
-    serializer = ProjectSerializer(projects, many=True)
+    serializer = ProjectSerializer(profiles, many=True)
     return Response(serializer.data)
 
 
@@ -1098,9 +1107,9 @@ def available_opportunities(request):
     Requires authentication
     """
     # Get all visible projects (regardless of status)
-    opportunities = Project.objects.filter(
+    opportunities = VolunteeringProfile.objects.filter(
         is_hidden=False
-    ).order_by('-created_at')  # Show all visible projects, sorted by newest first
+    ).select_related("project").order_by('-created_at')
 
     serializer = ProjectSerializer(opportunities, many=True)
     return Response({
@@ -1116,12 +1125,12 @@ def apply_to_opportunity(request, project_id):
     Apply to an opportunity/project - Creates an application for admin review
     """
     try:
-        project = Project.objects.get(id=project_id)
+        from projects.models import Project
+        platform_project = Project.objects.get(id=project_id)
         user = request.user
 
-        # Check if already applied
         existing_application = VolunteerApplication.objects.filter(
-            project=project,
+            project=platform_project,
             volunteer=user
         ).first()
 
@@ -1131,10 +1140,9 @@ def apply_to_opportunity(request, project_id):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Create a new application (NOT a task yet)
         application = VolunteerApplication.objects.create(
             volunteer=user,
-            project=project,
+            project=platform_project,
             message=request.data.get('message', ''),
             status='قيد المراجعة'
         )
@@ -1449,17 +1457,11 @@ def public_home_stats(request):
     No authentication required
     """
     # Total beneficiaries from all projects
-    total_beneficiaries = Project.objects.aggregate(
-        total=Sum('beneficiaries')
-    )['total'] or 0
+    total_beneficiaries = project_helpers.aggregate_beneficiaries()
 
-    # Total potential projects (all non-cancelled projects)
-    potential_projects = Project.objects.exclude(status='CANCELLED').count()
+    potential_projects = VolunteeringProfile.objects.exclude(volunteer_status='CANCELLED').count()
 
-    # Total donations amount
-    total_donations = Project.objects.aggregate(
-        total=Sum('donation_amount')
-    )['total'] or 0
+    total_donations = project_helpers.aggregate_donations()
 
     return Response({
         'beneficiaries': total_beneficiaries,

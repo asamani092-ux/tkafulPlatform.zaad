@@ -53,9 +53,12 @@ export default function SignIn() {
       const userData = await profileRes.json();
       const role = userData.profile?.role || "user";
       login({ name: userData.profile?.name || userData.username, email: userData.email, role }, tokenData.access, tokenData.refresh);
-      // التوجيه الموحّد حسب الصلاحية (D-17): مشرف عام → اللوحة؛ عضو مشروع → مشاريعه؛ غير ذلك → صفحة المستخدم
+      // Phase B: مشرف→/Admin · طاقم→الكادر · عضو مشروع→المشاريع · متطوع→/user
+      // المتبرعون يصلون لبوابة الكفالات عبر /projects/:slug/sponsorships (SaqyaHome يوجّه حسب الدور)
       if (role === "admin") {
         navigate("/Admin");
+      } else if (role === "manager" || role === "employee") {
+        navigate("/Admin/staff");
       } else {
         try {
           const membershipsRes = await fetch(`${API_BASE_URL}/api/platform/my-memberships/`, {

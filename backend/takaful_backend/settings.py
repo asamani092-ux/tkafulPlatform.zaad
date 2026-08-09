@@ -64,6 +64,8 @@ INSTALLED_APPS = [
     "maps",          # نظام الخرائط المتعددة
     "sponsorships",  # الكفالات (منقولة من saqya — D-02)
     "volunteering",  # التطوع (منقول من takaful_app — D-02)
+    "services",      # الخدمات (Phase A4)
+    "reporting",     # التقارير والإحصائيات (Phase A4)
 ]
 
 

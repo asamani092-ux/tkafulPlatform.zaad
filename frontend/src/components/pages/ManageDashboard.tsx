@@ -7,6 +7,7 @@ import Card from "../ui/Card";
 import Input from "../ui/Input";
 import Select from "../ui/Select";
 import Button from "../ui/Button";
+import AdminShell from "../layout/AdminShell";
 
 const STAFF_ROLES = ["admin", "manager", "employee"];
 type Employee = { id: number; name: string };
@@ -41,29 +42,27 @@ export default function ManageDashboard() {
 
   if (!isStaff) {
     return (
-      <div className="page-shell p-10 text-center">
+      <AdminShell>
         <Card>
           <h2 className="mb-2 text-xl font-bold text-primary">صلاحية مطلوبة</h2>
           <p className="text-brand-gray">هذه الشاشة مخصّصة لطاقم الإدارة. الرجاء تسجيل الدخول بحساب موظف/مشرف.</p>
           <Link to="/signin" className="mt-4 inline-block"><Button>تسجيل الدخول</Button></Link>
         </Card>
-      </div>
+      </AdminShell>
     );
   }
 
   return (
-    <div className="page-shell">
-      <header className="px-6 py-8 text-white" style={{ background: "var(--tmkeen-primary)" }}>
-        <div className="mx-auto flex max-w-page items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-extrabold">تغذية اللوحة التنفيذية</h1>
-            <p className="mt-2" style={{ opacity: 0.9 }}>إضافة أقسام وموظفين ومهام منجزة — {user?.name}</p>
-          </div>
-          <Link to="/Admin/executive" className="rounded-lg px-4 py-2 font-bold text-white" style={{ background: "rgba(255,255,255,.15)" }}>عرض اللوحة</Link>
+    <AdminShell>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold text-primary">تغذية لوحة الكادر</h1>
+          <p className="mt-1 text-sm text-brand-gray">إضافة أقسام وموظفين ومهام — {user?.name}</p>
         </div>
-      </header>
+        <Link to="/Admin/staff" className="btn-secondary">عرض اللوحة</Link>
+      </div>
 
-      <main className="mx-auto grid max-w-page gap-6 px-4 py-8 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3">
         <Card>
           <h2 className="mb-4 text-lg font-bold text-primary">إضافة بطاقة قسم</h2>
           <form className="space-y-3" onSubmit={async (e) => {
@@ -121,7 +120,7 @@ export default function ManageDashboard() {
             <Button type="submit" className="w-full">حفظ المهمة</Button>
           </form>
         </Card>
-      </main>
-    </div>
+      </div>
+    </AdminShell>
   );
 }

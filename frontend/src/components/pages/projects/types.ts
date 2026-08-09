@@ -7,6 +7,8 @@ export interface PlatformProject {
   description: string;
   brand_color: string;
   cover_image: string;
+  donation_url?: string;
+  donation_label?: string;
   start_date: string | null;
   end_date: string | null;
   status: string;
@@ -23,7 +25,7 @@ export interface PublicMapIndexEntry {
   description: string;
   visibility: "public" | "mixed";
   items_count: number;
-  project: { id: number; slug: string; name: string; brand_color: string };
+  project: { id: number; slug: string; name: string; brand_color: string; donation_url?: string; donation_label?: string };
 }
 
 export type MapFieldType = "text" | "number" | "select" | "boolean" | "date";
@@ -66,7 +68,7 @@ export interface PublicMapDetail {
   visibility: string;
   icon_set: Record<string, string>;
   color_scheme: Record<string, string>;
-  project: { id: number; slug: string; name: string; brand_color: string };
+  project: { id: number; slug: string; name: string; brand_color: string; donation_url?: string; donation_label?: string };
   layers: PublicMapLayer[];
   fields: MapFieldDef[];
   items: PublicMapItem[];

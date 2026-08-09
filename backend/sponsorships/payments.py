@@ -46,10 +46,13 @@ class PaymentProvider(ABC):
 
 
 class ManualPaymentProvider(PaymentProvider):
-    """Redirect to configured external store; admin reconciles Payment rows manually."""
+    """Redirect to project donation URL or configured external store."""
+
+    def __init__(self, base_url: str = ""):
+        self._base_url = base_url
 
     def create_checkout(self, request: CheckoutRequest) -> CheckoutResult:
-        base = getattr(settings, "EXTERNAL_STORE_URL", "") or ""
+        base = self._base_url or getattr(settings, "EXTERNAL_STORE_URL", "") or ""
         if not base:
             return CheckoutResult(redirect_url="", provider="manual")
         params = {
@@ -65,5 +68,12 @@ class ManualPaymentProvider(PaymentProvider):
         return CallbackVerification(valid=False, raw=payload)
 
 
-def get_payment_provider() -> PaymentProvider:
-    return ManualPaymentProvider()
+def get_payment_provider(sponsorship=None) -> PaymentProvider:
+    base = ""
+    if sponsorship and getattr(sponsorship, "project_id", None):
+        project = sponsorship.project
+        if project and project.donation_url:
+            base = project.donation_url
+    if not base:
+        base = getattr(settings, "EXTERNAL_STORE_URL", "") or ""
+    return ManualPaymentProvider(base_url=base)

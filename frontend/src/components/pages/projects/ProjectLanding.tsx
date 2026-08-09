@@ -43,7 +43,10 @@ export default function ProjectLanding() {
       case "volunteering":
         return "/volunteers";
       case "services":
-        return "/services";
+        // سقيا الماء مربوطة بمشروع السقيا؛ بقية المشاريع → صفحة الخدمات العامة
+        return project.slug === "saqya"
+          ? `/services/water-supply?project=${project.slug}`
+          : "/services";
       default:
         return null;
     }
@@ -55,10 +58,16 @@ export default function ProjectLanding() {
         <div className="mx-auto max-w-page">
           <h1 className="text-4xl font-extrabold">{project.name}</h1>
           {project.description && <p className="mt-3 text-lg" style={{ opacity: 0.92 }}>{project.description}</p>}
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
             <Badge variant="success">{project.status === "active" ? "نشط" : project.status}</Badge>
             {project.start_date && <span style={{ opacity: 0.9 }}>البداية: {project.start_date}</span>}
             {project.end_date && <span style={{ opacity: 0.9 }}>النهاية: {project.end_date}</span>}
+            {project.donation_url && (
+              <a href={project.donation_url} className="btn-primary inline-block px-4 py-2 text-sm font-bold"
+                target="_blank" rel="noopener noreferrer">
+                {project.donation_label || "تبرع الآن"}
+              </a>
+            )}
           </div>
         </div>
       </header>

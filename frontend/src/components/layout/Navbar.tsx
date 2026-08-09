@@ -2,22 +2,23 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, User, LogOut } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { useMemberships } from "../../hooks/useMemberships";
 
 const navLinks = [
-  { to: "/", label: "الصفحة الرئيسية" },
+  { to: "/", label: "الرئيسية" },
   { to: "/projects", label: "المشاريع" },
   { to: "/services", label: "الخدمات" },
-  { to: "/volunteers", label: "المتطوعين" },
-  { to: "/map", label: "خارطة المنصّة" },
-  { to: "/projects/saqya", label: "كفالات السقيا" },
+  { to: "/volunteers", label: "المتطوعون" },
+  { to: "/map", label: "الخرائط" },
   { to: "/about", label: "من نحن" },
 ];
 
-/** شريط التنقّل الموحّد على design-system. */
+/** شريط التنقّل العام الموحّد — ≤2 نقرات لكل صفحة عامة. */
 export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
+  const { memberships, isSuperAdmin } = useMemberships();
   const [open, setOpen] = useState(false);
 
   const linkClass = (to: string) =>
@@ -25,7 +26,14 @@ export default function Navbar() {
       location.pathname === to ? "text-primary" : "text-brand-gray hover:text-primary"
     }`;
 
-  const dashboardPath = user?.role === "admin" ? "/Admin" : "/user/main";
+  const staffRoles = ["admin", "manager", "employee"];
+  const isStaff =
+    !!user && (staffRoles.includes(user.role) || isSuperAdmin || memberships.length > 0);
+  const dashboardPath = user?.role === "admin" || isSuperAdmin
+    ? "/Admin"
+    : memberships.length > 0 || (user && staffRoles.includes(user.role))
+      ? "/Admin/projects"
+      : "/user/main";
 
   return (
     <nav className="sticky top-0 z-30 border-b border-surface-border bg-surface">
@@ -35,7 +43,7 @@ export default function Navbar() {
           تكافل وأثر
         </Link>
 
-        <div className="hidden items-center gap-2 md:flex">
+        <div className="hidden items-center gap-1 md:flex">
           {navLinks.map((l) => (
             <Link key={l.to} to={l.to} className={linkClass(l.to)}>
               {l.label}
@@ -47,7 +55,7 @@ export default function Navbar() {
           {isAuthenticated ? (
             <>
               <Link to={dashboardPath} className="flex items-center gap-2 text-sm font-semibold text-primary">
-                <User size={16} /> {user?.name || "حسابي"}
+                <User size={16} /> {isStaff ? "لوحة الإدارة" : (user?.name || "حسابي")}
               </Link>
               <button type="button" onClick={() => { void logout(); }} aria-label="خروج" className="text-brand-gray hover:text-primary">
                 <LogOut size={18} />
@@ -74,9 +82,14 @@ export default function Navbar() {
           ))}
           <div className="mt-2 border-t border-surface-border pt-2">
             {isAuthenticated ? (
-              <button type="button" onClick={() => { void logout(); setOpen(false); }} className="text-sm font-semibold text-primary">
-                خروج ({user?.name})
-              </button>
+              <>
+                <Link to={dashboardPath} onClick={() => setOpen(false)} className="mb-2 block text-sm font-semibold text-primary">
+                  {isStaff ? "لوحة الإدارة" : "حسابي"}
+                </Link>
+                <button type="button" onClick={() => { void logout(); setOpen(false); }} className="text-sm font-semibold text-primary">
+                  خروج ({user?.name})
+                </button>
+              </>
             ) : (
               <Link to="/signin" onClick={() => setOpen(false)} className="text-sm font-semibold text-primary">
                 تسجيل الدخول

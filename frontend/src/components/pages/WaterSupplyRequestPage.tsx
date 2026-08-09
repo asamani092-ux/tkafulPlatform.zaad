@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useToast } from "../../contexts/ToastContext";
 import { API_BASE_URL } from "../../config";
 import Card from "../ui/Card";
@@ -27,6 +28,8 @@ const EMPTY: FormData = {
 
 export default function WaterSupplyRequestPage() {
   const { success, error } = useToast();
+  const [params] = useSearchParams();
+  const projectSlug = params.get("project") || "saqya";
   const [formData, setFormData] = useState<FormData>(EMPTY);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -85,8 +88,17 @@ export default function WaterSupplyRequestPage() {
 
   return (
     <div>
-      <HeroBand title="طلب سقيا الماء" subtitle="يرجى تعبئة البيانات التالية لإرسال طلب سقيا الماء للمسجد." />
+      <HeroBand
+        title="طلب سقيا الماء"
+        subtitle="نموذج مرتبط بمشروع السقيا — تُراجع الطلبات من نطاق الطلبات في لوحة الإدارة."
+      />
       <main className="mx-auto max-w-3xl px-4 py-10">
+        <p className="mb-4 text-sm text-brand-gray">
+          المشروع:{" "}
+          <Link className="font-semibold text-primary" to={`/projects/${projectSlug}`}>
+            {projectSlug}
+          </Link>
+        </p>
         <form onSubmit={handleSubmit} className="space-y-6">
           <Card>
             <h2 className="mb-4 text-xl font-bold text-primary">بيانات مقدم الطلب</h2>

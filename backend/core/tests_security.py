@@ -10,7 +10,7 @@ from django.db import connection
 from django.test import TransactionTestCase, override_settings
 from rest_framework.test import APITestCase
 
-from saqya.models import Sponsorship, Order, Invoice, Documentation, Payment
+from sponsorships.models import Sponsorship, Order, Invoice, Documentation, Payment
 
 
 def make_user(email, role):

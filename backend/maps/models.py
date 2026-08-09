@@ -182,3 +182,60 @@ class MapContribution(models.Model):
 
     def __str__(self):
         return f"{self.name} — map {self.map_id} ({self.status})"
+
+
+class MapProduct(models.Model):
+    """كتالوج المنتجات لكل خريطة (مصدر الحقيقة بعد Phase A1 — بديل impact_map.Product)."""
+
+    map = models.ForeignKey(Map, on_delete=models.CASCADE, related_name="products")
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(max_length=120)
+    icon = models.CharField(max_length=50, blank=True)
+    season = models.CharField(max_length=50, blank=True, null=True)
+    target_families = models.IntegerField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    order = models.IntegerField(default=0)
+    external_id = models.CharField(max_length=100, blank=True, default="")
+
+    class Meta:
+        ordering = ["map", "order", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["map", "slug"], name="uq_map_product_slug"),
+        ]
+        indexes = [models.Index(fields=["map", "is_active"])]
+
+    def __str__(self):
+        return f"{self.name} ({self.map_id})"
+
+
+class MapDistributionRecord(models.Model):
+    """سجلات التوزيع لكل خريطة (بديل impact_map.DistributionRecord)."""
+
+    map = models.ForeignKey(Map, on_delete=models.CASCADE, related_name="distribution_records")
+    region_item = models.ForeignKey(
+        MapItem, on_delete=models.CASCADE, related_name="distribution_records"
+    )
+    product = models.ForeignKey(
+        MapProduct, on_delete=models.CASCADE, related_name="distribution_records"
+    )
+    families_served = models.IntegerField()
+    quantity_distributed = models.IntegerField()
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="map_distributions",
+    )
+    date = models.DateField()
+    external_id = models.CharField(max_length=100, blank=True, default="")
+
+    class Meta:
+        ordering = ["-date"]
+        indexes = [
+            models.Index(fields=["map", "date"]),
+            models.Index(fields=["map", "external_id"]),
+        ]
+
+    def __str__(self):
+        return f"{self.region_item.name} — {self.product.name} ({self.date})"

@@ -15,6 +15,7 @@ interface AdminTool { id: number; tool_key: string; config: Record<string, unkno
 interface AdminMember { id: number; user: number; username: string; email: string; role: string }
 interface AdminProject {
   id: number; name: string; slug: string; description: string; brand_color: string;
+  donation_url: string; donation_label: string;
   status: string; is_active: boolean; tools: AdminTool[]; members: AdminMember[];
   my_role: string | null;
 }
@@ -81,6 +82,32 @@ export default function PlatformProjects() {
     else toast.error({ title: "تعذّر تحديث الأداة (صلاحية المشرف العام)" });
   };
 
+  const [editDonation, setEditDonation] = useState({ projectId: 0, donation_url: "", donation_label: "تبرع الآن" });
+
+  const saveDonation = async (
+    project: AdminProject,
+    payload?: { donation_url: string; donation_label: string },
+  ) => {
+    const body = payload || {
+      donation_url: editDonation.donation_url,
+      donation_label: editDonation.donation_label || "تبرع الآن",
+    };
+    const res = await authFetch(`/api/platform/projects/${project.id}/`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        donation_url: body.donation_url,
+        donation_label: body.donation_label || "تبرع الآن",
+      }),
+    });
+    if (res.ok) {
+      toast.success({ title: "تم حفظ رابط التبرع" });
+      void load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error({ title: data.donation_url?.[0] || "تعذّر الحفظ" });
+    }
+  };
+
   const addMember = async (e: React.FormEvent) => {
     e.preventDefault();
     const res = await authFetch(`/api/platform/projects/${memberForm.projectId}/add_member/`, {
@@ -108,7 +135,7 @@ export default function PlatformProjects() {
 
   return (
     <AdminShell>
-      <h1 className="mb-4 text-2xl font-extrabold text-primary">مشاريع المنصّة</h1>
+      <h1 className="mb-4 text-2xl font-extrabold text-primary">المشاريع</h1>
 
       {isSuperAdmin && (
         <Card className="mb-6">
@@ -134,6 +161,35 @@ export default function PlatformProjects() {
                 {p.my_role && <Badge>{p.my_role === "super_admin" ? "مشرف عام" : p.my_role}</Badge>}
               </div>
               <Link to={`/projects/${p.slug}`} className="text-sm font-bold text-primary hover:underline">صفحة المشروع ←</Link>
+            </div>
+
+            <div className="mb-3 rounded-lg border border-surface-border p-3">
+              <span className="text-xs font-bold text-brand-gray">رابط التبرع (HTTPS):</span>
+              {(isSuperAdmin || p.my_role === "project_admin") ? (
+                <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(e) => {
+                  e.preventDefault();
+                  const donation_url = editDonation.projectId === p.id ? editDonation.donation_url : (p.donation_url || "");
+                  const donation_label = editDonation.projectId === p.id ? editDonation.donation_label : (p.donation_label || "تبرع الآن");
+                  void saveDonation(p, { donation_url, donation_label });
+                }}
+                  onFocus={() => {
+                    if (editDonation.projectId !== p.id) {
+                      setEditDonation({ projectId: p.id, donation_url: p.donation_url || "", donation_label: p.donation_label || "تبرع الآن" });
+                    }
+                  }}>
+                  <div className="min-w-[200px] flex-1">
+                    <Input label="رابط التبرع" dir="ltr" value={editDonation.projectId === p.id ? editDonation.donation_url : (p.donation_url || "")}
+                      onChange={(e) => setEditDonation({ projectId: p.id, donation_url: e.target.value, donation_label: editDonation.projectId === p.id ? editDonation.donation_label : (p.donation_label || "تبرع الآن") })} />
+                  </div>
+                  <div className="w-36">
+                    <Input label="نص الزر" value={editDonation.projectId === p.id ? editDonation.donation_label : (p.donation_label || "تبرع الآن")}
+                      onChange={(e) => setEditDonation({ projectId: p.id, donation_url: editDonation.projectId === p.id ? editDonation.donation_url : (p.donation_url || ""), donation_label: e.target.value })} />
+                  </div>
+                  <Button type="submit" variant="secondary">حفظ</Button>
+                </form>
+              ) : (
+                <p className="mt-1 text-sm text-brand-gray">{p.donation_url || "— غير مُعرَّف —"}</p>
+              )}
             </div>
 
             <div className="mb-3">

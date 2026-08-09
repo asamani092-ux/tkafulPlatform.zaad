@@ -134,3 +134,83 @@
 ## D-12 — `check --deploy` تحت بيئة إنتاج
 - يُشغَّل بـ `DEBUG=False` و`SECRET_KEY` عشوائي قوي و`SECURE_*` المفعّلة افتراضاً في settings عند
   `DEBUG=False`. النتيجة مسجلة في التقرير النهائي.
+
+## D-23 — maps مصدر الحقيقة الوحيد؛ إزالة impact_map (Phase A1)
+- **القرار**: إضافة `maps.MapProduct` (كتالوج منتجات لكل خريطة) و`maps.MapDistributionRecord`
+  (سجلات توزيع مرتبطة بـ MapItem منطقة + MapProduct). المناطق/المنافذ تبقى `MapItem`؛ المساهمات
+  `MapContribution`. هجرة `maps.0003` تنقل Product/DistributionRecord من impact_map؛ هجرة
+  `impact_map.0002` تحذف النماذج الخمسة (stub app يبقى للتاريخ).
+- **واجهة API**: `/api/map/*` تُخدم بمحول رفيع (`maps/legacy_urls|views|serializers`) يقرأ/يكتب
+  نماذج maps مع الحفاظ على أشكال JSON السابقة (ثبات الواجهات — D-05).
+- **البذر**: `seed_impact_map` ينتقل إلى `maps/management/commands/` ويكتب مباشرة إلى maps؛
+  `sync_impact_map_to_maps` يُزال (sync.py يرفع RuntimeError؛ منطق تاريخي في migrations فقط).
+- **فحص السلامة**: `check_migration_integrity` يعدّ جداول maps بدل impact_map كثوابت بعد A1.
+- **المبرر**: إنهاء ازدواجية المصدر/النسخة؛ تبسيط الصيانة مع توافق خلفي كامل لـ UAT والواجهة.
+
+## D-24 — إزالة أصداف saqya و takaful_app (Phase A2)
+- **القرار**: حذف وحدات Python غير الضرورية (views/urls/serializers/admin/tests) من `saqya` و
+  `takaful_app`؛ الإبقاء على `apps.py` + مجلد `migrations/` فقط لسلسلة الهجرات. `saqya/models.py`
+  يحتفظ بإعادة تصدير `invoice_upload_path` و`documentation_upload_path` لأن `saqya/0001_initial`
+  يستوردها.
+- **التوجيه**: `takaful_backend/urls.py` يضمّن `sponsorships.urls` مباشرة على `/api/saqya/` و
+  `volunteering.urls` على `/api/` — بدون وسيط takaful_app.urls.
+- **الاستيرادات**: كل `from saqya.models` / `from takaful_app.models` في الكود الحي تُستبدل بـ
+  `sponsorships` / `volunteering` (أو `services` / `reporting` بعد A4).
+- **المبرر**: إنهاء الازدواجية؛ التطبيقان الأصليان كانا shims فارغة بعد D-02.
+- **التوافق**: مسارات `/api/saqya/*` و`/api/projects/*` و`/api/stats/` تبقى كما هي (D-05).
+
+## D-25 — دمج volunteering.Project في projects.Project (Phase A3)
+- **الواقع**: `volunteering.Project` يحتوي **13 صفاً** (ليست صفراً) — مشاريع تطوّع فعلية من استيراد Excel.
+- **القرار**: `VolunteeringProfile` (OneToOne → `projects.Project`) يحمل الحقول الخاصة بالتطوّع
+  (category, beneficiaries, donation_amount, tags, progress, is_hidden, volunteer_status, …) بينما
+  `projects.Project` يحمل الهوية الموحّدة (name/slug/description/dates/status).
+- **هجرة البيانات**: لكل صف قديم — مطابقة بالاسم (تفقدهم→tafaqqadhum، منصة تكافل وأثر→takaful-athar،
+  سقيا الزاد→saqya) أو إنشاء slug جديد؛ إنشاء VolunteeringProfile؛ تفعيل أداة volunteering؛
+  إعادة توجيه FKs (Task, ProjectAssignment, VolunteerApplication, StaffTask) إلى `projects.Project`.
+- **حذف**: جدول `takaful_app_project` (نموذج volunteering.Project) بعد نقل البيانات — مع عكس قابل للتنفيذ.
+- **واجهة API**: `/api/projects/` تُرجع نفس شكل JSON (title/desc/status) عبر ProjectSerializer المُكيَّف
+  على VolunteeringProfile؛ المعرّف `id` = `projects.Project.id`.
+
+## D-26 — تقسيم volunteering وظيفياً: services + reporting (Phase A4)
+- **القرار**: تطبيقان جديدان — `services` (Service, ServiceRequest, ServiceVolunteerApplication,
+  WaterSupplyRequest, Suggestion) و`reporting` (AdminReport, VolunteerStatistics, QuarterlyTarget,
+  DepartmentHours, TopVolunteer). يبقى في `volunteering`: Volunteer, VolunteerApplication,
+  ProjectAssignment, Task, Subtask, VolunteeringProfile.
+- **الهجرة**: `SeparateDatabaseAndState` فقط — `db_table` يبقى `takaful_app_*`؛ صفر نقل بيانات.
+- **المسارات**: `volunteering.urls` يضمّن `services.urls` و`reporting.urls` — كل مسارات `/api/*`
+  القديمة تعمل دون تغيير.
+- **المبرر**: فصل المسؤوليات (تطوّع / خدمات / تقارير) مع الحفاظ على التوافق الخلفي الكامل.
+
+## D-27 — روابط تبرع لكل مشروع (Phase A5)
+- **القرار**: `projects.Project` يحصل على `donation_url` (HTTPS فقط) و`donation_label` (افتراضي «تبرع الآن»).
+- **التحقق**: `projects/validators.validate_https_donation_url` على النموذج والـ serializer.
+- **الواجهة**: تُعرض في serializers العامة والإدارية؛ تُحرَّر في `PlatformProjects.tsx`.
+- **CTAs**: خريطة التعهد تستخدم `project.donation_url` من بيانات الخريطة؛ صفحة هبوط المشروع تعرض زر التبرع
+  عند توفر الرابط؛ كفالات السقيا (`checkout_url`) تفضّل `sponsorship.project.donation_url` على
+  `EXTERNAL_STORE_URL` كاحتياطي منصّة فقط.
+- **المبرر**: تخصيص رابط التبرع لكل مشروع دون كسر التوافق مع المتجر الخارجي الافتراضي.
+
+## D-28 — قاعدة فرع Phase B على Phase A غير المدموج
+- `main` عند بدء Phase B لا يزال عند `39c89fe` (قبل Phase A). PR #9 (Phase A) مفتوح وغير مدمج.
+- **القرار**: قطع `refactor/phase-b-ui` من `refactor/phase-a-cleanup` @ `f57404a` لاستخدام
+  `donation_url` ومسارات المنصّة. عند دمج Phase A في `main` يُعاد استهداف قاعدة الـ PR أو يُدمَج بالتسلسل.
+
+## D-29 — إعادة استخدام `/Admin/requests` لنطاق الطلبات
+- سابقاً: `/Admin/requests` = طلبات انضمام المتطوعين، و`/Admin/service-requests` = طلبات الخدمات.
+- **القرار**: `/Admin/requests` = نطاق **الطلبات** (خدمات + سقيا + اقتراحات). طلبات الانضمام →
+  `/Admin/volunteers/join-requests`. `/Admin/service-requests` و`/Admin/ideas` redirects.
+- **المبرر**: تسمية عربية موحّدة بلا ازدواج ideas/suggest أو requests/service-requests.
+
+## D-30 — لا واجهة تنفيذية عامة
+- بعد D-19 أصبحت `/executive` تحويلاً للإدارة. Phase B ينقلها إلى `/Admin/staff`.
+- **القرار**: لا مسار عام للقراءة فقط للوحة الكادر — بيانات تشغيلية تبقى تحت حارس `orgStaff`.
+
+## D-31 — قائمة طلبات سقيا للإدارة بلا تغيير نموذج
+- **القرار**: `WaterSupplyRequestViewSet` (ReadOnly) على `/api/water-supply-requests/` — بدون حقول/جداول جديدة.
+- الصفحة العامة `/services/water-supply?project=saqya` تربط النموذج بمشروع السقيا في الواجهة؛
+  الطلبات تظهر في نطاق الطلبات.
+
+## D-32 — قائمة المشاريع العامة من منصّة المشاريع
+- `/projects` كانت تعرض `/api/public-projects/` (تطوّع قديم) بلا روابط هبوط.
+- **القرار**: نفس مصدر Home — `/api/platform/public/projects/` مع رابط صفحة المشروع وCTA تبرع
+  يُخفى إن لم يُضبط `donation_url`.
