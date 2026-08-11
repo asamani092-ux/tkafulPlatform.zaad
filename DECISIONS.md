@@ -214,3 +214,10 @@
 - `/projects` كانت تعرض `/api/public-projects/` (تطوّع قديم) بلا روابط هبوط.
 - **القرار**: نفس مصدر Home — `/api/platform/public/projects/` مع رابط صفحة المشروع وCTA تبرع
   يُخفى إن لم يُضبط `donation_url`.
+
+## D-33 — اعتماد التصميم المركزي وإلغاء الهيرو المارون القديم
+- **المصدر**: `@zaad/design-system` من `asamani092-ux/designSystemFinal` (وسم `v1.2.11`).
+- **القرار**: استبدال الاستيراد المحلي `design-system/` بـ الحزمة المركزية؛ جذر
+  `zad-root` + `data-theme="light"`؛ رؤوس الصفحات (Home/HeroBand/ProjectLanding/Saqya/Footer)
+  سطح فاتح + `text-primary`/`text-brand`؛ المارون للأزرار/الشارات/التمييز فقط.
+- **المبرر**: التصميم القديم (هيرو `--tmkeen-primary` ممتلئ) لا يطابق عقد الهوية المركزي.

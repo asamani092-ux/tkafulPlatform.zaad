@@ -4,6 +4,7 @@ import { HandHeart, Lightbulb, Droplets } from "lucide-react";
 import { API_BASE_URL } from "../../config";
 import Card from "../ui/Card";
 import Button from "../ui/Button";
+import KpiCard from "../ui/KpiCard";
 import { LoadingState } from "../feedback/PageStates";
 
 interface Stats {
@@ -35,7 +36,7 @@ const TOOL_AR: Record<string, string> = {
   reports: "تقارير",
 };
 
-/** الصفحة الرئيسية العامة — منصّة موحّدة، مشاريع نشطة، خدمات، أثر، CTA. */
+/** الصفحة الرئيسية — رأس فاتح وفق نظام الزاد المعتمد (لا هيرو مارون ممتلئ). */
 export default function Home() {
   const [stats, setStats] = useState<Stats>({ beneficiaries: 0, potential_projects: 0, donations: 0 });
   const [services, setServices] = useState<BeneficiaryService[]>([]);
@@ -61,24 +62,21 @@ export default function Home() {
   ];
 
   return (
-    <div>
-      <header className="px-4 py-16 text-center text-white" style={{ background: "var(--tmkeen-primary)" }}>
+    <div className="bg-surface-muted">
+      <header className="border-b border-surface-border bg-surface px-4 py-14 text-center">
         <div className="mx-auto max-w-page">
-          <h1 className="text-4xl font-extrabold md:text-5xl">تكافل وأثر</h1>
-          <p className="mt-3 text-lg" style={{ opacity: 0.9 }}>
+          <h1 className="text-4xl font-extrabold text-primary md:text-5xl">تكافل وأثر</h1>
+          <p className="mt-3 text-lg text-brand-gray">
             منصّة واحدة للعمل الخيري والتطوعي — مشاريع، كفالات، خرائط أثر، وخدمات مجتمعية.
           </p>
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {display.map((s) => (
-              <div key={s.label} className="rounded-xl border px-6 py-6" style={{ background: "rgba(255,255,255,.12)", borderColor: "rgba(255,255,255,.25)" }}>
-                <div className="text-3xl font-extrabold">{Number(s.value || 0).toLocaleString("en-US")} +</div>
-                <div className="mt-1 text-sm" style={{ opacity: 0.9 }}>{s.label}</div>
-              </div>
+              <KpiCard key={s.label} label={s.label} value={`${Number(s.value || 0).toLocaleString("en-US")} +`} />
             ))}
           </div>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link to="/projects" className="btn-register inline-flex">استكشف المشاريع</Link>
-            <Link to="/map" className="inline-flex rounded-lg border border-white/40 px-5 py-2 text-sm font-bold text-white">خارطة الأثر</Link>
+            <Link to="/map" className="btn-secondary inline-flex">خارطة الأثر</Link>
           </div>
         </div>
       </header>
@@ -93,7 +91,16 @@ export default function Home() {
               <Card key={p.slug} className="flex h-full flex-col">
                 <Link to={`/projects/${p.slug}`} className="block flex-1">
                   <div className="mb-2 flex items-center gap-2">
-                    <span style={{ width: 14, height: 14, borderRadius: 4, background: p.brand_color, display: "inline-block" }} />
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 14,
+                        height: 14,
+                        borderRadius: "var(--radius-sm, 4px)",
+                        background: p.brand_color || "var(--brand-primary)",
+                        display: "inline-block",
+                      }}
+                    />
                     <h3 className="text-lg font-bold text-primary">{p.name}</h3>
                   </div>
                   <p className="mb-3 text-sm text-brand-gray">{p.description}</p>

@@ -27,6 +27,7 @@
   "dependencies": {
     "@types/dompurify": "^3.0.5",
     "@types/leaflet": "^1.9.21",
+    "@zaad/design-system": "github:asamani092-ux/designSystemFinal#v1.2.11",
     "dompurify": "^3.3.0",
     "file-saver": "^2.0.5",
     "jspdf": "^4.0.0",
