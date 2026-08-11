@@ -4,10 +4,10 @@ import Button from "../../ui/Button";
 import Input from "../../ui/Input";
 import Badge from "../../ui/Badge";
 import { useToast } from "../../../contexts/ToastContext";
-import { UAT_ACCOUNTS, UAT_SECTIONS } from "./data";
+import { UAT_ACCOUNTS, UAT_SECTIONS, UAT_LOCAL_BASE } from "./data";
 import { buildReport, summarize, type UatState, type UatStatus } from "./report";
 
-const STORAGE_KEY = "takaful_uat_v1";
+const STORAGE_KEY = "takaful_uat_v2_phase_b";
 
 const EMPTY: UatState = { tester: "", verdict: "", statuses: {}, notes: {} };
 
@@ -78,7 +78,8 @@ export default function UatPage() {
       <header className="mb-4">
         <h1 className="text-2xl font-extrabold text-primary sm:text-3xl">نموذج تقييم القبول (UAT)</h1>
         <p className="mt-1 text-sm text-brand-gray">
-          يُحفظ تقدّمك تلقائياً في هذا المتصفح. المرجع الكامل: <code dir="ltr">UAT.md</code> · التقرير النهائي: <code dir="ltr">FINAL_REPORT.md</code>
+          تجربة محلية: <a className="font-semibold text-primary" href={UAT_LOCAL_BASE} dir="ltr">{UAT_LOCAL_BASE}</a>
+          {" "}· المرجع: <code dir="ltr">UAT.md</code> · Phase B: نطاقات العمل السبعة
         </p>
       </header>
 
