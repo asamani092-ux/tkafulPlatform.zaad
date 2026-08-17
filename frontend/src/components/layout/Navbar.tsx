@@ -52,11 +52,24 @@ export default function Navbar() {
 
   return (
     <nav className="sticky top-0 z-30 border-b border-surface-border bg-surface">
-      <div className="mx-auto flex max-w-page items-center justify-between px-4 py-3">
-        <Link to="/" className="flex items-center gap-2 text-xl font-extrabold text-primary">
-          <img src="/logo.png" alt="جمعية الزاد" style={{ height: 40, width: "auto" }} />
-          تكافل وأثر
-        </Link>
+      <div className="mx-auto flex max-w-page items-center gap-3 px-4 py-3 md:justify-between">
+        {/* جوال RTL: قائمة → شعار → اسم المنصة (من اليمين) */}
+        <div className="flex min-w-0 items-center gap-2 md:contents">
+          <button
+            type="button"
+            className="shrink-0 text-brand-gray md:hidden"
+            onClick={() => setOpen(true)}
+            aria-label="فتح القائمة"
+            aria-expanded={open}
+            aria-controls="site-nav-drawer"
+          >
+            <Menu size={22} />
+          </button>
+          <Link to="/" className="flex min-w-0 items-center gap-2 text-xl font-extrabold text-primary">
+            <img src="/logo.png" alt="جمعية الزاد" style={{ height: 40, width: "auto" }} />
+            <span className="truncate">تكافل وأثر</span>
+          </Link>
+        </div>
 
         <div className="hidden items-center gap-1 md:flex">
           {navLinks.map((l) => (
@@ -88,17 +101,6 @@ export default function Navbar() {
             </button>
           )}
         </div>
-
-        <button
-          type="button"
-          className="text-brand-gray md:hidden"
-          onClick={() => setOpen(true)}
-          aria-label="فتح القائمة"
-          aria-expanded={open}
-          aria-controls="site-nav-drawer"
-        >
-          <Menu size={22} />
-        </button>
       </div>
 
       {open && (
