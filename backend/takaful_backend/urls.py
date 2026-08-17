@@ -8,6 +8,9 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("core.urls")),
     path("api/", include("volunteering.urls")),
+    # D-34: services/reporting own their API; same /api/* paths (was nested under volunteering.urls)
+    path("api/", include("services.urls")),
+    path("api/", include("reporting.urls")),
     path("api/accounts/", include("accounts.urls")),
     path("api/dashboard/", include("analytics.urls")),
     path("api/notifications/", include("notifications.urls")),

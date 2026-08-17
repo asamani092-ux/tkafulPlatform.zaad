@@ -1,7 +1,7 @@
-"""تقارير وإحصائيات — مسارات /api/ (legacy paths preserved)."""
+"""تقارير وإحصائيات — مسارات /api/ (D-34: owned by reporting app via root include)."""
 from django.urls import path
 
-from volunteering import views
+from . import views
 
 urlpatterns = [
     path("admin/volunteer-statistics/", views.admin_volunteer_statistics, name="admin-volunteer-statistics"),

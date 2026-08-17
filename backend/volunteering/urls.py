@@ -1,17 +1,15 @@
-"""تجميع مسارات التطوّع + الخدمات + التقارير (legacy /api/* compatibility)."""
+"""تجميع مسارات التطوّع (legacy /api/*). Services/reporting تُضمَّن من الجذر (D-34)."""
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from . import views
 
 router = DefaultRouter()
-router.register(r"projects", views.ProjectViewSet, basename="project")
+router.register(r"projects", views.VolunteeringProfileViewSet, basename="volunteering-profile")
 router.register(r"assignments", views.ProjectAssignmentViewSet, basename="assignment")
 router.register(r"tasks", views.TaskViewSet, basename="task")
 
 urlpatterns = [
-    path("", include("services.urls")),
-    path("", include("reporting.urls")),
     path("public-projects/", views.public_projects, name="public-projects"),
     path("public-volunteers-stats/", views.public_volunteers_stats, name="public-volunteers-stats"),
     path("public-home-stats/", views.public_home_stats, name="public-home-stats"),

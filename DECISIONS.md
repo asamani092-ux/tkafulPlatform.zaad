@@ -222,3 +222,21 @@
   سطح فاتح + `text-primary`/`text-brand`؛ المارون للأزرار/الشارات/التمييز فقط.
 - **المبرر**: التصميم القديم (هيرو `--tmkeen-primary` ممتلئ) لا يطابق عقد الهوية المركزي.
 
+## D-34 — ملكية طبقة الـ API: services + reporting (Phase 1)
+- **المشكلة**: بعد D-26 صارت النماذج في `services`/`reporting` بينما الـ views/serializers بقيت في
+  `volunteering` مع تضمين متداخل عبر `volunteering.urls`.
+- **القرار**: نقل serializers + views إلى التطبيق المالك؛ `takaful_backend/urls.py` يضمّن
+  `services.urls` و`reporting.urls` مباشرة تحت `/api/`؛ إزالة التضمين المتداخل من
+  `volunteering.urls`. مسارات الـ URL كما هي (لا كسر للواجهة).
+- **إعادة تسمية**: `ProjectViewSet` → `VolunteeringProfileViewSet` مع الإبقاء على مسار
+  `projects` (`basename="volunteering-profile"`) حتى يبقى `/api/projects/` ثابتاً.
+- **جدول التوافق (legacy path → ملكية جديدة)**:
+
+  | Path | كان | أصبح |
+  |------|-----|------|
+  | `/api/public-services/`, `/api/beneficiary-services/`, `/api/public-suggestions/`, `/api/public-service-request/`, `/api/public-water-supply-request/`, `/api/services/`, `/api/service-requests/`, `/api/suggestions/`, `/api/water-supply-requests/`, `/api/services/<id>/apply-volunteer/`, `/api/admin/service-volunteer-applications/*` | nested via `volunteering.urls` → `services.urls` | root `include("services.urls")` |
+  | `/api/reports/*`, `/api/public-volunteer-statistics/`, `/api/admin/volunteer-statistics/`, `/api/admin/upload-statistics/` | nested via `volunteering.urls` → `reporting.urls` | root `include("reporting.urls")` |
+  | `/api/projects/` | `volunteering.views.ProjectViewSet` | `volunteering.views.VolunteeringProfileViewSet` (نفس المسار) |
+
+- **لا تغيير**: مواقع النماذج، هجرات بيانات، مسارات الواجهة الأمامية.
+
