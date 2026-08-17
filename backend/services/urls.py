@@ -1,8 +1,8 @@
-"""خدمات المنصّة — مسارات /api/ (legacy paths preserved via volunteering.urls)."""
+"""خدمات المنصّة — مسارات /api/ (D-34: owned by services app via root include)."""
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-from volunteering import views
+from . import views
 
 router = DefaultRouter()
 router.register(r"services", views.ServiceViewSet, basename="service")

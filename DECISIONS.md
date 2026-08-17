@@ -222,3 +222,59 @@
   سطح فاتح + `text-primary`/`text-brand`؛ المارون للأزرار/الشارات/التمييز فقط.
 - **المبرر**: التصميم القديم (هيرو `--tmkeen-primary` ممتلئ) لا يطابق عقد الهوية المركزي.
 
+## D-34 — ملكية طبقة الـ API: services + reporting (Phase 1)
+- **المشكلة**: بعد D-26 صارت النماذج في `services`/`reporting` بينما الـ views/serializers بقيت في
+  `volunteering` مع تضمين متداخل عبر `volunteering.urls`.
+- **القرار**: نقل serializers + views إلى التطبيق المالك؛ `takaful_backend/urls.py` يضمّن
+  `services.urls` و`reporting.urls` مباشرة تحت `/api/`؛ إزالة التضمين المتداخل من
+  `volunteering.urls`. مسارات الـ URL كما هي (لا كسر للواجهة).
+- **إعادة تسمية**: `ProjectViewSet` → `VolunteeringProfileViewSet` مع الإبقاء على مسار
+  `projects` (`basename="volunteering-profile"`) حتى يبقى `/api/projects/` ثابتاً.
+- **جدول التوافق (legacy path → ملكية جديدة)**:
+
+  | Path | كان | أصبح |
+  |------|-----|------|
+  | `/api/public-services/`, `/api/beneficiary-services/`, `/api/public-suggestions/`, `/api/public-service-request/`, `/api/public-water-supply-request/`, `/api/services/`, `/api/service-requests/`, `/api/suggestions/`, `/api/water-supply-requests/`, `/api/services/<id>/apply-volunteer/`, `/api/admin/service-volunteer-applications/*` | nested via `volunteering.urls` → `services.urls` | root `include("services.urls")` |
+  | `/api/reports/*`, `/api/public-volunteer-statistics/`, `/api/admin/volunteer-statistics/`, `/api/admin/upload-statistics/` | nested via `volunteering.urls` → `reporting.urls` | root `include("reporting.urls")` |
+  | `/api/projects/` | `volunteering.views.ProjectViewSet` | `volunteering.views.VolunteeringProfileViewSet` (نفس المسار) |
+
+- **لا تغيير**: مواقع النماذج، هجرات بيانات، مسارات الواجهة الأمامية.
+
+## D-35 — ربط WaterSupplyRequest بالمشروع (Phase 2A)
+- **المشكلة**: نموذج سقيا الماء العام كان بلا FK للمشروع؛ الواجهة تمرّر `?project=saqya` دون حفظه.
+- **القرار**: حقل اختياري `project = FK(projects.Project, SET_NULL, related_name=water_supply_requests)`؛
+  الهجرة `services.0002_watersupplyrequest_project` قابلة للعكس؛ الـ serializer يعرض
+  `project` + `project_slug`/`project_name`؛ `public_water_supply_request` يقبل slug أو id
+  من الجسم أو الاستعلام؛ الواجهة ترسل `project` من `?project=`؛ قائمة الإدارة تعرض اسم المشروع
+  أو «طلب عام» عند null. نطاق الطلبات في `domains.ts` يحتفظ برابط سقيا الماء.
+
+## D-36 — خط أساس الأمان (Phase 2B)
+- **الأثر**: `PERMISSION_TABLE.md` يوثّق النقاط × الأدوار؛ اختبارات دائمة في
+  `core/tests_security.py` + `core/tests_security_phase2.py` (IDOR، أدوار المشاريع، ملفات خاصة،
+  رفع/GPS، throttles، JWT blacklist، PDPL، هجرة سقيا).
+- **AllowAny المبرَّر**: نماذج عامة (سقيا/اقتراح/طلب خدمة) مع `PublicWriteRateThrottle`؛
+  كتالوج مشاريع/خدمات وإحصاءات عامة؛ خرائط عامة مع إخفاء PDPL (&lt;5)؛ تسجيل/دخول مع
+  `AuthRateThrottle`. قائمة إدارة سقيا تبقى `IsAdmin` (بيانات شخصية).
+- **استثناء موروث**: `GET /api/dashboard/executive/` ما زال AllowAny (واجهة `/executive` محوّلة
+  للإدارة — D-30). تشديد هذا الـ API مؤجَّل حتى لا يُكسر تكامل لوحة قديمة؛ موثّق في
+  `PERMISSION_TABLE.md`.
+- **JWT**: Access 1 يوم / Refresh 7 أيام؛ تدوير + blacklist بعد التدوير؛ logout يُدرج
+  الـ refresh في القائمة السوداء — بلا تغيير في هذا الطور.
+- **وسائط خاصة**: تنزيل الفواتير/التوثيق عبر `/api/saqya/.../file/` مصادق مع فحص ملكية
+  (ليس عبر `MEDIA_URL` العام).
+- **تدقيقات التبعيات (Phase 2)**: `pip-audit` → ترقية Django `5.2.15`→`5.2.17` (إغلاق
+  PYSEC-2026-2090/2091/2092). `npm audit --omit=dev --audit-level=high` → `npm audit fix`
+  أغلق ثغرات high في `react-router`/`react-router-dom`؛ لا متبقٍ عالي/حرج في الإنتاج.
+
+## D-37 — نموذج UAT داخلي مُقيَّد بالبيئة (Phase 3)
+- **المشكلة**: صفحة `/uat` للتقييم الداخلي يجب ألا تظهر في إنتاج العميل.
+- **القرار**:
+  - الواجهة: تسجيل المسار فقط عند `VITE_ENABLE_UAT === "true"` مع `lazy` مشروط لإزالة
+    الـ chunk من بناء الإنتاج (dead-code elimination)؛ بدون العلم يسقط `/uat` على 404.
+  - حالة النموذج في ذاكرة الجلسة فقط (`useState`) — بلا `localStorage`؛ النسخ/التنزيل
+    Markdown يبقى.
+  - بوابة صلبة: `npm run assert:no-uat` تفشل إن وُجدت سلاسل UAT المميزة في `dist/`.
+  - الخلفية: `UAT_ENABLED` (افتراضي False)؛ `GET /api/uat/` يعيد 404 عند التعطيل و
+    `{"enabled": true}` عند التفعيل.
+- **لا تضبط** `VITE_ENABLE_UAT` أو `UAT_ENABLED` في الإنتاج (انظر DEPLOYMENT.md).
+

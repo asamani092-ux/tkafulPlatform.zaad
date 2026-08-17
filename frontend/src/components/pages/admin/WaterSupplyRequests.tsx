@@ -15,6 +15,9 @@ interface WaterRow {
   mobile_number?: string;
   created_at?: string;
   status?: string;
+  project?: number | null;
+  project_name?: string | null;
+  project_slug?: string | null;
 }
 
 /** طلبات سقيا الماء ضمن نطاق الطلبات — مربوطة بمشروع السقيا عبر الصفحة العامة. */
@@ -60,6 +63,9 @@ export default function WaterSupplyRequests() {
               </div>
               <p className="text-sm text-brand-gray">
                 {r.applicant_name || "—"} · {r.neighborhood || "—"}
+              </p>
+              <p className="mt-1 text-xs text-brand-gray">
+                المشروع: {r.project_name || "طلب عام"}
               </p>
               <p className="mt-1 text-xs text-brand-gray" dir="ltr">{r.mobile_number || ""}</p>
             </Card>

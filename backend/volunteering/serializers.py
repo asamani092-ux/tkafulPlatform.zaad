@@ -2,10 +2,6 @@ from rest_framework import serializers
 from django.utils.text import slugify
 
 from projects.models import Project
-from services.models import Service, ServiceRequest, ServiceVolunteerApplication, Suggestion, WaterSupplyRequest
-from reporting.models import (
-    AdminReport, VolunteerStatistics, QuarterlyTarget, DepartmentHours, TopVolunteer,
-)
 from .models import (
     VolunteeringProfile, Volunteer, ProjectAssignment, Task, Subtask, VolunteerApplication,
     PLATFORM_STATUS_MAP,
@@ -77,68 +73,10 @@ class ProjectSerializer(serializers.ModelSerializer):
         return instance
 
 
-class ServiceSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Service
-        fields = ['id', 'title', 'desc', 'status', 'service_type', 'is_active', 'created_at']
-        read_only_fields = ['created_at']
-
-
-class ServiceRequestSerializer(serializers.ModelSerializer):
-    service_title = serializers.CharField(source='service.title', read_only=True)
-
-    class Meta:
-        model = ServiceRequest
-        fields = [
-            'id',
-            'service',
-            'service_title',
-            'beneficiary_name',
-            'beneficiary_contact',
-            'details',
-            'status',
-            'created_at',
-        ]
-        read_only_fields = ['created_at']
-
-
-class ServiceVolunteerApplicationSerializer(serializers.ModelSerializer):
-    volunteer_name = serializers.CharField(source='volunteer.profile.name', read_only=True)
-    volunteer_email = serializers.CharField(source='volunteer.email', read_only=True)
-    service_title = serializers.CharField(source='service.title', read_only=True)
-    reviewed_by_name = serializers.CharField(source='reviewed_by.profile.name', read_only=True, allow_null=True)
-
-    class Meta:
-        model = ServiceVolunteerApplication
-        fields = [
-            'id',
-            'volunteer',
-            'volunteer_name',
-            'volunteer_email',
-            'service',
-            'service_title',
-            'status',
-            'message',
-            'admin_notes',
-            'applied_at',
-            'reviewed_at',
-            'reviewed_by',
-            'reviewed_by_name',
-        ]
-        read_only_fields = ['applied_at', 'reviewed_at', 'reviewed_by', 'volunteer_name', 'volunteer_email', 'service_title', 'reviewed_by_name']
-
-
 class VolunteerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Volunteer
         fields = ['id', 'full_name', 'phone', 'email', 'is_active', 'created_at']
-        read_only_fields = ['created_at']
-
-
-class SuggestionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Suggestion
-        fields = ['id', 'title', 'description', 'submitted_by', 'created_at', 'is_reviewed']
         read_only_fields = ['created_at']
 
 
@@ -350,34 +288,6 @@ class VolunteerRequestSerializer(serializers.ModelSerializer):
         ]
 
 
-class AdminReportSerializer(serializers.ModelSerializer):
-    """
-    Serializer for AdminReport model
-    """
-    admin_name = serializers.CharField(source='admin.profile.name', read_only=True)
-    admin_email = serializers.EmailField(source='admin.email', read_only=True)
-
-    class Meta:
-        model = AdminReport
-        fields = [
-            'id',
-            'admin',
-            'admin_name',
-            'admin_email',
-            'title',
-            'date_from',
-            'date_to',
-            'report_data',
-            'total_projects',
-            'total_volunteers',
-            'total_tasks',
-            'total_beneficiaries',
-            'total_donations',
-            'generated_at',
-        ]
-        read_only_fields = ['generated_at', 'admin_name', 'admin_email']
-
-
 class VolunteerApplicationSerializer(serializers.ModelSerializer):
     """
     Serializer for VolunteerApplication model
@@ -411,88 +321,3 @@ class VolunteerApplicationSerializer(serializers.ModelSerializer):
         if obj.reviewed_by and hasattr(obj.reviewed_by, 'profile'):
             return obj.reviewed_by.profile.name
         return None
-
-
-# ============================================================================
-# VOLUNTEER STATISTICS SERIALIZERS
-# ============================================================================
-
-class QuarterlyTargetSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = QuarterlyTarget
-        fields = ['quarter', 'volunteer_target', 'volunteer_actual', 'hours_target', 'hours_actual']
-
-
-class DepartmentHoursSerializer(serializers.ModelSerializer):
-    label = serializers.CharField(source='department_name_ar')
-    value = serializers.IntegerField(source='hours')
-
-    class Meta:
-        model = DepartmentHours
-        fields = ['label', 'value', 'percentage', 'color', 'department_name', 'department_name_ar']
-
-
-class TopVolunteerSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TopVolunteer
-        fields = ['rank', 'name', 'hours']
-
-
-class VolunteerStatisticsSerializer(serializers.ModelSerializer):
-    quarterly_targets = QuarterlyTargetSerializer(many=True, read_only=True)
-    department_hours = DepartmentHoursSerializer(many=True, read_only=True)
-    top_volunteers = TopVolunteerSerializer(many=True, read_only=True)
-
-    # Formatted display values
-    hours_display = serializers.SerializerMethodField()
-    volunteers_display = serializers.SerializerMethodField()
-
-    class Meta:
-        model = VolunteerStatistics
-        fields = [
-            'year',
-            'total_volunteers',
-            'new_volunteers',
-            'returning_volunteers',
-            'total_hours',
-            'hours_display',
-            'volunteers_display',
-            'total_contribution_value',
-            'contribution_value_display',
-            'quarterly_targets',
-            'department_hours',
-            'top_volunteers',
-        ]
-
-    def get_hours_display(self, obj):
-        return f"{obj.total_hours:,}"
-
-    def get_volunteers_display(self, obj):
-        return f"{obj.total_volunteers:,}"
-
-
-# ============================================================================
-# WATER SUPPLY REQUEST SERIALIZER
-# ============================================================================
-
-class WaterSupplyRequestSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = WaterSupplyRequest
-        fields = [
-            'id',
-            'applicant_name',
-            'mobile_number',
-            'applicant_role',
-            'mosque_name',
-            'neighborhood',
-            'location_link',
-            'worshippers_count',
-            'donor_exists',
-            'donor_name',
-            'donor_phone',
-            'status',
-            'admin_notes',
-            'created_at',
-            'updated_at',
-        ]
-        read_only_fields = ['created_at', 'updated_at', 'status', 'admin_notes']

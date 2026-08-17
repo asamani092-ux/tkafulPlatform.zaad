@@ -73,7 +73,7 @@ export default function WaterSupplyRequestPage() {
       const res = await fetch(`${API_BASE_URL}/api/public-water-supply-request/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, project: projectSlug }),
       });
       if (!res.ok) throw new Error();
       success({ title: "تم إرسال طلبك بنجاح", description: "شكرًا لتقديمك طلب سقيا الماء، سيتم التواصل معك قريبًا." });

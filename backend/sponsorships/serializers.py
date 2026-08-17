@@ -86,6 +86,13 @@ class InvoiceSerializer(serializers.ModelSerializer):
         # رابط التنزيل المصادق (وليس MEDIA_URL العام)
         return f"/api/saqya/invoices/{obj.id}/file/" if obj.file else None
 
+    def validate_file(self, value):
+        from .validators import validate_upload_file
+        err = validate_upload_file(value)
+        if err:
+            raise serializers.ValidationError(err)
+        return value
+
 
 class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -109,3 +116,17 @@ class DocumentationSerializer(serializers.ModelSerializer):
 
     def get_file_url(self, obj):
         return f"/api/saqya/documentation/{obj.id}/file/" if obj.file else None
+
+    def validate_file(self, value):
+        from .validators import validate_upload_file
+        err = validate_upload_file(value)
+        if err:
+            raise serializers.ValidationError(err)
+        return value
+
+    def validate(self, attrs):
+        from .validators import validate_gps
+        err = validate_gps(attrs.get("latitude"), attrs.get("longitude"))
+        if err:
+            raise serializers.ValidationError({"latitude": err})
+        return attrs
