@@ -45,7 +45,7 @@ export default function SignUp() {
   const [formData, setFormData] = useState({
     fullName: "", nationalId: "", email: "", phone: "", password: "", confirmPassword: "",
     age: "", gender: "", region: "", city: "", educationLevel: "",
-    availableDays: [] as string[], skills: [] as string[], agreeToTerms: false,
+    availableDays: [] as string[], skills: [] as string[],
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
