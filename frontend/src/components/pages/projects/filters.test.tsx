@@ -23,8 +23,23 @@ const items: PublicMapItem[] = [
 ];
 
 describe("dynamic public filters (MapItemField-driven)", () => {
-  it("exposes only select/boolean fields as filters (excludes priority)", () => {
+  it("exposes only select/boolean fields as filters (excludes priority and outlet_type)", () => {
     expect(filterableFields(fields).map((f) => f.key)).toEqual(["kind", "active"]);
+  });
+
+  it("excludes outlet_type from public filters", () => {
+    const withOutlet: MapFieldDef[] = [
+      ...fields,
+      {
+        key: "outlet_type",
+        label: "نوع المنفذ",
+        type: "select",
+        required: false,
+        options: ["pos", "corner"],
+        order: 4,
+      },
+    ];
+    expect(filterableFields(withOutlet).map((f) => f.key)).toEqual(["kind", "active"]);
   });
 
   it("handles both object and string options", () => {
