@@ -117,6 +117,13 @@ class WaterSupplyRequest(models.Model):
     donor_phone = models.CharField(max_length=20, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDING")
     admin_notes = models.TextField(blank=True)
+    project = models.ForeignKey(
+        "projects.Project",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="water_supply_requests",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

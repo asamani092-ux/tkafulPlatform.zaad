@@ -135,7 +135,7 @@ class SuggestionViewSet(viewsets.ModelViewSet):
 
 class WaterSupplyRequestViewSet(viewsets.ReadOnlyModelViewSet):
     """قائمة/تفاصيل طلبات سقيا الماء لنطاق الطلبات في لوحة الإدارة (Phase B)."""
-    queryset = WaterSupplyRequest.objects.all()
+    queryset = WaterSupplyRequest.objects.select_related("project").all()
     serializer_class = WaterSupplyRequestSerializer
     permission_classes = [IsAdmin]
 
@@ -345,14 +345,30 @@ def reject_service_volunteer_application(request, application_id):
         )
 
 
+def _resolve_water_supply_project(request):
+    """Resolve optional project from POST body or query (slug or numeric id)."""
+    from projects.models import Project
+
+    ref = request.data.get("project")
+    if ref is None or ref == "":
+        ref = request.query_params.get("project")
+    if ref is None or ref == "":
+        return None
+
+    if isinstance(ref, int) or (isinstance(ref, str) and ref.isdigit()):
+        return Project.objects.filter(pk=int(ref)).first()
+    return Project.objects.filter(slug=str(ref)).first()
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @throttle_classes([PublicWriteRateThrottle])
 def public_water_supply_request(request):
     """
     POST /api/public-water-supply-request/
-    Submit a water supply request for a mosque
-    No authentication required
+    Submit a water supply request for a mosque.
+    Optional `project` (slug or id) in body or query links the request to a Project.
+    No authentication required (public form — see PERMISSION_TABLE.md).
     """
     data = request.data.copy()
 
@@ -381,6 +397,10 @@ def public_water_supply_request(request):
                 except (ValueError, TypeError):
                     value = 0
             mapped_data[backend_key] = value
+
+    project = _resolve_water_supply_project(request)
+    if project is not None:
+        mapped_data['project'] = project.id
 
     serializer = WaterSupplyRequestSerializer(data=mapped_data)
     if serializer.is_valid():

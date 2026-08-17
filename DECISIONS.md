@@ -240,3 +240,26 @@
 
 - **لا تغيير**: مواقع النماذج، هجرات بيانات، مسارات الواجهة الأمامية.
 
+## D-35 — ربط WaterSupplyRequest بالمشروع (Phase 2A)
+- **المشكلة**: نموذج سقيا الماء العام كان بلا FK للمشروع؛ الواجهة تمرّر `?project=saqya` دون حفظه.
+- **القرار**: حقل اختياري `project = FK(projects.Project, SET_NULL, related_name=water_supply_requests)`؛
+  الهجرة `services.0002_watersupplyrequest_project` قابلة للعكس؛ الـ serializer يعرض
+  `project` + `project_slug`/`project_name`؛ `public_water_supply_request` يقبل slug أو id
+  من الجسم أو الاستعلام؛ الواجهة ترسل `project` من `?project=`؛ قائمة الإدارة تعرض اسم المشروع
+  أو «طلب عام» عند null. نطاق الطلبات في `domains.ts` يحتفظ برابط سقيا الماء.
+
+## D-36 — خط أساس الأمان (Phase 2B)
+- **الأثر**: `PERMISSION_TABLE.md` يوثّق النقاط × الأدوار؛ اختبارات دائمة في
+  `core/tests_security.py` + `core/tests_security_phase2.py` (IDOR، أدوار المشاريع، ملفات خاصة،
+  رفع/GPS، throttles، JWT blacklist، PDPL، هجرة سقيا).
+- **AllowAny المبرَّر**: نماذج عامة (سقيا/اقتراح/طلب خدمة) مع `PublicWriteRateThrottle`؛
+  كتالوج مشاريع/خدمات وإحصاءات عامة؛ خرائط عامة مع إخفاء PDPL (&lt;5)؛ تسجيل/دخول مع
+  `AuthRateThrottle`. قائمة إدارة سقيا تبقى `IsAdmin` (بيانات شخصية).
+- **استثناء موروث**: `GET /api/dashboard/executive/` ما زال AllowAny (واجهة `/executive` محوّلة
+  للإدارة — D-30). تشديد هذا الـ API مؤجَّل حتى لا يُكسر تكامل لوحة قديمة؛ موثّق في
+  `PERMISSION_TABLE.md`.
+- **JWT**: Access 1 يوم / Refresh 7 أيام؛ تدوير + blacklist بعد التدوير؛ logout يُدرج
+  الـ refresh في القائمة السوداء — بلا تغيير في هذا الطور.
+- **وسائط خاصة**: تنزيل الفواتير/التوثيق عبر `/api/saqya/.../file/` مصادق مع فحص ملكية
+  (ليس عبر `MEDIA_URL` العام).
+

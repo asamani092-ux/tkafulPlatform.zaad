@@ -72,6 +72,9 @@ class SuggestionSerializer(serializers.ModelSerializer):
 
 
 class WaterSupplyRequestSerializer(serializers.ModelSerializer):
+    project_slug = serializers.CharField(source='project.slug', read_only=True, allow_null=True)
+    project_name = serializers.CharField(source='project.name', read_only=True, allow_null=True)
+
     class Meta:
         model = WaterSupplyRequest
         fields = [
@@ -88,7 +91,13 @@ class WaterSupplyRequestSerializer(serializers.ModelSerializer):
             'donor_phone',
             'status',
             'admin_notes',
+            'project',
+            'project_slug',
+            'project_name',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['created_at', 'updated_at', 'status', 'admin_notes']
+        read_only_fields = [
+            'created_at', 'updated_at', 'status', 'admin_notes',
+            'project_slug', 'project_name',
+        ]
