@@ -221,3 +221,4 @@
   `zad-root` + `data-theme="light"`؛ رؤوس الصفحات (Home/HeroBand/ProjectLanding/Saqya/Footer)
   سطح فاتح + `text-primary`/`text-brand`؛ المارون للأزرار/الشارات/التمييز فقط.
 - **المبرر**: التصميم القديم (هيرو `--tmkeen-primary` ممتلئ) لا يطابق عقد الهوية المركزي.
+
