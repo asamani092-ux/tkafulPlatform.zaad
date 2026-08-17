@@ -266,3 +266,15 @@
   PYSEC-2026-2090/2091/2092). `npm audit --omit=dev --audit-level=high` → `npm audit fix`
   أغلق ثغرات high في `react-router`/`react-router-dom`؛ لا متبقٍ عالي/حرج في الإنتاج.
 
+## D-37 — نموذج UAT داخلي مُقيَّد بالبيئة (Phase 3)
+- **المشكلة**: صفحة `/uat` للتقييم الداخلي يجب ألا تظهر في إنتاج العميل.
+- **القرار**:
+  - الواجهة: تسجيل المسار فقط عند `VITE_ENABLE_UAT === "true"` مع `lazy` مشروط لإزالة
+    الـ chunk من بناء الإنتاج (dead-code elimination)؛ بدون العلم يسقط `/uat` على 404.
+  - حالة النموذج في ذاكرة الجلسة فقط (`useState`) — بلا `localStorage`؛ النسخ/التنزيل
+    Markdown يبقى.
+  - بوابة صلبة: `npm run assert:no-uat` تفشل إن وُجدت سلاسل UAT المميزة في `dist/`.
+  - الخلفية: `UAT_ENABLED` (افتراضي False)؛ `GET /api/uat/` يعيد 404 عند التعطيل و
+    `{"enabled": true}` عند التفعيل.
+- **لا تضبط** `VITE_ENABLE_UAT` أو `UAT_ENABLED` في الإنتاج (انظر DEPLOYMENT.md).
+

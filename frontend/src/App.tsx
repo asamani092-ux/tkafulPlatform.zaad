@@ -50,7 +50,10 @@ const ProjectMapPage = lazy(() => import("./components/pages/projects/ProjectMap
 const MapsAggregator = lazy(() => import("./components/pages/projects/MapsAggregator"));
 const PlatformProjects = lazy(() => import("./components/pages/admin/PlatformProjects"));
 const MapsAdmin = lazy(() => import("./components/pages/admin/MapsAdmin"));
-const UatPage = lazy(() => import("./components/pages/uat"));
+// Dead-code-eliminated unless VITE_ENABLE_UAT === "true" (production builds omit the chunk).
+const UatPage = import.meta.env.VITE_ENABLE_UAT === "true"
+  ? lazy(() => import("./components/pages/uat"))
+  : null;
 
 function Lazy({ children }: { children: ReactNode }) {
   return <Suspense fallback={<LoadingState />}>{children}</Suspense>;
@@ -132,7 +135,7 @@ function AppContent() {
           <Route path="/projects/:slug/sponsorships" element={<Lazy><SaqyaHome /></Lazy>} />
           <Route path="/map" element={<Lazy><MapsAggregator /></Lazy>} />
 
-          <Route path="/uat" element={<Lazy><UatPage /></Lazy>} />
+          {UatPage ? <Route path="/uat" element={<Lazy><UatPage /></Lazy>} /> : null}
 
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

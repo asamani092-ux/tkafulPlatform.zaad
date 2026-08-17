@@ -168,6 +168,9 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@alzad.org")
 
 EXTERNAL_STORE_URL = os.environ.get("EXTERNAL_STORE_URL", "")
 
+# Internal UAT evaluation form status API — off by default; never set in production.
+UAT_ENABLED = os.environ.get("UAT_ENABLED", "False").lower() in ("1", "true", "yes")
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ===========================
 

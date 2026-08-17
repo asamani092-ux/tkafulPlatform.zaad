@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Input from "../../ui/Input";
@@ -7,20 +7,7 @@ import { useToast } from "../../../contexts/ToastContext";
 import { UAT_ACCOUNTS, UAT_SECTIONS, UAT_LOCAL_BASE } from "./data";
 import { buildReport, summarize, type UatState, type UatStatus } from "./report";
 
-const STORAGE_KEY = "takaful_uat_v2_phase_b";
-
 const EMPTY: UatState = { tester: "", verdict: "", statuses: {}, notes: {} };
-
-function loadState(): UatState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return EMPTY;
-    const parsed = JSON.parse(raw);
-    return { ...EMPTY, ...parsed };
-  } catch {
-    return EMPTY;
-  }
-}
 
 const STATUS_BUTTONS: Array<{ value: UatStatus; label: string; color: string }> = [
   { value: "pass", label: "✅ ناجح", color: "#16a34a" },
@@ -28,14 +15,10 @@ const STATUS_BUTTONS: Array<{ value: UatStatus; label: string; color: string }> 
   { value: "fail", label: "❌ فشل", color: "#dc2626" },
 ];
 
-/** نموذج تقييم القبول (UAT) — حفظ تلقائي في المتصفح + نسخ/تنزيل التقرير. */
+/** نموذج تقييم القبول (UAT) — حالة الجلسة في الذاكرة فقط؛ نسخ/تنزيل التقرير اختياري. */
 export default function UatPage() {
   const toast = useToast();
-  const [state, setState] = useState<UatState>(loadState);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [state]);
+  const [state, setState] = useState<UatState>(EMPTY);
 
   const counts = useMemo(() => summarize(state), [state]);
   const progress = Math.round(((counts.total - counts.pending) / counts.total) * 100);
