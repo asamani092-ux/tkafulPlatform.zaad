@@ -1,6 +1,7 @@
 import type { MapFieldDef } from "./types";
 import type { DynamicFilters } from "./filters";
 import { filterableFields, optionLabel, optionValue } from "./filters";
+import Select from "../../ui/Select";
 
 interface Props {
   fields: MapFieldDef[];
@@ -8,46 +9,60 @@ interface Props {
   onChange: (next: DynamicFilters) => void;
 }
 
-/** فلاتر عامة مولّدة ديناميكياً من مخطط MapItemField (select → chips، boolean → مفتاح). */
+const ALL = "__all__";
+
+/** فلاتر ديناميكية كقوائم منسدلة (تجربة عرض بدل الـ chips). */
 export default function DynamicFilterBar({ fields, filters, onChange }: Props) {
   const usable = filterableFields(fields);
   if (!usable.length) return null;
 
-  const chipClass = (active: boolean) =>
-    `rounded-full px-3 py-1 text-xs font-bold${active ? " bg-primary text-white" : " bg-surface border border-surface-border"}`;
-
   return (
-    <div className="mb-3 space-y-2">
-      {usable.map((field) => (
-        <div key={field.key} className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold text-brand-gray">{field.label}:</span>
-          {field.type === "select" ? (
-            <>
-              <button type="button" className={chipClass(filters[field.key] == null)}
-                onClick={() => onChange({ ...filters, [field.key]: null })}>الكل</button>
-              {field.options.map((o) => {
-                const value = optionValue(o);
-                const active = filters[field.key] === value;
-                return (
-                  <button key={value} type="button" className={chipClass(active)}
-                    onClick={() => onChange({ ...filters, [field.key]: active ? null : value })}>
-                    {optionLabel(o)}
-                  </button>
-                );
-              })}
-            </>
-          ) : (
-            <>
-              <button type="button" className={chipClass(filters[field.key] == null)}
-                onClick={() => onChange({ ...filters, [field.key]: null })}>الكل</button>
-              <button type="button" className={chipClass(filters[field.key] === true)}
-                onClick={() => onChange({ ...filters, [field.key]: filters[field.key] === true ? null : true })}>نعم</button>
-              <button type="button" className={chipClass(filters[field.key] === false)}
-                onClick={() => onChange({ ...filters, [field.key]: filters[field.key] === false ? null : false })}>لا</button>
-            </>
-          )}
-        </div>
-      ))}
+    <div className="zad-filter-bar">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {usable.map((field) => {
+          const current = filters[field.key];
+          const selectValue =
+            current === null || current === undefined ? ALL : String(current);
+
+          return (
+            <Select
+              key={field.key}
+              id={`filter-${field.key}`}
+              label={field.label}
+              value={selectValue}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === ALL) {
+                  onChange({ ...filters, [field.key]: null });
+                  return;
+                }
+                if (field.type === "boolean") {
+                  onChange({ ...filters, [field.key]: v === "true" });
+                  return;
+                }
+                onChange({ ...filters, [field.key]: v });
+              }}
+            >
+              <option value={ALL}>الكل</option>
+              {field.type === "select" ? (
+                field.options.map((o) => {
+                  const value = optionValue(o);
+                  return (
+                    <option key={value} value={value}>
+                      {optionLabel(o)}
+                    </option>
+                  );
+                })
+              ) : (
+                <>
+                  <option value="true">نعم</option>
+                  <option value="false">لا</option>
+                </>
+              )}
+            </Select>
+          );
+        })}
+      </div>
     </div>
   );
 }

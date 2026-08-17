@@ -13,6 +13,7 @@ import {
 import DynamicFilterBar from "./DynamicFilterBar";
 import GenericMapView, { MapLegend } from "./GenericMapView";
 import MapContributionModal from "./MapContributionModal";
+import Select from "../../ui/Select";
 import type { MapSummaryInfo, PublicMapDetail, PublicMapIndexEntry, PublicMapItem } from "./types";
 
 /**
@@ -109,9 +110,6 @@ export default function MapsAggregator() {
   if (error) return <ErrorState title="تعذّر تحميل البيانات" message="تحقّق من اتصال الخادم وحاول مجدداً." />;
   if (!index.length) return <EmptyState title="لا توجد خرائط منشورة" message="ستظهر الخرائط بعد نشرها من إدارة المشاريع." />;
 
-  const chipClass = (active: boolean) =>
-    `rounded-full px-3 py-1 text-xs font-bold${active ? " bg-primary text-white" : " bg-surface border border-surface-border"}`;
-
   return (
     <div className="mx-auto max-w-page px-3 py-4 sm:px-4" dir="rtl">
       <header className="mb-4">
@@ -127,15 +125,20 @@ export default function MapsAggregator() {
         <Card><div className="text-center"><div className="text-lg font-extrabold text-primary sm:text-xl">{kpis.pending}</div><div className="text-xs text-brand-gray">تعهد قيد المراجعة</div></div></Card>
       </div>
 
-      {/* فلترة بالمشروع */}
-      <div className="mb-3 flex flex-wrap gap-2">
-        <button type="button" className={chipClass(!projectFilter)} onClick={() => setProjectFilter(null)}>كل المشاريع</button>
-        {projects.map((p) => (
-          <button key={p.slug} type="button" className={chipClass(projectFilter === p.slug)}
-            onClick={() => setProjectFilter(projectFilter === p.slug ? null : p.slug)}>
-            {p.name}
-          </button>
-        ))}
+      <div className="zad-filter-bar">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Select
+            id="filter-project"
+            label="المشروع"
+            value={projectFilter ?? "__all__"}
+            onChange={(e) => setProjectFilter(e.target.value === "__all__" ? null : e.target.value)}
+          >
+            <option value="__all__">كل المشاريع</option>
+            {projects.map((p) => (
+              <option key={p.slug} value={p.slug}>{p.name}</option>
+            ))}
+          </Select>
+        </div>
       </div>
 
       {/* فلاتر ديناميكية موحّدة من مخططات MapItemField */}
