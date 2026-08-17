@@ -262,4 +262,7 @@
   الـ refresh في القائمة السوداء — بلا تغيير في هذا الطور.
 - **وسائط خاصة**: تنزيل الفواتير/التوثيق عبر `/api/saqya/.../file/` مصادق مع فحص ملكية
   (ليس عبر `MEDIA_URL` العام).
+- **تدقيقات التبعيات (Phase 2)**: `pip-audit` → ترقية Django `5.2.15`→`5.2.17` (إغلاق
+  PYSEC-2026-2090/2091/2092). `npm audit --omit=dev --audit-level=high` → `npm audit fix`
+  أغلق ثغرات high في `react-router`/`react-router-dom`؛ لا متبقٍ عالي/حرج في الإنتاج.
 
