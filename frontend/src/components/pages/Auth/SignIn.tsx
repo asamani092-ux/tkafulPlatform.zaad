@@ -5,7 +5,6 @@ import { API_BASE_URL } from "../../../config";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
 import Button from "../../ui/Button";
-import HeroBand from "../../ui/HeroBand";
 
 export default function SignIn() {
   const navigate = useNavigate();
@@ -78,7 +77,6 @@ export default function SignIn() {
 
   return (
     <div>
-      <HeroBand title="نورتنا من جديد" subtitle="سجّل دخولك وأكمل رحلتك في صناعة الأثر." />
       <main className="mx-auto max-w-md px-4 py-12">
         <Card>
           <div className="mb-4 flex justify-center">
