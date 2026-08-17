@@ -99,7 +99,6 @@ export default function SignIn() {
           </form>
           <div className="mt-4 space-y-1 text-center text-sm text-brand-gray">
             <p>ليس لديك حساب؟ <Link to="/signup" className="font-semibold text-primary">تسجيل جديد</Link></p>
-            <p className="text-xs">دخول موحّد للجميع — يوجَّه كل مستخدم تلقائياً حسب صلاحيته.</p>
           </div>
         </Card>
       </main>
