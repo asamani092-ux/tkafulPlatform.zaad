@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, User, LogOut } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
@@ -13,18 +13,13 @@ const navLinks = [
   { to: "/about", label: "من نحن" },
 ];
 
-/** شريط التنقّل العام الموحّد — ≤2 نقرات لكل صفحة عامة. */
+/** شريط التنقّل العام — قائمة جانبية (drawer) على الشاشات الصغيرة. */
 export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
   const { memberships, isSuperAdmin } = useMemberships();
   const [open, setOpen] = useState(false);
-
-  const linkClass = (to: string) =>
-    `px-3 py-2 text-sm font-semibold transition-colors ${
-      location.pathname === to ? "text-primary" : "text-brand-gray hover:text-primary"
-    }`;
 
   const staffRoles = ["admin", "manager", "employee"];
   const isStaff =
@@ -34,6 +29,26 @@ export default function Navbar() {
     : memberships.length > 0 || (user && staffRoles.includes(user.role))
       ? "/Admin/projects"
       : "/user/main";
+
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  const close = () => setOpen(false);
 
   return (
     <nav className="sticky top-0 z-30 border-b border-surface-border bg-surface">
@@ -45,7 +60,13 @@ export default function Navbar() {
 
         <div className="hidden items-center gap-1 md:flex">
           {navLinks.map((l) => (
-            <Link key={l.to} to={l.to} className={linkClass(l.to)}>
+            <Link
+              key={l.to}
+              to={l.to}
+              className={`px-3 py-2 text-sm font-semibold transition-colors ${
+                location.pathname === l.to ? "text-primary" : "text-brand-gray hover:text-primary"
+              }`}
+            >
               {l.label}
             </Link>
           ))}
@@ -68,34 +89,62 @@ export default function Navbar() {
           )}
         </div>
 
-        <button className="text-brand-gray md:hidden" onClick={() => setOpen((v) => !v)} aria-label="القائمة">
-          {open ? <X size={22} /> : <Menu size={22} />}
+        <button
+          type="button"
+          className="text-brand-gray md:hidden"
+          onClick={() => setOpen(true)}
+          aria-label="فتح القائمة"
+          aria-expanded={open}
+          aria-controls="site-nav-drawer"
+        >
+          <Menu size={22} />
         </button>
       </div>
 
       {open && (
-        <div className="border-t border-surface-border bg-surface px-4 py-2 md:hidden">
-          {navLinks.map((l) => (
-            <Link key={l.to} to={l.to} onClick={() => setOpen(false)} className={`block ${linkClass(l.to)}`}>
-              {l.label}
-            </Link>
-          ))}
-          <div className="mt-2 border-t border-surface-border pt-2">
-            {isAuthenticated ? (
-              <>
-                <Link to={dashboardPath} onClick={() => setOpen(false)} className="mb-2 block text-sm font-semibold text-primary">
-                  {isStaff ? "لوحة الإدارة" : "حسابي"}
+        <div className="zad-drawer-root md:hidden" role="dialog" aria-modal="true" aria-labelledby="site-nav-drawer-title">
+          <button type="button" className="zad-drawer-backdrop" aria-label="إغلاق القائمة" onClick={close} />
+          <aside id="site-nav-drawer" className="zad-drawer-panel">
+            <div className="zad-drawer-header">
+              <h2 id="site-nav-drawer-title" className="zad-drawer-title">القائمة</h2>
+              <button type="button" className="zad-drawer-close text-brand-gray" onClick={close} aria-label="إغلاق">
+                <X size={22} />
+              </button>
+            </div>
+            <div className="zad-drawer-body flex flex-col gap-1">
+              {navLinks.map((l) => (
+                <Link
+                  key={l.to}
+                  to={l.to}
+                  onClick={close}
+                  className="zad-nav-link"
+                  aria-current={location.pathname === l.to ? "page" : undefined}
+                >
+                  {l.label}
                 </Link>
-                <button type="button" onClick={() => { void logout(); setOpen(false); }} className="text-sm font-semibold text-primary">
-                  خروج ({user?.name})
-                </button>
-              </>
-            ) : (
-              <Link to="/signin" onClick={() => setOpen(false)} className="text-sm font-semibold text-primary">
-                تسجيل الدخول
-              </Link>
-            )}
-          </div>
+              ))}
+              <div className="mt-3 border-t border-surface-border pt-3">
+                {isAuthenticated ? (
+                  <>
+                    <Link to={dashboardPath} onClick={close} className="zad-nav-link">
+                      <User size={16} /> {isStaff ? "لوحة الإدارة" : "حسابي"}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => { void logout(); close(); }}
+                      className="zad-nav-link"
+                    >
+                      <LogOut size={16} /> خروج ({user?.name})
+                    </button>
+                  </>
+                ) : (
+                  <Link to="/signin" onClick={close} className="zad-nav-link">
+                    <User size={16} /> تسجيل الدخول
+                  </Link>
+                )}
+              </div>
+            </div>
+          </aside>
         </div>
       )}
     </nav>
