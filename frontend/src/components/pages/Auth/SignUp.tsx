@@ -77,7 +77,6 @@ export default function SignUp() {
     if (!formData.city) e.city = "المدينة مطلوبة";
     if (!formData.educationLevel) e.educationLevel = "المستوى التعليمي مطلوب";
     if (formData.availableDays.length === 0) e.availableDays = "يرجى اختيار يوم واحد على الأقل";
-    if (!formData.agreeToTerms) e.agreeToTerms = "يجب الموافقة على الشروط والأحكام";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -188,12 +187,6 @@ export default function SignUp() {
                 </div>
               )}
             </div>
-
-            <label className="flex items-center justify-end gap-2 text-sm text-brand-gray">
-              <span>أوافق على الشروط والأحكام لمنصة تكافل.</span>
-              <input type="checkbox" checked={formData.agreeToTerms} onChange={(e) => set("agreeToTerms", e.target.checked)} />
-            </label>
-            {errors.agreeToTerms && <p style={{ color: "var(--tmkeen-danger)", fontSize: "0.8rem" }}>{errors.agreeToTerms}</p>}
 
             <div className="flex justify-center">
               <Button type="submit" disabled={isSubmitting} className="w-full md:w-auto">
