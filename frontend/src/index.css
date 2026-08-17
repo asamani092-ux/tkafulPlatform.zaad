@@ -171,6 +171,10 @@ body {
 .zad-kpi {
   text-align: center;
   padding: var(--space-4);
+  border: var(--border-hairline, 1px) solid var(--border-subtle, var(--surface-border, #d1d5db));
+  border-radius: var(--radius-xl, 12px);
+  background: var(--surface-raised, #fff);
+  box-shadow: none;
 }
 .zad-kpi__value {
   font-size: var(--text-2xl);

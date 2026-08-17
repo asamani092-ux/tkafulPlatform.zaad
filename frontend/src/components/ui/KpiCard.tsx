@@ -4,10 +4,10 @@ interface KpiCardProps {
   delta?: { value: string; direction: "up" | "down" | "flat" };
 }
 
-/** بطاقة مؤشر — بلا إطار خارجي مزدوج (عقد KPI فقط). */
+/** بطاقة مؤشر بحدود رمادية من التوكن. */
 export default function KpiCard({ label, value, delta }: KpiCardProps) {
   return (
-    <div className="zad-kpi" style={{ border: "none", boxShadow: "none" }}>
+    <div className="zad-kpi">
       <div className="zad-kpi__value">{value}</div>
       <div className="zad-kpi__label">{label}</div>
       {delta && (
