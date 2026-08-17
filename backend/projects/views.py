@@ -32,7 +32,18 @@ from .serializers import (
 @permission_classes([AllowAny])
 @cache_page(60)
 def public_projects(request):
-    qs = services.public_projects_queryset()
+    """
+    قائمة المشاريع العامة.
+    ?home=1 → عيّنة الرئيسية (مميزة أو أحدث، حدّ افتراضي 6).
+    """
+    if request.query_params.get("home") in ("1", "true", "yes"):
+        try:
+            limit = min(max(int(request.query_params.get("limit", 6)), 1), 12)
+        except (TypeError, ValueError):
+            limit = 6
+        qs = services.public_home_projects_queryset(limit=limit)
+    else:
+        qs = services.public_projects_queryset()
     return Response(PublicProjectSerializer(qs, many=True).data)
 
 

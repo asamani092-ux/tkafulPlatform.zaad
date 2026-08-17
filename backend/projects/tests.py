@@ -150,3 +150,39 @@ class PublicProjectEndpointsTests(APITestCase):
         res = self.client.get("/api/platform/my-memberships/")
         self.assertEqual(res.status_code, 200)
         self.assertTrue(res.json()["is_super_admin"])
+
+
+class HomeFeaturedProjectsTests(APITestCase):
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        self.old = Project.objects.create(name="قديم", slug="old-p", status="active")
+        self.new = Project.objects.create(name="جديد", slug="new-p", status="active")
+        self.feat_b = Project.objects.create(
+            name="مميز ب", slug="feat-b", status="active", is_featured=True, featured_order=2,
+        )
+        self.feat_a = Project.objects.create(
+            name="مميز أ", slug="feat-a", status="active", is_featured=True, featured_order=1,
+        )
+        Project.objects.create(name="مسودة", slug="draft-home", status="draft", is_featured=True)
+
+    def test_home_returns_featured_ordered(self):
+        from . import services
+
+        slugs = [p.slug for p in services.public_home_projects_queryset(limit=6)]
+        self.assertEqual(slugs, ["feat-a", "feat-b"])
+
+    def test_home_falls_back_to_latest_when_no_featured(self):
+        from . import services
+
+        Project.objects.filter(is_featured=True).update(is_featured=False)
+        slugs = [p.slug for p in services.public_home_projects_queryset(limit=2)]
+        self.assertEqual(len(slugs), 2)
+        self.assertNotIn("draft-home", slugs)
+
+    def test_home_query_param_api(self):
+        res = self.client.get("/api/platform/public/projects/?home=1&limit=6")
+        self.assertEqual(res.status_code, 200)
+        slugs = [p["slug"] for p in res.json()]
+        self.assertEqual(slugs, ["feat-a", "feat-b"])

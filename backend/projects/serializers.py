@@ -19,7 +19,7 @@ class PublicProjectSerializer(serializers.ModelSerializer):
         fields = [
             "id", "name", "slug", "description", "brand_color", "cover_image",
             "donation_url", "donation_label",
-            "start_date", "end_date", "status", "tools",
+            "start_date", "end_date", "status", "is_featured", "tools",
         ]
 
     def get_tools(self, obj):
@@ -46,7 +46,9 @@ class ProjectAdminSerializer(serializers.ModelSerializer):
         fields = [
             "id", "name", "slug", "description", "brand_color", "cover_image",
             "donation_url", "donation_label",
-            "start_date", "end_date", "status", "is_active", "created_by",
+            "start_date", "end_date", "status", "is_active",
+            "is_featured", "featured_order",
+            "created_by",
             "created_at", "updated_at", "tools", "members", "my_role",
         ]
         read_only_fields = ["created_by", "created_at", "updated_at"]

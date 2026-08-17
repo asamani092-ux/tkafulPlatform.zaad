@@ -15,9 +15,10 @@ class ProjectMemberInline(admin.TabularInline):
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ("name", "slug", "status", "is_active", "created_at")
+    list_display = ("name", "slug", "status", "is_active", "is_featured", "featured_order", "created_at")
     search_fields = ("name", "slug")
-    list_filter = ("status", "is_active")
+    list_filter = ("status", "is_active", "is_featured")
+    list_editable = ("is_featured", "featured_order")
     inlines = [ProjectToolInline, ProjectMemberInline]
 
 

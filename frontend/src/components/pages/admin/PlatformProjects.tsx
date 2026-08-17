@@ -16,7 +16,8 @@ interface AdminMember { id: number; user: number; username: string; email: strin
 interface AdminProject {
   id: number; name: string; slug: string; description: string; brand_color: string;
   donation_url: string; donation_label: string;
-  status: string; is_active: boolean; tools: AdminTool[]; members: AdminMember[];
+  status: string; is_active: boolean; is_featured: boolean; featured_order: number;
+  tools: AdminTool[]; members: AdminMember[];
   my_role: string | null;
 }
 
@@ -108,6 +109,34 @@ export default function PlatformProjects() {
     }
   };
 
+  const toggleFeatured = async (project: AdminProject) => {
+    if (!isSuperAdmin) return;
+    const res = await authFetch(`/api/platform/projects/${project.id}/`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_featured: !project.is_featured }),
+    });
+    if (res.ok) {
+      toast.success({ title: project.is_featured ? "أُزيل من الرئيسية" : "أُضيف للرئيسية" });
+      void load();
+    } else {
+      toast.error({ title: "تعذّر تحديث التمييز" });
+    }
+  };
+
+  const saveFeaturedOrder = async (project: AdminProject, order: number) => {
+    if (!isSuperAdmin) return;
+    const res = await authFetch(`/api/platform/projects/${project.id}/`, {
+      method: "PATCH",
+      body: JSON.stringify({ featured_order: order }),
+    });
+    if (res.ok) {
+      toast.success({ title: "تم حفظ ترتيب العرض" });
+      void load();
+    } else {
+      toast.error({ title: "تعذّر حفظ الترتيب" });
+    }
+  };
+
   const addMember = async (e: React.FormEvent) => {
     e.preventDefault();
     const res = await authFetch(`/api/platform/projects/${memberForm.projectId}/add_member/`, {
@@ -158,10 +187,41 @@ export default function PlatformProjects() {
                 <span style={{ width: 14, height: 14, borderRadius: 4, background: p.brand_color, display: "inline-block" }} />
                 <h3 className="text-lg font-bold text-primary">{p.name}</h3>
                 <Badge variant={p.status === "active" ? "success" : "warning"}>{p.status}</Badge>
+                {p.is_featured && <Badge variant="success">مميز في الرئيسية</Badge>}
                 {p.my_role && <Badge>{p.my_role === "super_admin" ? "مشرف عام" : p.my_role}</Badge>}
               </div>
               <Link to={`/projects/${p.slug}`} className="text-sm font-bold text-primary hover:underline">صفحة المشروع ←</Link>
             </div>
+
+            {isSuperAdmin && (
+              <div className="mb-3 flex flex-wrap items-end gap-3 rounded-lg border border-surface-border p-3">
+                <button
+                  type="button"
+                  className={`rounded-full px-3 py-1 text-xs font-bold${p.is_featured ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
+                  onClick={() => void toggleFeatured(p)}
+                >
+                  {p.is_featured ? "مميز في الرئيسية ✓" : "تمييز للرئيسية"}
+                </button>
+                {p.is_featured && (
+                  <div className="w-28">
+                    <Input
+                      label="ترتيب العرض"
+                      type="number"
+                      min={0}
+                      dir="ltr"
+                      defaultValue={String(p.featured_order ?? 0)}
+                      key={`order-${p.id}-${p.featured_order}`}
+                      onBlur={(e) => {
+                        const next = Number(e.target.value);
+                        if (!Number.isNaN(next) && next !== p.featured_order) {
+                          void saveFeaturedOrder(p, Math.max(0, next));
+                        }
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="mb-3 rounded-lg border border-surface-border p-3">
               <span className="text-xs font-bold text-brand-gray">رابط التبرع (HTTPS):</span>

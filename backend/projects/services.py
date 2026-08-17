@@ -58,3 +58,15 @@ def public_projects_queryset():
         .exclude(status__in=["draft", "archived"])
         .prefetch_related("tools")
     )
+
+
+def public_home_projects_queryset(limit: int = 6):
+    """
+    مشاريع الصفحة الرئيسية: المميزة أولاً (حسب featured_order)،
+    وإن لم يُحدَّد شيء → أحدث المشاريع العامة. O(N) مع حدّ ثابت.
+    """
+    base = public_projects_queryset()
+    featured = base.filter(is_featured=True).order_by("featured_order", "name")
+    if featured.exists():
+        return featured[:limit]
+    return base.order_by("-updated_at", "-id")[:limit]

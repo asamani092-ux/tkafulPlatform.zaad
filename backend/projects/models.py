@@ -41,12 +41,23 @@ class Project(models.Model):
         related_name="created_platform_projects",
     )
     is_active = models.BooleanField(default=True)
+    is_featured = models.BooleanField(
+        default=False,
+        help_text="عرض في قسم المشاريع النشطة بالصفحة الرئيسية",
+    )
+    featured_order = models.PositiveIntegerField(
+        default=0,
+        help_text="ترتيب العرض بين المشاريع المميزة (الأصغر أولاً)",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["name"]
-        indexes = [models.Index(fields=["is_active", "status"])]
+        indexes = [
+            models.Index(fields=["is_active", "status"]),
+            models.Index(fields=["is_featured", "featured_order"]),
+        ]
 
     def __str__(self):
         return self.name

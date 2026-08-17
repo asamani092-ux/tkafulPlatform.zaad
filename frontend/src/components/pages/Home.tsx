@@ -49,7 +49,7 @@ export default function Home() {
     Promise.all([
       fetch(`${API_BASE_URL}/api/public-home-stats/`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
       fetch(`${API_BASE_URL}/api/beneficiary-services/`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-      fetch(`${API_BASE_URL}/api/platform/public/projects/`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`${API_BASE_URL}/api/platform/public/projects/?home=1&limit=6`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     ]).then(([st, sv, pr]) => {
       if (st) setStats(st);
       if (sv) setServices(sv.results || sv);
@@ -85,7 +85,9 @@ export default function Home() {
 
       <section className="mx-auto max-w-page px-4 py-12">
         <h2 className="mb-2 text-center text-3xl font-bold text-primary">المشاريع النشطة</h2>
-        <p className="mb-8 text-center text-sm text-brand-gray">كل مشروع يعرض أدواته المفعّلة فقط — تبرّع إن وُجد رابط.</p>
+        <p className="mb-8 text-center text-sm text-brand-gray">
+          مشاريع مختارة للعرض — للاطلاع على الكل استخدم «استكشف المشاريع».
+        </p>
         {loading && <LoadingState title="جاري التحميل…" />}
         {!loading && (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -116,6 +118,13 @@ export default function Home() {
                 </div>
               </Card>
             ))}
+          </div>
+        )}
+        {!loading && platformProjects.length > 0 && (
+          <div className="mt-8 text-center">
+            <Link to="/projects" className="text-sm font-bold text-primary hover:underline">
+              عرض كل المشاريع ←
+            </Link>
           </div>
         )}
       </section>
