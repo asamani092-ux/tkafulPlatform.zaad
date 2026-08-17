@@ -15,13 +15,15 @@ export function optionLabel(option: MapFieldOption | string): string {
   return typeof option === "string" ? option : option.label;
 }
 
-/** الحقول التي تصلح كفلاتر عامة: select و boolean فقط — باستثناء الأولوية ونوع المنفذ. */
+/** مفاتيح تُستبعد من شريط الفلاتر العامة فوق الخريطة. */
+const HIDDEN_PUBLIC_FILTER_KEYS = new Set(["priority", "outlet_type", "kind", "product"]);
+
+/** الحقول التي تصلح كفلاتر عامة: select و boolean فقط — مع استثناءات العرض. */
 export function filterableFields(fields: MapFieldDef[]): MapFieldDef[] {
   return fields.filter(
     (f) =>
       (f.type === "select" || f.type === "boolean") &&
-      f.key !== "priority" &&
-      f.key !== "outlet_type",
+      !HIDDEN_PUBLIC_FILTER_KEYS.has(f.key),
   );
 }
 

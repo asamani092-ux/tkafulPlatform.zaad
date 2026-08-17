@@ -23,12 +23,12 @@ const items: PublicMapItem[] = [
 ];
 
 describe("dynamic public filters (MapItemField-driven)", () => {
-  it("exposes only select/boolean fields as filters (excludes priority and outlet_type)", () => {
-    expect(filterableFields(fields).map((f) => f.key)).toEqual(["kind", "active"]);
+  it("exposes only select/boolean fields as filters (hides kind/priority/outlet_type/product)", () => {
+    expect(filterableFields(fields).map((f) => f.key)).toEqual(["active"]);
   });
 
-  it("excludes outlet_type from public filters", () => {
-    const withOutlet: MapFieldDef[] = [
+  it("excludes outlet_type, kind, and product from public filters", () => {
+    const withExtra: MapFieldDef[] = [
       ...fields,
       {
         key: "outlet_type",
@@ -38,8 +38,16 @@ describe("dynamic public filters (MapItemField-driven)", () => {
         options: ["pos", "corner"],
         order: 4,
       },
+      {
+        key: "product",
+        label: "المنتج",
+        type: "select",
+        required: false,
+        options: ["winter"],
+        order: 5,
+      },
     ];
-    expect(filterableFields(withOutlet).map((f) => f.key)).toEqual(["kind", "active"]);
+    expect(filterableFields(withExtra).map((f) => f.key)).toEqual(["active"]);
   });
 
   it("handles both object and string options", () => {
