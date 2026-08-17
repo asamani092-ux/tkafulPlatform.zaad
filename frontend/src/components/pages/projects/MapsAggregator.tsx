@@ -11,7 +11,7 @@ import {
   type DynamicFilters,
 } from "./filters";
 import DynamicFilterBar from "./DynamicFilterBar";
-import GenericMapView, { MapLegend } from "./GenericMapView";
+import GenericMapView from "./GenericMapView";
 import MapContributionModal from "./MapContributionModal";
 import Select from "../../ui/Select";
 import type { MapSummaryInfo, PublicMapDetail, PublicMapIndexEntry, PublicMapItem } from "./types";
@@ -145,7 +145,6 @@ export default function MapsAggregator() {
       />
 
       <GenericMapView maps={visibleDetails} visibleItems={visibleItems} selectedItemId={selectedItemId} onSelectItem={setSelectedItemId} />
-      <MapLegend maps={visibleDetails} />
 
       {selectedEntry && (
         <Card className="mt-4">

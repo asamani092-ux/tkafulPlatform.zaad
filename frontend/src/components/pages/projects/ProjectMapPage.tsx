@@ -6,7 +6,7 @@ import { LoadingState, EmptyState, ErrorState } from "../../feedback/PageStates"
 import { fetchPublicMapDetail, fetchPublicMapsIndex, fetchPublicMapSummary } from "./api";
 import { applyDynamicFilters, type DynamicFilters } from "./filters";
 import DynamicFilterBar from "./DynamicFilterBar";
-import GenericMapView, { MapLegend } from "./GenericMapView";
+import GenericMapView from "./GenericMapView";
 import MapContributionModal from "./MapContributionModal";
 import type { MapSummaryInfo, PublicMapDetail, PublicMapIndexEntry } from "./types";
 
@@ -102,7 +102,6 @@ export default function ProjectMapPage() {
 
       <DynamicFilterBar fields={detail.fields} filters={filters} onChange={setFilters} />
       <GenericMapView maps={[detail]} visibleItems={visibleItems} selectedItemId={selectedItemId} onSelectItem={setSelectedItemId} />
-      <MapLegend maps={[detail]} />
 
       {selectedItem && (
         <Card className="mt-4">
