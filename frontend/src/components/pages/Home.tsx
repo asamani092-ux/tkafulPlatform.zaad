@@ -75,7 +75,7 @@ export default function Home() {
             ))}
           </div>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link to="/projects" className="btn-register inline-flex">استكشف المشاريع</Link>
+            <Link to="/projects" className="btn-primary inline-flex">استكشف المشاريع</Link>
             <Link to="/map" className="btn-secondary inline-flex">خارطة الأثر</Link>
           </div>
         </div>
