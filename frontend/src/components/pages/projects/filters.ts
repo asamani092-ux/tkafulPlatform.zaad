@@ -15,9 +15,11 @@ export function optionLabel(option: MapFieldOption | string): string {
   return typeof option === "string" ? option : option.label;
 }
 
-/** الحقول التي تصلح كفلاتر عامة: select و boolean فقط. */
+/** الحقول التي تصلح كفلاتر عامة: select و boolean فقط — باستثناء الأولوية. */
 export function filterableFields(fields: MapFieldDef[]): MapFieldDef[] {
-  return fields.filter((f) => f.type === "select" || f.type === "boolean");
+  return fields.filter(
+    (f) => (f.type === "select" || f.type === "boolean") && f.key !== "priority",
+  );
 }
 
 /** يطبّق الفلاتر المفعّلة (غير null) على العناصر بمطابقة قيمة data[key]. */

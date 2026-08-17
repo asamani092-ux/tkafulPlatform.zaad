@@ -11,8 +11,9 @@ import type { MapFieldDef, PublicMapItem } from "./types";
 
 const fields: MapFieldDef[] = [
   { key: "kind", label: "النوع", type: "select", required: true, options: [{ value: "region", label: "منطقة" }, "outlet"], order: 0 },
-  { key: "active", label: "نشط", type: "boolean", required: false, options: [], order: 1 },
-  { key: "note", label: "ملاحظة", type: "text", required: false, options: [], order: 2 },
+  { key: "priority", label: "الأولوية", type: "select", required: false, options: ["high", "medium", "low"], order: 1 },
+  { key: "active", label: "نشط", type: "boolean", required: false, options: [], order: 2 },
+  { key: "note", label: "ملاحظة", type: "text", required: false, options: [], order: 3 },
 ];
 
 const items: PublicMapItem[] = [
@@ -22,7 +23,7 @@ const items: PublicMapItem[] = [
 ];
 
 describe("dynamic public filters (MapItemField-driven)", () => {
-  it("exposes only select/boolean fields as filters", () => {
+  it("exposes only select/boolean fields as filters (excludes priority)", () => {
     expect(filterableFields(fields).map((f) => f.key)).toEqual(["kind", "active"]);
   });
 
