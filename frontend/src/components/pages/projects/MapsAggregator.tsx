@@ -125,8 +125,11 @@ export default function MapsAggregator() {
         <Card><div className="text-center"><div className="text-lg font-extrabold text-primary sm:text-xl">{kpis.pending}</div><div className="text-xs text-brand-gray">تعهد قيد المراجعة</div></div></Card>
       </div>
 
-      <div className="zad-filter-bar">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <DynamicFilterBar
+        fields={mergedFields}
+        filters={filters}
+        onChange={setFilters}
+        leading={
           <Select
             id="filter-project"
             label="المشروع"
@@ -138,11 +141,8 @@ export default function MapsAggregator() {
               <option key={p.slug} value={p.slug}>{p.name}</option>
             ))}
           </Select>
-        </div>
-      </div>
-
-      {/* فلاتر ديناميكية موحّدة من مخططات MapItemField */}
-      <DynamicFilterBar fields={mergedFields} filters={filters} onChange={setFilters} />
+        }
+      />
 
       <GenericMapView maps={visibleDetails} visibleItems={visibleItems} selectedItemId={selectedItemId} onSelectItem={setSelectedItemId} />
       <MapLegend maps={visibleDetails} />

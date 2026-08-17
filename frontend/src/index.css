@@ -147,14 +147,30 @@ body {
 
 .zad-filter-bar {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-end;
   gap: var(--space-3);
-  padding: var(--space-4);
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-xl);
   border: var(--border-hairline) solid var(--border-subtle);
   background: var(--surface-raised);
   box-shadow: var(--shadow-xs);
   margin-block-end: var(--space-4);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.zad-filter-bar > * {
+  flex: 1 1 10rem;
+  min-width: 9.5rem;
+  max-width: 16rem;
+}
+@media (min-width: 1024px) {
+  .zad-filter-bar > * {
+    max-width: none;
+  }
 }
 .zad-filter-bar__row {
   display: flex;
