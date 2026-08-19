@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { UAT_SECTIONS } from "./data";
+import { UAT_SECTIONS, UAT_TRIAL_PHASES, sectionsForPhase } from "./data";
 import { buildReport, summarize, type UatState } from "./report";
 
 const total = UAT_SECTIONS.flatMap((s) => s.scenarios).length;
@@ -28,10 +28,19 @@ describe("UAT report generation", () => {
     expect(report).toContain("الحكم النهائي: قبول بملاحظات");
     expect(report).toContain("✅ ناجح");
     expect(report).toContain("ملاحظة / بسطر جديد"); // لا يكسر جدول Markdown
+    expect(report).toContain("المرحلة 1 — الموقع العام والدخول");
+    expect(report).toContain("المرحلة 2 — بوابة المتطوّع ولوحة الإدارة");
+    expect(report).toContain("المرحلة 3 — أدوات التشغيل والجودة");
     for (const section of UAT_SECTIONS) {
       for (const sc of section.scenarios) {
         expect(report).toContain(`| ${sc.id} |`);
       }
     }
+  });
+
+  it("splits tools into three trial phases without dropping scenarios", () => {
+    const assigned = UAT_TRIAL_PHASES.flatMap((p) => sectionsForPhase(p.id));
+    expect(assigned).toHaveLength(UAT_SECTIONS.length);
+    expect(new Set(UAT_SECTIONS.map((s) => s.trialPhase))).toEqual(new Set([1, 2, 3]));
   });
 });

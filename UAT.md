@@ -1,7 +1,12 @@
-# UAT — نموذج تقييم القبول (Phase A + B)
+# UAT — نموذج تقييم القبول (ثلاث مراحل تجربة)
 
-> فرع التجربة: `refactor/phase-b-ui` · التقارير: `FINAL_REPORT_PHASE_A.md` / `FINAL_REPORT_PHASE_B.md` · القرارات: `DECISIONS.md`  
-> التقييم: ✅ ناجح / ⚠️ ملاحظة / ❌ فشل — النموذج التفاعلي: **http://localhost:3400/uat**
+> التقارير: `FINAL_REPORT_PHASE_A.md` / `FINAL_REPORT_PHASE_B.md` · القرارات: `DECISIONS.md`  
+> التقييم: ✅ ناجح / ⚠️ ملاحظة / ❌ فشل — النموذج التفاعلي: **http://localhost:3400/uat** (يتطلب `VITE_ENABLE_UAT=true`)
+
+**تقسيم التجربة**
+1. الموقع العام والدخول
+2. بوابة المتطوّع ولوحة الإدارة (+ التحويلات القديمة)
+3. أدوات التشغيل (كفالات + خرائط) وسلامة البيانات
 
 ---
 
@@ -17,8 +22,10 @@ cd backend
 ./venv/bin/python manage.py check_migration_integrity --expect migrated
 ./venv/bin/python manage.py runserver 0.0.0.0:8000
 
-# الواجهة — منفذ التجربة 3400
-cd frontend && npm run dev -- --port 3400 --host localhost
+# الواجهة — منفذ التجربة 3400 + تفعيل نموذج UAT
+cd frontend
+echo 'VITE_ENABLE_UAT=true' > .env.development.local
+npm run dev -- --port 3400 --host localhost
 # افتح: http://localhost:3400  و  http://localhost:3400/uat
 ```
 
@@ -34,14 +41,14 @@ CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhos
 cd backend && ./venv/bin/python manage.py shell -c "
 from django.contrib.auth.models import User
 from projects.models import Project, ProjectMember
-for u, r in [('uat_donor','donor'), ('uat_supplier','supplier'), ('uat_rep','representative'), ('uat_pm','user')]:
+for u, r in [('uat_donor','donor'), ('uat_supplier','supplier'), ('uat_rep','representative'), ('uat_pm','user'), ('uat_vol','user')]:
     user, _ = User.objects.get_or_create(username=u, defaults={'email': f'{u}@takaful.com'})
     user.set_password('Uat12345!'); user.email = f'{u}@takaful.com'; user.save()
     user.profile.role = r; user.profile.is_approved = True; user.profile.save()
 pm = User.objects.get(username='uat_pm')
 p = Project.objects.get(slug='tafaqqadhum')
 ProjectMember.objects.update_or_create(project=p, user=pm, defaults={'role': 'project_admin'})
-print('UAT users ready — password: Uat12345!')
+print('UAT users ready — password: Uat12345!  volunteer: uat_vol@takaful.com')
 "
 ```
 
@@ -74,7 +81,15 @@ print('UAT users ready — password: Uat12345!')
 | 2.4 | `/admin/signin` | — | → `/signin` | | |
 | 2.5 | تسجيل جديد + JWT | — | بلا كسر | | |
 
-## 3) سبعة نطاقات الإدارة
+## 3) بوابة المتطوّع (مرحلة التجربة 2)
+
+| # | السيناريو | المتوقع | التقييم | ملاحظات |
+|---|---|---|---|---|
+| 8.1 | `/user/main` بعد دخول uat_vol | غلاف المتطوّع وروابط المهام/المعلومات/الإعدادات | | |
+| 8.2 | `/user/tasks` و`/user/personal-info` و`/user/settings` | تعمل داخل UserShell | | |
+| 8.3 | `/Admin` بحساب متطوّع | رفض أو تحويل | | |
+
+## 4) سبعة نطاقات الإدارة
 
 | # | السيناريو | الدور | المتوقع | التقييم | ملاحظات |
 |---|---|---|---|---|---|
@@ -89,7 +104,7 @@ print('UAT users ready — password: Uat12345!')
 | 3.9 | `/Admin/reports` | admin | التقارير | | |
 | 3.10 | صلاحيات uat_pm | uat_pm | نطاقه فقط؛ 403 لغيرها | | |
 
-## 4) تحويلات المسارات القديمة
+## 5) تحويلات المسارات القديمة
 
 | # | من | إلى | التقييم | ملاحظات |
 |---|---|---|---|---|
@@ -103,7 +118,7 @@ print('UAT users ready — password: Uat12345!')
 | 4.8 | `…/manage` التنفيذي | `/Admin/staff/manage` | | |
 | 4.9 | `/saqya` | `/projects/saqya/sponsorships` | | |
 
-## 5) الكفالات
+## 6) الكفالات (مرحلة التجربة 3)
 
 | # | السيناريو | الدور | المتوقع | التقييم | ملاحظات |
 |---|---|---|---|---|---|
@@ -115,7 +130,7 @@ print('UAT users ready — password: Uat12345!')
 | 5.6 | اكتمال التمويل | — | in_progress | | |
 | 5.7 | CTA تبرع من donation_url | — | يظهر/يُخفى حسب الإعداد | | |
 
-## 6) الخرائط (إدارة من `/Admin/maps`)
+## 7) الخرائط (إدارة من `/Admin/maps`)
 
 | # | السيناريو | الدور | المتوقع | التقييم | ملاحظات |
 |---|---|---|---|---|---|
@@ -126,7 +141,7 @@ print('UAT users ready — password: Uat12345!')
 | 6.5 | اعتماد تعهد | uat_pm | ملخص + إخفاء &lt;5 | | |
 | 6.6 | نشر/إلغاء | admin | يظهر في `/map` | | |
 
-## 7) سلامة البيانات
+## 8) سلامة البيانات
 
 | # | السيناريو | المتوقع | التقييم | ملاحظات |
 |---|---|---|---|---|
@@ -140,6 +155,7 @@ print('UAT users ready — password: Uat12345!')
 |---|---|---|
 | admin@takaful.com | admin123 | مشرف → `/Admin` |
 | uat_pm@takaful.com | Uat12345! | مدير تفقدهم → `/Admin/projects` |
+| uat_vol@takaful.com | Uat12345! | متطوّع → `/user/main` |
 | uat_donor@takaful.com | Uat12345! | متبرّع |
 | uat_supplier@takaful.com | Uat12345! | مورّد |
 | uat_rep@takaful.com | Uat12345! | مندوب |

@@ -1,5 +1,5 @@
 /** توليد تقرير UAT بصيغة Markdown — دالة نقية قابلة للاختبار. O(S) على السيناريوهات. */
-import { UAT_SECTIONS } from "./data";
+import { UAT_SECTIONS, UAT_TRIAL_PHASES, sectionsForPhase } from "./data";
 
 export type UatStatus = "pass" | "warn" | "fail";
 
@@ -41,19 +41,23 @@ export function buildReport(state: UatState, now: Date = new Date()): string {
   );
   lines.push(`- الحكم النهائي: ${state.verdict || "—"}`);
   lines.push("");
-  for (const section of UAT_SECTIONS) {
-    lines.push(`## ${section.title}`);
+  for (const phase of UAT_TRIAL_PHASES) {
+    lines.push(`# ${phase.title} — ${phase.subtitle}`);
     lines.push("");
-    lines.push("| # | السيناريو | الدور | المتوقع | التقييم | ملاحظات |");
-    lines.push("|---|---|---|---|---|---|");
-    for (const sc of section.scenarios) {
-      const st = state.statuses[sc.id];
-      const note = (state.notes[sc.id] || "").replace(/\|/g, "/").replace(/\n/g, " ");
-      lines.push(
-        `| ${sc.id} | ${sc.title} | ${sc.role || "—"} | ${sc.expected} | ${st ? STATUS_LABELS[st] : "—"} | ${note} |`,
-      );
+    for (const section of sectionsForPhase(phase.id)) {
+      lines.push(`## ${section.title}`);
+      lines.push("");
+      lines.push("| # | السيناريو | الدور | المتوقع | التقييم | ملاحظات |");
+      lines.push("|---|---|---|---|---|---|");
+      for (const sc of section.scenarios) {
+        const st = state.statuses[sc.id];
+        const note = (state.notes[sc.id] || "").replace(/\|/g, "/").replace(/\n/g, " ");
+        lines.push(
+          `| ${sc.id} | ${sc.title} | ${sc.role || "—"} | ${sc.expected} | ${st ? STATUS_LABELS[st] : "—"} | ${note} |`,
+        );
+      }
+      lines.push("");
     }
-    lines.push("");
   }
   return lines.join("\n");
 }

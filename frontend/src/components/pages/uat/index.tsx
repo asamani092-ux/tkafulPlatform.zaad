@@ -4,7 +4,7 @@ import Button from "../../ui/Button";
 import Input from "../../ui/Input";
 import Badge from "../../ui/Badge";
 import { useToast } from "../../../contexts/ToastContext";
-import { UAT_ACCOUNTS, UAT_SECTIONS, UAT_LOCAL_BASE } from "./data";
+import { UAT_ACCOUNTS, UAT_LOCAL_BASE, UAT_TRIAL_PHASES, sectionsForPhase } from "./data";
 import { buildReport, summarize, type UatState, type UatStatus } from "./report";
 
 const EMPTY: UatState = { tester: "", verdict: "", statuses: {}, notes: {} };
@@ -19,9 +19,14 @@ const STATUS_BUTTONS: Array<{ value: UatStatus; label: string; color: string }> 
 export default function UatPage() {
   const toast = useToast();
   const [state, setState] = useState<UatState>(EMPTY);
+  const [phase, setPhase] = useState<1 | 2 | 3>(1);
 
   const counts = useMemo(() => summarize(state), [state]);
   const progress = Math.round(((counts.total - counts.pending) / counts.total) * 100);
+  const phaseSections = sectionsForPhase(phase);
+  const phaseIds = phaseSections.flatMap((s) => s.scenarios.map((sc) => sc.id));
+  const phaseDone = phaseIds.filter((id) => state.statuses[id]).length;
+  const phaseMeta = UAT_TRIAL_PHASES[phase - 1];
 
   const setStatus = (id: string, value: UatStatus) =>
     setState((s) => ({
@@ -62,9 +67,29 @@ export default function UatPage() {
         <h1 className="text-2xl font-extrabold text-primary sm:text-3xl">نموذج تقييم القبول (UAT)</h1>
         <p className="mt-1 text-sm text-brand-gray">
           تجربة محلية: <a className="font-semibold text-primary" href={UAT_LOCAL_BASE} dir="ltr">{UAT_LOCAL_BASE}</a>
-          {" "}· المرجع: <code dir="ltr">UAT.md</code> · Phase B: نطاقات العمل السبعة
+          {" "}· المرجع: <code dir="ltr">UAT.md</code> · ثلاث مراحل متتالية
         </p>
       </header>
+
+      <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {UAT_TRIAL_PHASES.map((p) => {
+          const ids = sectionsForPhase(p.id).flatMap((s) => s.scenarios.map((sc) => sc.id));
+          const done = ids.filter((id) => state.statuses[id]).length;
+          const active = phase === p.id;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setPhase(p.id)}
+              className={`rounded-xl border px-3 py-3 text-right ${active ? "border-primary bg-surface" : "border-surface-border bg-surface-muted"}`}
+            >
+              <div className="text-sm font-extrabold text-primary">{p.title} — {p.subtitle}</div>
+              <div className="mt-1 text-xs text-brand-gray">{p.goal}</div>
+              <div className="mt-2 text-xs font-bold text-brand-gray">{done} / {ids.length} سيناريو</div>
+            </button>
+          );
+        })}
+      </div>
 
       <Card className="mb-4">
         <div className="mb-2 flex flex-wrap items-center gap-3 text-sm font-bold">
@@ -100,7 +125,12 @@ export default function UatPage() {
         </div>
       </Card>
 
-      {UAT_SECTIONS.map((section) => (
+      <Card className="mb-4">
+        <h2 className="text-lg font-extrabold text-primary">{phaseMeta.title} — {phaseMeta.subtitle}</h2>
+        <p className="mt-1 text-sm text-brand-gray">{phaseMeta.goal} · مكتمل في هذه المرحلة: {phaseDone} / {phaseIds.length}</p>
+      </Card>
+
+      {phaseSections.map((section) => (
         <Card key={section.key} className="mb-4">
           <h2 className="mb-3 text-lg font-bold text-primary">{section.title}</h2>
           <div className="space-y-4">
@@ -139,6 +169,22 @@ export default function UatPage() {
           </div>
         </Card>
       ))}
+
+      <div className="mb-4 flex flex-wrap justify-between gap-2">
+        <Button
+          variant="secondary"
+          onClick={() => setPhase((p) => (p === 1 ? 1 : ((p - 1) as 1 | 2 | 3)))}
+          disabled={phase === 1}
+        >
+          المرحلة السابقة
+        </Button>
+        <Button
+          onClick={() => setPhase((p) => (p === 3 ? 3 : ((p + 1) as 1 | 2 | 3)))}
+          disabled={phase === 3}
+        >
+          المرحلة التالية
+        </Button>
+      </div>
 
       <Card>
         <h2 className="mb-2 text-base font-bold text-primary">الحكم النهائي</h2>

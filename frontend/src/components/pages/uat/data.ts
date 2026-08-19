@@ -1,4 +1,4 @@
-/** بيانات نموذج تقييم القبول (UAT) — Phase A+B (لوحة بنطاقات العمل + روابط التبرع). */
+/** بيانات نموذج تقييم القبول (UAT) — ثلاث مراحل تجربة. */
 
 export interface UatScenario {
   id: string;
@@ -10,12 +10,39 @@ export interface UatScenario {
 export interface UatSection {
   key: string;
   title: string;
+  trialPhase: 1 | 2 | 3;
   scenarios: UatScenario[];
+}
+
+export const UAT_TRIAL_PHASES = [
+  {
+    id: 1 as const,
+    title: "المرحلة 1",
+    subtitle: "الموقع العام والدخول",
+    goal: "تجربة الزائر ثم حسابات الدخول والتوجيه حسب الدور.",
+  },
+  {
+    id: 2 as const,
+    title: "المرحلة 2",
+    subtitle: "بوابة المتطوّع ولوحة الإدارة",
+    goal: "مسارات /user ونطاقات الإدارة السبعة + التحويلات القديمة.",
+  },
+  {
+    id: 3 as const,
+    title: "المرحلة 3",
+    subtitle: "أدوات التشغيل والجودة",
+    goal: "دورة الكفالات، إدارة الخرائط، ثم فحص سلامة البيانات.",
+  },
+];
+
+export function sectionsForPhase(phase: 1 | 2 | 3): UatSection[] {
+  return UAT_SECTIONS.filter((s) => s.trialPhase === phase);
 }
 
 export const UAT_SECTIONS: UatSection[] = [
   {
     key: "public",
+    trialPhase: 1,
     title: "1) الموقع العام (بدون دخول)",
     scenarios: [
       {
@@ -72,6 +99,7 @@ export const UAT_SECTIONS: UatSection[] = [
   },
   {
     key: "auth",
+    trialPhase: 1,
     title: "2) الدخول الموحّد والتوجيه حسب الدور",
     scenarios: [
       {
@@ -104,8 +132,31 @@ export const UAT_SECTIONS: UatSection[] = [
     ],
   },
   {
+    key: "volunteer",
+    trialPhase: 2,
+    title: "3) بوابة المتطوّع",
+    scenarios: [
+      {
+        id: "8.1",
+        title: "دخول متطوّع ثم فتح /user/main",
+        expected: "غلاف المتطوّع: ترحيب + روابط مهامي / معلوماتي / الإعدادات",
+      },
+      {
+        id: "8.2",
+        title: "فتح /user/tasks و /user/personal-info و /user/settings",
+        expected: "الصفحات تعمل داخل UserShell؛ القائمة الجانبية أو الـ drawer على الجوال",
+      },
+      {
+        id: "8.3",
+        title: "محاولة فتح /Admin بحساب متطوّع",
+        expected: "رفض أو تحويل — لا دخول لوحة الإدارة",
+      },
+    ],
+  },
+  {
     key: "admin_domains",
-    title: "3) لوحة الإدارة — سبعة نطاقات عمل",
+    trialPhase: 2,
+    title: "4) لوحة الإدارة — سبعة نطاقات عمل",
     scenarios: [
       {
         id: "3.1",
@@ -171,7 +222,8 @@ export const UAT_SECTIONS: UatSection[] = [
   },
   {
     key: "redirects",
-    title: "4) توافق المسارات القديمة (يجب ألا تنكسر روابط محفوظة)",
+    trialPhase: 2,
+    title: "5) توافق المسارات القديمة (يجب ألا تنكسر روابط محفوظة)",
     scenarios: [
       { id: "4.1", title: "/Admin/map", expected: "→ /Admin/maps" },
       { id: "4.2", title: "/Admin/tasks", expected: "→ /Admin/projects/create" },
@@ -186,7 +238,8 @@ export const UAT_SECTIONS: UatSection[] = [
   },
   {
     key: "sponsorships",
-    title: "5) أداة الكفالات (مسارها القانوني /projects/:slug/sponsorships)",
+    trialPhase: 3,
+    title: "6) أداة الكفالات (مسارها القانوني /projects/:slug/sponsorships)",
     scenarios: [
       { id: "5.1", title: "إنشاء كفالة", role: "uat_donor", expected: "تُنشأ بحالة pending" },
       { id: "5.2", title: "اعتماد الكفالة → إسناد لمورّد ومندوب", role: "admin", expected: "Order ينتقل pending→assigned" },
@@ -203,7 +256,8 @@ export const UAT_SECTIONS: UatSection[] = [
   },
   {
     key: "maps",
-    title: "6) أداة الخرائط — إدارة من نطاق الخرائط فقط",
+    trialPhase: 3,
+    title: "7) أداة الخرائط — إدارة من نطاق الخرائط فقط",
     scenarios: [
       { id: "6.1", title: "/Admin/maps: إنشاء خريطة لمشروع", role: "admin", expected: "تُنشأ (provisioning للمشرف العام)" },
       { id: "6.2", title: "نفس المحاولة", role: "uat_pm", expected: "مرفوضة 403" },
@@ -215,7 +269,8 @@ export const UAT_SECTIONS: UatSection[] = [
   },
   {
     key: "integrity",
-    title: "7) سلامة البيانات (نهاية الجلسة)",
+    trialPhase: 3,
+    title: "8) سلامة البيانات (نهاية الجلسة)",
     scenarios: [
       {
         id: "7.1",
@@ -229,6 +284,7 @@ export const UAT_SECTIONS: UatSection[] = [
 export const UAT_ACCOUNTS = [
   { email: "admin@takaful.com", password: "admin123", label: "المشرف العام → /Admin" },
   { email: "uat_pm@takaful.com", password: "Uat12345!", label: "مدير مشروع «تفقدهم» → /Admin/projects" },
+  { email: "uat_vol@takaful.com", password: "Uat12345!", label: "متطوّع → /user/main" },
   { email: "uat_donor@takaful.com", password: "Uat12345!", label: "متبرّع كفالات" },
   { email: "uat_supplier@takaful.com", password: "Uat12345!", label: "مورّد" },
   { email: "uat_rep@takaful.com", password: "Uat12345!", label: "مندوب" },
