@@ -7,6 +7,7 @@ export interface Membership {
   project_slug: string;
   project_name: string;
   role: string;
+  project_tools?: string[];
 }
 
 interface MembershipsState {

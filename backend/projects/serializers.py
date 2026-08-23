@@ -71,7 +71,11 @@ class MembershipSerializer(serializers.ModelSerializer):
     """عضويات المستخدم الحالي (للوحة الأدمن الموحّدة في الواجهة)."""
     project_slug = serializers.CharField(source="project.slug", read_only=True)
     project_name = serializers.CharField(source="project.name", read_only=True)
+    project_tools = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectMember
-        fields = ["project", "project_slug", "project_name", "role"]
+        fields = ["project", "project_slug", "project_name", "role", "project_tools"]
+
+    def get_project_tools(self, obj):
+        return obj.project.enabled_tool_keys()

@@ -141,9 +141,13 @@ export default function WaterSupplyRequestPage() {
             </div>
           </Card>
 
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting ? "جاري الإرسال…" : "إرسال"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" className="flex-1" disabled={isSubmitting}>
+              {isSubmitting ? "جاري الإرسال…" : "إرسال"}
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => { setFormData(EMPTY); setErrors({}); }}>مسح الحقول</Button>
+          </div>
+          <p className="mt-3 text-center text-xs text-brand-gray">لا يُعدّل الطلب بعد الإرسال — يُراجع من /Admin/requests/water-supply.</p>
         </form>
       </main>
     </div>

@@ -144,6 +144,7 @@ export default function MapsAggregator() {
         }
       />
 
+      <p className="mb-2 text-sm text-brand-gray">لإرسال تعهد: اختر عنصراً على الخريطة ثم اضغط «ساهم هنا».</p>
       <GenericMapView maps={visibleDetails} visibleItems={visibleItems} selectedItemId={selectedItemId} onSelectItem={setSelectedItemId} />
 
       {selectedEntry && (

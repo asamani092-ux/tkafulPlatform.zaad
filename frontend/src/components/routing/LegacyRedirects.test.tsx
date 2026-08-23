@@ -14,6 +14,7 @@ const TARGETS: Record<string, string> = {
   "/Admin/staff": "staff",
   "/Admin/staff/manage": "staff-manage",
   "/signin": "unified-signin",
+  "/projects/saqya": "saqya-landing",
   "/projects/saqya/sponsorships": "saqya-portal",
 };
 
@@ -34,7 +35,7 @@ function LegacyRoutes() {
 
 describe("legacy route redirects (Phase B)", () => {
   it.each([
-    ["/saqya", "saqya-portal"],
+    ["/saqya", "saqya-landing"],
     ["/Admin/map", "maps-admin"],
     ["/admin/signin", "unified-signin"],
     ["/executive", "staff"],

@@ -4,6 +4,7 @@ import { LogOut, ChevronDown, ChevronLeft, Menu, X } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useMemberships } from "../../hooks/useMemberships";
 import { ADMIN_DOMAINS, domainForPath } from "../../admin/domains";
+import { visibleAdminDomains } from "../../admin/visibility";
 import { useEffect, useState } from "react";
 
 /** غلاف لوحة الإدارة — شريط جانبي ثابت على الشاشات الكبيرة، وdrawer على الصغيرة. */
@@ -11,15 +12,18 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const loc = useLocation();
   const nav = useNavigate();
   const { user, logout } = useAuth();
-  const { isSuperAdmin } = useMemberships();
-  const isAdmin = user?.role === "admin" || isSuperAdmin;
+  const { isSuperAdmin, memberships } = useMemberships();
+  const isGlobalAdmin = user?.role === "admin" || isSuperAdmin;
+  const projectTools = new Set(memberships.flatMap((m) => m.project_tools || []));
   const activeDomain = domainForPath(loc.pathname);
   const [openDomain, setOpenDomain] = useState<string>(activeDomain);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const visibleDomains = ADMIN_DOMAINS.filter((d) => {
-    if (!d.superAdminOnly) return true;
-    return isAdmin;
+  const visibleDomains = visibleAdminDomains(ADMIN_DOMAINS, {
+    isGlobalAdmin,
+    userRole: user?.role || "",
+    projectTools,
+    hasMemberships: memberships.length > 0,
   });
 
   useEffect(() => {
@@ -63,7 +67,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         {visibleDomains.map((domain) => {
           const domainActive = activeDomain === domain.id;
           const expanded = openDomain === domain.id || domainActive;
-          const childLinks = domain.links.filter((l) => isAdmin || l.staffVisible);
+          const childLinks = domain.links.filter((l) => isGlobalAdmin || l.staffVisible);
           if (childLinks.length === 0) return null;
           return (
             <div key={domain.id} className="rounded-lg">

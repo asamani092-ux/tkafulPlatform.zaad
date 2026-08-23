@@ -63,12 +63,12 @@ export const UAT_SECTIONS: UatSection[] = [
       {
         id: "1.4",
         title: "فتح /projects/saqya و /projects/tafaqqadhum و /projects/takaful-athar",
-        expected: "صفحة هبوط: الهوية + الأدوات المفعّلة فقط + تبرع إن وُجد donation_url",
+        expected: "صفحة هبوط: الهوية + الأدوات من ProjectTool (مُفعّلة في قاعدة البيانات)؛ الخريطة تظهر فقط إن وُجدت خريطة منشورة",
       },
       {
         id: "1.5",
         title: "فتح /map",
-        expected: "مجمّع عام واحد: KPI + فلترة بالمشروع + فلاتر ديناميكية + وسيلة إيضاح + مساهمة من العنصر",
+        expected: "مجمّع عام (يتطلب seed_impact_map)؛ اختر عنصراً ثم «ساهم هنا» للتعهد",
       },
       {
         id: "1.6",
@@ -78,22 +78,22 @@ export const UAT_SECTIONS: UatSection[] = [
       {
         id: "1.7",
         title: "إرسال تعهد من الخريطة (اسم + 05XXXXXXXX + كمية)",
-        expected: "«تم استلام تعهدكم بنجاح» وحالته pending",
+        expected: "اختر عنصراً على الخريطة → «ساهم هنا» → «تم استلام تعهدكم بنجاح» (pending)",
       },
       {
         id: "1.8",
         title: "فتح /saqya",
-        expected: "تحويل إلى /projects/saqya/sponsorships",
+        expected: "تحويل إلى /projects/saqya (هبوط عام)؛ الكفالات على /projects/saqya/sponsorships تتطلب دخولاً",
       },
       {
         id: "1.9",
         title: "فتح /services/water-supply?project=saqya",
-        expected: "نموذج سقيا يعمل ويعرض ارتباط المشروع؛ الطلب يظهر لاحقاً في /Admin/requests/water-supply",
+        expected: "من الرئيسية أو /services؛ إرسال لمرة واحدة + مسح الحقول؛ يظهر في /Admin/requests/water-supply",
       },
       {
         id: "1.10",
         title: "فتح /suggest و /request-service",
-        expected: "النماذج العامة تعمل كما قبل",
+        expected: "من الرئيسية أو /services؛ إرسال لمرة واحدة + مسح الحقول؛ لا تعديل بعد الإرسال",
       },
     ],
   },
@@ -112,22 +112,22 @@ export const UAT_SECTIONS: UatSection[] = [
         id: "2.2",
         title: "دخول مدير مشروع uat_pm عبر /signin",
         role: "uat_pm",
-        expected: "توجيه إلى /Admin/projects؛ يرى مشروع «تفقدهم» فقط",
+        expected: "توجيه إلى /Admin/projects؛ الشريط يعرض مشاريع+خرائط فقط (حسب أدوات مشروعه)",
       },
       {
         id: "2.3",
         title: "متطوع / مستخدم عادي بعد الدخول",
-        expected: "توجيه إلى /user/main",
+        expected: "توجيه إلى /user/main؛ رسائل تغيير كلمة المرور بالعربية في /user/settings",
       },
       {
         id: "2.4",
         title: "فتح /admin/signin",
-        expected: "تحويل إلى /signin",
+        expected: "تحويل توافقي خلفي — الرابط القديم → /signin الموحّد",
       },
       {
         id: "2.5",
         title: "تسجيل مستخدم جديد + دخول/خروج JWT",
-        expected: "بلا كسر سلوكي",
+        expected: "تسجيل → الرئيسية؛ اعتماد المتطوعين في /Admin/volunteers/applications (للمشرف العام)",
       },
     ],
   },
@@ -233,7 +233,7 @@ export const UAT_SECTIONS: UatSection[] = [
       { id: "4.6", title: "/Admin/service-requests", expected: "→ /Admin/requests" },
       { id: "4.7", title: "/Admin/executive و /executive", expected: "→ /Admin/staff" },
       { id: "4.8", title: "/Admin/executive/manage و /executive/manage", expected: "→ /Admin/staff/manage" },
-      { id: "4.9", title: "/saqya", expected: "→ /projects/saqya/sponsorships" },
+      { id: "4.9", title: "/saqya", expected: "→ /projects/saqya" },
     ],
   },
   {

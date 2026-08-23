@@ -101,6 +101,7 @@ export default function ProjectMapPage() {
       )}
 
       <DynamicFilterBar fields={detail.fields} filters={filters} onChange={setFilters} />
+      <p className="mb-2 text-sm text-brand-gray">لإرسال تعهد: اختر عنصراً على الخريطة ثم اضغط «ساهم هنا».</p>
       <GenericMapView maps={[detail]} visibleItems={visibleItems} selectedItemId={selectedItemId} onSelectItem={setSelectedItemId} />
 
       {selectedItem && (

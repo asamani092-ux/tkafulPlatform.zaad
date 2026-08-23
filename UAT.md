@@ -1,6 +1,6 @@
 # UAT — نموذج تقييم القبول (ثلاث مراحل تجربة)
 
-> التقارير: `FINAL_REPORT_PHASE_A.md` / `FINAL_REPORT_PHASE_B.md` · القرارات: `DECISIONS.md`  
+> **إجابات أسئلة المرحلة 1:** `docs/UAT_PHASE1_ANSWERS.md`
 > التقييم: ✅ ناجح / ⚠️ ملاحظة / ❌ فشل — النموذج التفاعلي: **http://localhost:3400/uat** (يتطلب `VITE_ENABLE_UAT=true`)
 
 **تقسيم التجربة**
