@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Input from "../../ui/Input";
@@ -6,8 +6,14 @@ import Badge from "../../ui/Badge";
 import { useToast } from "../../../contexts/ToastContext";
 import { UAT_ACCOUNTS, UAT_LOCAL_BASE, UAT_TRIAL_PHASES, sectionsForPhase } from "./data";
 import { buildReport, summarize, type UatState, type UatStatus } from "./report";
+import { clearUatPersisted, loadUatPersisted, saveUatPersisted } from "./storage";
 
 const EMPTY: UatState = { tester: "", verdict: "", statuses: {}, notes: {} };
+
+function initialUatSession(): { state: UatState; phase: 1 | 2 | 3 } {
+  const saved = loadUatPersisted();
+  return saved ? { state: saved.state, phase: saved.phase } : { state: EMPTY, phase: 1 };
+}
 
 const STATUS_BUTTONS: Array<{ value: UatStatus; label: string; color: string }> = [
   { value: "pass", label: "✅ ناجح", color: "#16a34a" },
@@ -15,11 +21,16 @@ const STATUS_BUTTONS: Array<{ value: UatStatus; label: string; color: string }> 
   { value: "fail", label: "❌ فشل", color: "#dc2626" },
 ];
 
-/** نموذج تقييم القبول (UAT) — حالة الجلسة في الذاكرة فقط؛ نسخ/تنزيل التقرير اختياري. */
+/** نموذج تقييم القبول (UAT) — يحفظ التقييمات والملاحظات تلقائياً في المتصفح. */
 export default function UatPage() {
   const toast = useToast();
-  const [state, setState] = useState<UatState>(EMPTY);
-  const [phase, setPhase] = useState<1 | 2 | 3>(1);
+  const [session] = useState(initialUatSession);
+  const [state, setState] = useState<UatState>(session.state);
+  const [phase, setPhase] = useState<1 | 2 | 3>(session.phase);
+
+  useEffect(() => {
+    saveUatPersisted({ version: 1, state, phase });
+  }, [state, phase]);
 
   const counts = useMemo(() => summarize(state), [state]);
   const progress = Math.round(((counts.total - counts.pending) / counts.total) * 100);
@@ -58,7 +69,10 @@ export default function UatPage() {
   };
 
   const resetAll = () => {
-    if (window.confirm("مسح كل التقييمات والملاحظات؟")) setState(EMPTY);
+    if (!window.confirm("مسح كل التقييمات والملاحظات المحفوظة؟")) return;
+    clearUatPersisted();
+    setState(EMPTY);
+    setPhase(1);
   };
 
   return (
@@ -67,7 +81,7 @@ export default function UatPage() {
         <h1 className="text-2xl font-extrabold text-primary sm:text-3xl">نموذج تقييم القبول (UAT)</h1>
         <p className="mt-1 text-sm text-brand-gray">
           تجربة محلية: <a className="font-semibold text-primary" href={UAT_LOCAL_BASE} dir="ltr">{UAT_LOCAL_BASE}</a>
-          {" "}· المرجع: <code dir="ltr">UAT.md</code> · ثلاث مراحل متتالية
+          {" "}· المرجع: <code dir="ltr">UAT.md</code> · ثلاث مراحل · يُحفظ تلقائياً في المتصفح
         </p>
       </header>
 
