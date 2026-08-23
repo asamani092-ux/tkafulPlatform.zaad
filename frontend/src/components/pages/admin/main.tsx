@@ -7,7 +7,8 @@ import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { ADMIN_DOMAINS } from "../../../admin/domains";
-import { useMemberships } from "../../../hooks/useMemberships";
+import { visibleDomainsForUser } from "../../../admin/access";
+import { useMembershipsContext } from "../../../contexts/MembershipsContext";
 
 interface DomainCounts {
   projects: number | null;
@@ -40,9 +41,8 @@ async function countList(url: string, access: string | null): Promise<number | n
 
 /** نظرة عامة — بطاقة KPI واحدة لكل نطاق عمل. */
 export default function AdminMain() {
-  const { access, user } = useAuth();
-  const { isSuperAdmin } = useMemberships();
-  const isAdmin = user?.role === "admin" || isSuperAdmin;
+  const { access } = useAuth();
+  const { access } = useMembershipsContext();
   const [counts, setCounts] = useState<DomainCounts | null>(null);
   const [error, setError] = useState(false);
 
@@ -90,7 +90,7 @@ export default function AdminMain() {
     return () => { cancelled = true; };
   }, [access]);
 
-  const visible = ADMIN_DOMAINS.filter((d) => !d.superAdminOnly || isAdmin);
+  const visible = visibleDomainsForUser(access);
 
   return (
     <AdminShell>

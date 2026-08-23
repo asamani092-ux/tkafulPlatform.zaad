@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 import { AuthProvider } from "./contexts/AuthContext";
+import { MembershipsProvider } from "./contexts/MembershipsContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { DashboardSettingsProvider } from "./contexts/DashboardSettingsContext";
 import ProtectedRoute from "./components/routing/ProtectedRoute";
@@ -148,13 +149,15 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <ToastProvider>
-        <DashboardSettingsProvider>
-          <Router>
-            <AppContent />
-          </Router>
-        </DashboardSettingsProvider>
-      </ToastProvider>
+      <MembershipsProvider>
+        <ToastProvider>
+          <DashboardSettingsProvider>
+            <Router>
+              <AppContent />
+            </Router>
+          </DashboardSettingsProvider>
+        </ToastProvider>
+      </MembershipsProvider>
     </AuthProvider>
   );
 }
