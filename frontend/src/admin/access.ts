@@ -30,6 +30,7 @@ export function canAccessAdminPath(pathname: string, ctx: AdminAccessContext): b
 
   if (p === "/admin" || p === "/admin/") return false;
   if (p.startsWith("/admin/projects/create")) return false;
+  if (p.startsWith("/admin/users")) return false;
   if (p.startsWith("/admin/volunteers")) return false;
   if (p.startsWith("/admin/requests")) return false;
   if (p.startsWith("/admin/reports")) return false;

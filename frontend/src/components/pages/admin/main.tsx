@@ -53,7 +53,7 @@ export default function AdminMain() {
       try {
         const [projects, volunteers, requests, maps, staff, suggestions] = await Promise.all([
           countList("/api/platform/projects/", token),
-          countList("/api/volunteers/", token),
+          countList("/api/users/", token),
           countList("/api/service-requests/?status=PENDING", token),
           countList("/api/maps/", token),
           countList("/api/dashboard/executive/", token),

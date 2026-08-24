@@ -35,6 +35,7 @@ const AdminMain = lazy(() => import("./components/pages/admin/main"));
 const VolunteerRequests = lazy(() => import("./components/pages/admin/VolunteerRequests"));
 const VolunteerApplications = lazy(() => import("./components/pages/admin/VolunteerApplications"));
 const VolunteerManagement = lazy(() => import("./components/pages/admin/VolunteerManagement"));
+const UsersAdmin = lazy(() => import("./components/pages/admin/UsersAdmin"));
 const AddProjectPage = lazy(() => import("./components/pages/admin/AddProject"));
 const ProjectIdeas = lazy(() => import("./components/pages/admin/ProjectIdeas"));
 const Reports = lazy(() => import("./components/pages/admin/Reports"));
@@ -103,6 +104,7 @@ function AppContent() {
           <Route path="/Admin/projects/create" element={<Lazy><ProtectedRoute requiredRole="admin"><AddProjectPage /></ProtectedRoute></Lazy>} />
 
           {/* 2. المتطوعون */}
+          <Route path="/Admin/users" element={<Lazy><ProtectedRoute requiredRole="admin"><UsersAdmin /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/volunteers" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerManagement /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/volunteers/applications" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerApplications /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/volunteers/join-requests" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerRequests /></ProtectedRoute></Lazy>} />

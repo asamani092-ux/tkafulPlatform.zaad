@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { authFetch } from "../lib/api";
 import { useAuth } from "./AuthContext";
 import { buildAdminAccess, type AdminAccessContext } from "../admin/access";
@@ -16,6 +16,8 @@ interface MembershipsContextValue {
   isSuperAdmin: boolean;
   memberships: Membership[];
   access: AdminAccessContext;
+  /** إعادة جلب العضويات بعد إضافة/إزالة عضو — O(1) استدعاء شبكة. */
+  reloadMemberships: () => Promise<void>;
 }
 
 const MembershipsContext = createContext<MembershipsContextValue | undefined>(undefined);
@@ -26,34 +28,31 @@ export function MembershipsProvider({ children }: { children: ReactNode }) {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [memberships, setMemberships] = useState<Membership[]>([]);
 
-  useEffect(() => {
+  const reloadMemberships = useCallback(async () => {
     if (!isAuthenticated) {
       setLoading(false);
       setIsSuperAdmin(false);
       setMemberships([]);
       return;
     }
-    let cancelled = false;
     setLoading(true);
-    authFetch("/api/platform/my-memberships/")
-      .then(async (res) => {
-        if (!res.ok) throw new Error("fetch");
-        const data = await res.json();
-        if (cancelled) return;
-        setIsSuperAdmin(!!data.is_super_admin);
-        setMemberships(data.memberships || []);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setIsSuperAdmin(user?.role === "admin");
-        setMemberships([]);
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const res = await authFetch("/api/platform/my-memberships/");
+      if (!res.ok) throw new Error("fetch");
+      const data = await res.json();
+      setIsSuperAdmin(!!data.is_super_admin);
+      setMemberships(data.memberships || []);
+    } catch {
+      setIsSuperAdmin(user?.role === "admin");
+      setMemberships([]);
+    } finally {
+      setLoading(false);
+    }
   }, [isAuthenticated, user?.role]);
+
+  useEffect(() => {
+    void reloadMemberships();
+  }, [reloadMemberships]);
 
   const access = useMemo(
     () => buildAdminAccess(user?.role, isSuperAdmin, memberships),
@@ -61,8 +60,8 @@ export function MembershipsProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ loading, isSuperAdmin, memberships, access }),
-    [loading, isSuperAdmin, memberships, access],
+    () => ({ loading, isSuperAdmin, memberships, access, reloadMemberships }),
+    [loading, isSuperAdmin, memberships, access, reloadMemberships],
   );
 
   return <MembershipsContext.Provider value={value}>{children}</MembershipsContext.Provider>;

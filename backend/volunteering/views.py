@@ -533,25 +533,31 @@ class ProjectAssignmentViewSet(viewsets.ModelViewSet):
 @permission_classes([IsAdmin])
 def list_users(request):
     """
-    GET /api/admin/users/
-    Returns list of all registered users with their profiles
+    GET /api/users/
+    قائمة كل المستخدمين المسجّلين مع الملف الشخصي — لكل الأدوار.
     """
-    users = User.objects.select_related('profile').all()
-    
+    users = User.objects.select_related('profile').order_by('-date_joined')
+
     data = []
     for user in users:
+        profile = getattr(user, 'profile', None)
         data.append({
             'id': user.id,
+            'username': user.username,
             'email': user.email,
-            'name': user.profile.name,
-            'role': user.profile.role,
-            'skills': user.profile.skills,
-            'city': user.profile.city,
-            'total_volunteer_hours': user.profile.total_volunteer_hours,
-            'completed_tasks_count': user.profile.completed_tasks_count,
+            'name': profile.name if profile else '',
+            'role': profile.role if profile else 'user',
+            'is_approved': bool(profile.is_approved) if profile else False,
+            'is_active': user.is_active,
+            'city': profile.city if profile else '',
+            'phone': profile.phone if profile else '',
+            'skills': profile.skills if profile else [],
+            'total_volunteer_hours': profile.total_volunteer_hours if profile else 0,
+            'completed_tasks_count': profile.completed_tasks_count if profile else 0,
+            'date_joined': user.date_joined.isoformat() if user.date_joined else None,
         })
-    
-    return Response(data)
+
+    return Response({'results': data, 'count': len(data)})
 
 
 # ============================================================================

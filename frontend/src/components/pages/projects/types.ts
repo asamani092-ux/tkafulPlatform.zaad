@@ -91,13 +91,4 @@ export const TOOL_LABELS: Record<string, string> = {
 };
 
 /** تسميات مفاتيح color_scheme المعروفة (وسيلة الإيضاح) — أي مفتاح آخر يُعرض كما هو. */
-export const COLOR_SCHEME_LABELS: Record<string, string> = {
-  high: "أولوية عالية",
-  medium: "أولوية متوسطة",
-  low: "أولوية منخفضة",
-  sale_point: "نقطة بيع",
-  permanent_corner: "ركن دائم",
-  participation_point: "نقطة مشاركة",
-  region: "منطقة",
-  outlet: "منفذ",
-};
+export { MAP_VALUE_AR as COLOR_SCHEME_LABELS } from "../../../i18n/labels";

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
@@ -8,8 +8,11 @@ import Select from "../../ui/Select";
 import Badge from "../../ui/Badge";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
+import { useAuth } from "../../../contexts/AuthContext";
+import { useMembershipsContext } from "../../../contexts/MembershipsContext";
 import { authFetch } from "../../../lib/api";
 import { TOOL_LABELS } from "../projects/types";
+import { labelAr, PROJECT_MEMBER_ROLE_AR, PROJECT_STATUS_AR } from "../../../i18n/labels";
 
 interface AdminTool { id: number; tool_key: string; config: Record<string, unknown>; is_enabled: boolean }
 interface AdminMember { id: number; user: number; username: string; email: string; role: string }
@@ -31,32 +34,45 @@ const MEMBER_ROLES = [
 /** إدارة مشاريع المنصّة — نطاق حسب الدور (super-admin يرى الكل). */
 export default function PlatformProjects() {
   const toast = useToast();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { reloadMemberships } = useMembershipsContext();
   const [projects, setProjects] = useState<AdminProject[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<"network" | "forbidden" | null>(null);
   const [form, setForm] = useState({ name: "", slug: "", description: "", brand_color: "#8b1538" });
   const [memberForm, setMemberForm] = useState({ projectId: 0, userId: "", role: "project_viewer" });
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(false);
+    setError(null);
     try {
       const [projectsRes, meRes] = await Promise.all([
         authFetch("/api/platform/projects/"),
         authFetch("/api/platform/my-memberships/"),
       ]);
+      if (projectsRes.status === 403 || meRes.status === 403) {
+        setError("forbidden");
+        return;
+      }
       if (!projectsRes.ok || !meRes.ok) throw new Error("fetch");
       setProjects(await projectsRes.json());
       setIsSuperAdmin((await meRes.json()).is_super_admin);
     } catch {
-      setError(true);
+      setError("network");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (error === "forbidden") {
+      void reloadMemberships().then(() => navigate("/user/main", { replace: true }));
+    }
+  }, [error, navigate, reloadMemberships]);
 
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,12 +171,30 @@ export default function PlatformProjects() {
       method: "POST",
       body: JSON.stringify({ user_id: userId }),
     });
-    if (res.ok) { toast.success({ title: "تمت إزالة العضو" }); void load(); }
-    else toast.error({ title: "تعذّرت إزالة العضو" });
+    if (res.ok) {
+      toast.success({ title: "تمت إزالة العضو" });
+      await reloadMemberships();
+      // إن أُزيل المستخدم الحالي ولم تبقَ عضوية — حوّله لبوابة المتطوّع
+      const me = await authFetch("/api/platform/my-memberships/");
+      if (me.ok) {
+        const data = await me.json();
+        const stillMember = (data.memberships || []).length > 0 || !!data.is_super_admin;
+        if (!stillMember && user?.role !== "admin") {
+          navigate("/user/main", { replace: true });
+          return;
+        }
+      }
+      void load();
+    } else toast.error({ title: "تعذّرت إزالة العضو" });
   };
 
   if (loading) return <AdminShell><LoadingState title="جاري تحميل المشاريع…" /></AdminShell>;
-  if (error) return <AdminShell><ErrorState title="تعذّر التحميل" message="تحقّق من الاتصال." /></AdminShell>;
+  if (error === "forbidden") {
+    return <AdminShell><LoadingState title="لا صلاحية على المشاريع — جاري التحويل…" /></AdminShell>;
+  }
+  if (error === "network") {
+    return <AdminShell><ErrorState title="تعذّر التحميل" message="تحقّق من الاتصال ثم أعد المحاولة." /></AdminShell>;
+  }
 
   return (
     <AdminShell>
@@ -186,9 +220,9 @@ export default function PlatformProjects() {
               <div className="flex items-center gap-2">
                 <span style={{ width: 14, height: 14, borderRadius: 4, background: p.brand_color, display: "inline-block" }} />
                 <h3 className="text-lg font-bold text-primary">{p.name}</h3>
-                <Badge variant={p.status === "active" ? "success" : "warning"}>{p.status}</Badge>
+                <Badge variant={p.status === "active" ? "success" : "warning"}>{labelAr(PROJECT_STATUS_AR, p.status)}</Badge>
                 {p.is_featured && <Badge variant="success">مميز في الرئيسية</Badge>}
-                {p.my_role && <Badge>{p.my_role === "super_admin" ? "مشرف عام" : p.my_role}</Badge>}
+                {p.my_role && <Badge>{labelAr(PROJECT_MEMBER_ROLE_AR, p.my_role)}</Badge>}
               </div>
               <Link to={`/projects/${p.slug}`} className="text-sm font-bold text-primary hover:underline">صفحة المشروع ←</Link>
             </div>

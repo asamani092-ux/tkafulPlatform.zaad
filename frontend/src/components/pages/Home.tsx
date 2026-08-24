@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ClipboardList } from "lucide-react";
 import { API_BASE_URL } from "../../config";
+import { labelAr, PROJECT_STATUS_AR } from "../../i18n/labels";
 import Card from "../ui/Card";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
@@ -91,7 +92,7 @@ export default function Home() {
                     <span style={{ width: 12, height: 12, borderRadius: 3, background: p.brand_color }} />
                     <h3 className="text-lg font-bold text-primary">{p.name}</h3>
                   </div>
-                  <Badge variant="success">{p.status === "active" ? "نشط" : (p.status || "نشط")}</Badge>
+                  <Badge variant="success">{labelAr(PROJECT_STATUS_AR, p.status || "active")}</Badge>
                 </div>
                 <p className="mb-3 flex-1 text-sm text-brand-gray">{p.description}</p>
                 <div className="mb-4 flex flex-wrap gap-1">

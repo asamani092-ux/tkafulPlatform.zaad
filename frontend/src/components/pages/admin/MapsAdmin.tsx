@@ -11,6 +11,7 @@ import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
 import { optionLabel, optionValue } from "../projects/filters";
 import type { MapFieldDef } from "../projects/types";
+import { labelAr, MAP_ITEM_STATUS_AR } from "../../../i18n/labels";
 
 interface AdminMap {
   id: number; project: number; project_slug: string; project_name: string;
@@ -248,7 +249,7 @@ export default function MapsAdmin() {
                     <strong>{i.name}</strong>
                     <span className="text-xs text-brand-gray">({i.layer_name})</span>
                     <span className="text-xs text-brand-gray" dir="ltr">{i.lat.toFixed(4)}, {i.lng.toFixed(4)}</span>
-                    <Badge variant={i.status === "active" ? "success" : "warning"}>{i.status}</Badge>
+                    <Badge variant={i.status === "active" ? "success" : "warning"}>{labelAr(MAP_ITEM_STATUS_AR, i.status)}</Badge>
                   </div>
                 ))}
                 {items.length === 0 && <p className="text-brand-gray">لا عناصر بعد.</p>}
@@ -322,7 +323,7 @@ export default function MapsAdmin() {
                   {c.item_name && <span className="text-xs text-brand-gray">{c.item_name}</span>}
                   {c.category && <Badge>{c.category}</Badge>}
                   <span>× {c.quantity}</span>
-                  <Badge variant={c.status === "fulfilled" ? "success" : c.status === "cancelled" ? "danger" : "warning"}>{c.status}</Badge>
+                  <Badge variant={c.status === "fulfilled" ? "success" : c.status === "cancelled" ? "danger" : "warning"}>{labelAr(MAP_ITEM_STATUS_AR, c.status)}</Badge>
                   {c.status === "pending" && (
                     <>
                       <button type="button" className="text-xs font-bold text-green-700 hover:underline"

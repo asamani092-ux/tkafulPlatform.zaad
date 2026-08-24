@@ -7,6 +7,7 @@ import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { fetchPublicProject } from "./api";
 import { WATER_SUPPLY_FORM_ENABLED } from "../../../config";
 import { TOOL_LABELS, type PublicProjectDetail } from "./types";
+import { labelAr, PROJECT_STATUS_AR } from "../../../i18n/labels";
 
 const TOOL_ICONS: Record<string, typeof MapIcon> = {
   map: MapIcon,
@@ -62,7 +63,7 @@ export default function ProjectLanding() {
           <h1 className="text-4xl font-extrabold text-primary">{project.name}</h1>
           {project.description && <p className="mt-3 text-lg text-brand-gray">{project.description}</p>}
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-sm text-brand-gray">
-            <Badge variant="success">{project.status === "active" ? "نشط" : project.status}</Badge>
+            <Badge variant="success">{labelAr(PROJECT_STATUS_AR, project.status)}</Badge>
             {project.start_date && <span>البداية: {project.start_date}</span>}
             {project.end_date && <span>النهاية: {project.end_date}</span>}
             {project.donation_url && (
