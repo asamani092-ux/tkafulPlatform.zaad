@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { HandHeart, Lightbulb, Droplets } from "lucide-react";
-import { API_BASE_URL, WATER_SUPPLY_FORM_ENABLED } from "../../config";
+import { ClipboardList } from "lucide-react";
+import { API_BASE_URL } from "../../config";
 import Card from "../ui/Card";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
@@ -12,11 +12,6 @@ interface Stats {
   beneficiaries: number;
   potential_projects: number;
   donations: number;
-}
-interface BeneficiaryService {
-  id: number;
-  title: string;
-  desc: string;
 }
 interface PlatformProjectCard {
   id: number;
@@ -41,18 +36,15 @@ const TOOL_AR: Record<string, string> = {
 /** الصفحة الرئيسية — رأس فاتح وفق نظام الزاد المعتمد (لا هيرو مارون ممتلئ). */
 export default function Home() {
   const [stats, setStats] = useState<Stats>({ beneficiaries: 0, potential_projects: 0, donations: 0 });
-  const [services, setServices] = useState<BeneficiaryService[]>([]);
   const [platformProjects, setPlatformProjects] = useState<PlatformProjectCard[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       fetch(`${API_BASE_URL}/api/public-home-stats/`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-      fetch(`${API_BASE_URL}/api/beneficiary-services/`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
       fetch(`${API_BASE_URL}/api/platform/public/projects/?home=1&limit=6`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-    ]).then(([st, sv, pr]) => {
+    ]).then(([st, pr]) => {
       if (st) setStats(st);
-      if (sv) setServices(sv.results || sv);
       if (pr) setPlatformProjects(Array.isArray(pr) ? pr : pr.results || []);
     }).finally(() => setLoading(false));
   }, []);
@@ -79,6 +71,7 @@ export default function Home() {
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link to="/projects" className="btn-primary inline-flex">استكشف المشاريع</Link>
             <Link to="/map" className="btn-register inline-flex" style={{ color: "var(--text-brand)" }}>خارطة الأثر</Link>
+            <Link to="/volunteers" className="btn-register inline-flex" style={{ color: "var(--text-brand)" }}>تطوّع معنا</Link>
           </div>
         </div>
       </header>
@@ -129,56 +122,20 @@ export default function Home() {
         )}
       </section>
 
-      <section className="mx-auto max-w-page px-4 py-8">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <Card>
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <h3 className="mb-2 text-xl font-bold text-primary">تطوّع معنا</h3>
-                <p className="text-sm text-brand-gray">انضم للمتطوعين وساهم في تنفيذ المشاريع.</p>
-              </div>
-              <HandHeart className="text-secondary" size={32} />
-            </div>
-            <Link to="/volunteers"><Button>المتطوعون</Button></Link>
-          </Card>
-          <Card>
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <h3 className="mb-2 text-xl font-bold text-primary">اقترح مبادرة</h3>
-                <p className="text-sm text-brand-gray">شاركنا فكرة تصل لنطاق الطلبات في لوحة الإدارة.</p>
-              </div>
-              <Lightbulb className="text-secondary" size={32} />
-            </div>
-            <Link to="/suggest"><Button variant="secondary">شارك اقتراحك</Button></Link>
-          </Card>
-          <Card>
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <h3 className="mb-2 text-xl font-bold text-primary">طلب سقيا الماء</h3>
-                <p className="text-sm text-brand-gray">نموذج مرتبط بمشروع السقيا ويظهر في نطاق الطلبات.</p>
-              </div>
-              <Droplets className="text-secondary" size={32} />
-            </div>
-            {WATER_SUPPLY_FORM_ENABLED ? (
-              <Link to="/services/water-supply?project=saqya"><Button variant="secondary">قدّم طلباً</Button></Link>
-            ) : (
-              <p className="text-sm text-brand-gray">النموذج غير مفعّل حالياً — الطلبات عبر القنوات الخارجية.</p>
-            )}
-          </Card>
-        </div>
-      </section>
-
       <section className="bg-surface-muted py-12">
         <div className="mx-auto max-w-page px-4">
           <h2 className="mb-8 text-center text-3xl font-bold text-primary">الخدمات</h2>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {services.length > 0 ? services.map((s) => (
-              <Card key={s.id}>
-                <h3 className="mb-2 text-lg font-bold text-primary">{s.title}</h3>
-                <p className="mb-4 text-sm text-brand-gray">{s.desc}</p>
-                <Link to="/request-service"><Button variant="secondary">اطلب الخدمة</Button></Link>
-              </Card>
-            )) : <p className="text-center text-brand-gray">لا توجد خدمات حالياً.</p>}
+          <div className="mx-auto grid max-w-md grid-cols-1 gap-6">
+            <Card>
+              <div className="mb-4 flex items-start justify-between">
+                <div>
+                  <h3 className="mb-2 text-xl font-bold text-primary">طلب خدمة</h3>
+                  <p className="text-sm text-brand-gray">قدّم طلباً للمستفيدين — يُراجع من الإدارة ويُتابع حتى الإنجاز.</p>
+                </div>
+                <ClipboardList className="text-secondary" size={32} />
+              </div>
+              <Link to="/request-service"><Button variant="secondary">قدّم طلباً</Button></Link>
+            </Card>
           </div>
         </div>
       </section>

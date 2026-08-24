@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { API_BASE_URL, WATER_SUPPLY_FORM_ENABLED } from "../../config";
+import { ClipboardList } from "lucide-react";
+import { API_BASE_URL } from "../../config";
 import Card from "../ui/Card";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
@@ -29,19 +30,21 @@ export default function Services() {
     <div>
       <HeroBand title="الخدمات" subtitle="فرص تطوعية وخدمات يمكنك المشاركة فيها لصنع الأثر." />
       <main className="mx-auto max-w-page px-4 py-10">
-        <Card className="mb-8">
-          <h2 className="mb-2 text-lg font-bold text-primary">نماذج عامة</h2>
-          <p className="mb-4 text-sm text-brand-gray">
-            إرسال لمرة واحدة — يمكنك مسح الحقول قبل الإرسال؛ التعديل بعد الإرسال من لوحة الإدارة فقط.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Link to="/request-service"><Button variant="secondary">طلب خدمة</Button></Link>
-            <Link to="/suggest"><Button variant="secondary">اقتراح مبادرة</Button></Link>
-            {WATER_SUPPLY_FORM_ENABLED && (
-              <Link to="/services/water-supply?project=saqya"><Button variant="secondary">طلب سقيا الماء</Button></Link>
-            )}
-          </div>
-        </Card>
+        <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <Card>
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="mb-2 text-xl font-bold text-primary">طلب خدمة</h3>
+                <p className="text-sm text-brand-gray">
+                  إرسال لمرة واحدة — يمكنك مسح الحقول قبل الإرسال؛ التعديل بعد الإرسال من لوحة الإدارة فقط.
+                </p>
+              </div>
+              <ClipboardList className="text-secondary" size={32} />
+            </div>
+            <Link to="/request-service"><Button variant="secondary">قدّم طلباً</Button></Link>
+          </Card>
+        </div>
+        <h2 className="mb-6 text-center text-2xl font-bold text-primary">فرص التطوّع</h2>
         {loading ? (
           <p className="text-center text-brand-gray">جاري التحميل…</p>
         ) : (

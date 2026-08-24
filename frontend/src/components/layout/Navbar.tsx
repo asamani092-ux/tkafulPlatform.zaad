@@ -12,6 +12,7 @@ const navLinks = [
   { to: "/volunteers", label: "المتطوعون" },
   { to: "/map", label: "خارطة الأثر" },
   { to: "/about", label: "من نحن" },
+  { to: "/suggest", label: "اقترح مبادرة" },
 ];
 
 /** شريط التنقّل العام — قائمة جانبية (drawer) على الشاشات الصغيرة. */
