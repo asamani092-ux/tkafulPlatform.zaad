@@ -11,7 +11,8 @@ export type AdminDomainId =
   | "sponsorships"
   | "maps"
   | "staff"
-  | "reports";
+  | "reports"
+  | "settings";
 
 export interface AdminNavLink {
   to: string;
@@ -106,6 +107,16 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
       { to: "/Admin/reports", label: "التقارير" },
     ],
   },
+  {
+    id: "settings",
+    label: "إعدادات المنصّة",
+    to: "/Admin/settings",
+    blurb: "أعلام التشغيل والتواصل العام",
+    superAdminOnly: true,
+    links: [
+      { to: "/Admin/settings", label: "إعدادات المنصّة" },
+    ],
+  },
 ];
 
 /**
@@ -143,5 +154,6 @@ export function domainForPath(pathname: string): AdminDomainId | "overview" {
   if (p.startsWith("/admin/maps") || p === "/admin/map") return "maps";
   if (p.startsWith("/admin/staff") || p.startsWith("/admin/executive")) return "staff";
   if (p.startsWith("/admin/reports")) return "reports";
+  if (p.startsWith("/admin/settings")) return "settings";
   return "overview";
 }

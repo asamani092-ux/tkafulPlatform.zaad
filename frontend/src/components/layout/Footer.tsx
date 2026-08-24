@@ -1,7 +1,10 @@
 import { Mail, Phone, MapPin } from "lucide-react";
+import { usePlatformSettings } from "../../contexts/PlatformSettingsContext";
 
 /** تذييل مضغوط — من نحن + تواصل. */
 export default function Footer() {
+  const { settings } = usePlatformSettings();
+
   return (
     <footer className="border-t border-surface-border bg-surface">
       <div className="mx-auto max-w-page px-4 py-5 sm:py-6">
@@ -15,8 +18,8 @@ export default function Footer() {
           <div>
             <h3 className="mb-1.5 text-sm font-bold text-primary sm:text-base">تواصل معنا</h3>
             <div className="space-y-1.5 text-xs text-brand-gray sm:text-sm">
-              <div className="flex items-center gap-2"><Mail size={14} aria-hidden /> info@takafol-athar.com</div>
-              <div className="flex items-center gap-2"><Phone size={14} aria-hidden /> +966 50 123 4567</div>
+              <div className="flex items-center gap-2"><Mail size={14} aria-hidden /> {settings.contact_email}</div>
+              <div className="flex items-center gap-2"><Phone size={14} aria-hidden /> {settings.contact_phone}</div>
               <div className="flex items-center gap-2"><MapPin size={14} aria-hidden /> القصيم، المملكة العربية السعودية</div>
             </div>
           </div>

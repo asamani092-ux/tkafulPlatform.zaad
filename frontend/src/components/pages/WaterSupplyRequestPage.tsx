@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useToast } from "../../contexts/ToastContext";
-import { API_BASE_URL, WATER_SUPPLY_FORM_ENABLED } from "../../config";
+import { API_BASE_URL } from "../../config";
+import { usePlatformSettings } from "../../contexts/PlatformSettingsContext";
 import Card from "../ui/Card";
 import Input from "../ui/Input";
 import Select from "../ui/Select";
@@ -27,6 +28,7 @@ const EMPTY: FormData = {
 };
 
 export default function WaterSupplyRequestPage() {
+  const { settings, loading } = usePlatformSettings();
   const { success, error } = useToast();
   const [params] = useSearchParams();
   const projectSlug = params.get("project") || "saqya";
@@ -86,15 +88,14 @@ export default function WaterSupplyRequestPage() {
     }
   };
 
-  if (!WATER_SUPPLY_FORM_ENABLED) {
+  if (!loading && !settings.water_supply_form_enabled) {
     return (
       <div>
-        <HeroBand title="طلب سقيا الماء" subtitle="النموذج غير مفعّل حالياً في هذه البيئة." />
+        <HeroBand title="طلب سقيا الماء" subtitle="النموذج غير مفعّل حالياً." />
         <main className="mx-auto max-w-2xl px-4 py-10">
           <Card>
             <p className="text-sm text-brand-gray">
-              تُستقبل الطلبات عبر القنوات الخارجية المعتمدة. لتفعيل النموذج محلياً:{" "}
-              <code dir="ltr">VITE_ENABLE_WATER_SUPPLY_FORM=true</code>
+              تُستقبل الطلبات عبر القنوات الخارجية المعتمدة. يمكن للمشرف العام تفعيل النموذج من إعدادات المنصّة.
             </p>
             <Link to="/projects/saqya" className="mt-4 inline-block text-sm font-bold text-primary">← صفحة مشروع السقيا</Link>
           </Card>

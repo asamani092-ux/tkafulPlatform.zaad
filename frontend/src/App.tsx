@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "r
 
 import { AuthProvider } from "./contexts/AuthContext";
 import { MembershipsProvider } from "./contexts/MembershipsContext";
+import { PlatformSettingsProvider } from "./contexts/PlatformSettingsContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { DashboardSettingsProvider } from "./contexts/DashboardSettingsContext";
 import ProtectedRoute from "./components/routing/ProtectedRoute";
@@ -12,6 +13,8 @@ import { ForbiddenPage, NotFoundPage } from "./components/pages/ErrorPages";
 import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer";
 import { ACTIVE_LEGACY_REDIRECTS } from "./admin/domains";
+import { useAuth } from "./contexts/AuthContext";
+import { usePlatformSettings } from "./contexts/PlatformSettingsContext";
 
 // Public / general (eager — small landing pages)
 import Home from "./components/pages/Home";
@@ -52,6 +55,7 @@ const ProjectMapPage = lazy(() => import("./components/pages/projects/ProjectMap
 const MapsAggregator = lazy(() => import("./components/pages/projects/MapsAggregator"));
 const PlatformProjects = lazy(() => import("./components/pages/admin/PlatformProjects"));
 const MapsAdmin = lazy(() => import("./components/pages/admin/MapsAdmin"));
+const PlatformSettingsPage = lazy(() => import("./components/pages/admin/PlatformSettings"));
 // Dead-code-eliminated unless VITE_ENABLE_UAT === "true" (production builds omit the chunk).
 const UatPage = import.meta.env.VITE_ENABLE_UAT === "true"
   ? lazy(() => import("./components/pages/uat"))
@@ -59,6 +63,19 @@ const UatPage = import.meta.env.VITE_ENABLE_UAT === "true"
 
 function Lazy({ children }: { children: ReactNode }) {
   return <Suspense fallback={<LoadingState />}>{children}</Suspense>;
+}
+
+function MaintenanceGate({ children }: { children: ReactNode }) {
+  const { settings, loading } = usePlatformSettings();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  if (loading || !settings.maintenance_mode || isAdmin) return <>{children}</>;
+  return (
+    <div className="mx-auto max-w-page px-4 py-20 text-center">
+      <h1 className="mb-3 text-2xl font-bold text-primary">المنصّة قيد الصيانة</h1>
+      <p className="text-brand-gray">نعود قريباً — شكراً لصبركم.</p>
+    </div>
+  );
 }
 
 function AppContent() {
@@ -76,6 +93,7 @@ function AppContent() {
     <div className="flex min-h-screen flex-col bg-surface-muted" dir="rtl">
       {!hideChrome && <Navbar />}
       <main className="flex-1 overflow-x-hidden">
+        <MaintenanceGate>
         <Routes>
           {/* —— الموقع العام —— */}
           <Route path="/" element={<Home />} />
@@ -127,6 +145,9 @@ function AppContent() {
           {/* 7. التقارير */}
           <Route path="/Admin/reports" element={<Lazy><ProtectedRoute requiredRole="admin"><Reports /></ProtectedRoute></Lazy>} />
 
+          {/* 8. إعدادات المنصّة */}
+          <Route path="/Admin/settings" element={<Lazy><ProtectedRoute requiredRole="admin"><PlatformSettingsPage /></ProtectedRoute></Lazy>} />
+
           {/* توافق خلفي: كل المسارات القديمة */}
           {ACTIVE_LEGACY_REDIRECTS.map((r) => (
             <Route key={r.from} path={r.from} element={<Navigate to={r.to} replace />} />
@@ -142,6 +163,7 @@ function AppContent() {
 
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        </MaintenanceGate>
       </main>
       {!hideChrome && <Footer />}
     </div>
@@ -151,15 +173,17 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <MembershipsProvider>
-        <ToastProvider>
-          <DashboardSettingsProvider>
-            <Router>
-              <AppContent />
-            </Router>
-          </DashboardSettingsProvider>
-        </ToastProvider>
-      </MembershipsProvider>
+      <PlatformSettingsProvider>
+        <MembershipsProvider>
+          <ToastProvider>
+            <DashboardSettingsProvider>
+              <Router>
+                <AppContent />
+              </Router>
+            </DashboardSettingsProvider>
+          </ToastProvider>
+        </MembershipsProvider>
+      </PlatformSettingsProvider>
     </AuthProvider>
   );
 }

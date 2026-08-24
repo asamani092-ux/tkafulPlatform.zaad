@@ -9,6 +9,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from core.throttles import AuthRateThrottle
+from core.platform_settings import is_public_registration_enabled
 from .password_ar import password_errors_to_ar
 from .serializers import UserSerializer, RegisterSerializer
 
@@ -50,6 +51,12 @@ def register(request):
         "refresh": "jwt_refresh_token"
     }
     """
+    if not is_public_registration_enabled():
+        return Response(
+            {"detail": "التسجيل مغلق حالياً — تواصل مع الإدارة."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     serializer = RegisterSerializer(data=request.data)
 
     if serializer.is_valid():

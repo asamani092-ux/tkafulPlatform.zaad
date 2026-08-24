@@ -4,6 +4,8 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { isValidEmail, validatePassword, isValidSaudiPhone, isValidSaudiNationalId } from "../../../utils/validation";
 import { API_BASE_URL } from "../../../config";
+import { usePlatformSettings } from "../../../contexts/PlatformSettingsContext";
+import { LoadingState } from "../../feedback/PageStates";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
 import Select from "../../ui/Select";
@@ -38,6 +40,7 @@ function Chip({ selected, onClick, children }: { selected: boolean; onClick: () 
 }
 
 export default function SignUp() {
+  const { settings, loading: settingsLoading } = usePlatformSettings();
   const navigate = useNavigate();
   const { login } = useAuth();
   const { success, error } = useToast();
@@ -134,6 +137,31 @@ export default function SignUp() {
     if (s && !formData.skills.includes(s)) set("skills", [...formData.skills, s]);
     setSkillInput("");
   };
+
+  if (settingsLoading) {
+    return (
+      <div>
+        <HeroBand title="انضم إلينا" subtitle="سجّل البيانات التالية لتكون جزءًا من صناعة الأثر." />
+        <main className="mx-auto max-w-4xl px-4 py-10"><LoadingState title="جاري التحميل…" /></main>
+      </div>
+    );
+  }
+
+  if (!settings.public_registration_enabled) {
+    return (
+      <div>
+        <HeroBand title="انضم إلينا" subtitle="التسجيل مغلق حالياً." />
+        <main className="mx-auto max-w-2xl px-4 py-10">
+          <Card>
+            <p className="text-sm text-brand-gray">التسجيل العام غير متاح حالياً. تواصل مع إدارة المنصّة أو سجّل الدخول إن كان لديك حساب.</p>
+            <p className="mt-4 text-center text-sm">
+              <Link to="/signin" className="font-semibold text-primary">تسجيل الدخول</Link>
+            </p>
+          </Card>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div>

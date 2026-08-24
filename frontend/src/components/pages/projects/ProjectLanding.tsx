@@ -5,7 +5,7 @@ import Card from "../../ui/Card";
 import Badge from "../../ui/Badge";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { fetchPublicProject } from "./api";
-import { WATER_SUPPLY_FORM_ENABLED } from "../../../config";
+import { usePlatformSettings } from "../../../contexts/PlatformSettingsContext";
 import { TOOL_LABELS, type PublicProjectDetail } from "./types";
 import { labelAr, PROJECT_STATUS_AR } from "../../../i18n/labels";
 
@@ -19,6 +19,7 @@ const TOOL_ICONS: Record<string, typeof MapIcon> = {
 
 /** صفحة هبوط المشروع — هوية ثابتة + أدوات قابلة للتفعيل. */
 export default function ProjectLanding() {
+  const { settings } = usePlatformSettings();
   const { slug = "" } = useParams();
   const [project, setProject] = useState<PublicProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,7 +46,7 @@ export default function ProjectLanding() {
       case "volunteering":
         return "/volunteers";
       case "services":
-        if (project.slug === "saqya" && !WATER_SUPPLY_FORM_ENABLED) return null;
+        if (project.slug === "saqya" && !settings.water_supply_form_enabled) return null;
         return project.slug === "saqya"
           ? `/services/water-supply?project=${project.slug}`
           : "/services";
