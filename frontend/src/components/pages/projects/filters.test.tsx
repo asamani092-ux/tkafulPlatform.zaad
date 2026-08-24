@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyDynamicFilters,
+  displayFieldValue,
   filterableFields,
   mergeFields,
   optionLabel,
@@ -54,6 +55,23 @@ describe("dynamic public filters (MapItemField-driven)", () => {
     expect(optionValue(fields[0].options[0])).toBe("region");
     expect(optionLabel(fields[0].options[0])).toBe("منطقة");
     expect(optionValue(fields[0].options[1])).toBe("outlet");
+    expect(optionLabel(fields[0].options[1])).toBe("منفذ");
+    expect(optionLabel("sale_point")).toBe("نقطة بيع");
+  });
+
+  it("displays field values in Arabic via option labels", () => {
+    const outletType: MapFieldDef = {
+      key: "outlet_type",
+      label: "نوع المنفذ",
+      type: "select",
+      required: false,
+      options: [{ value: "sale_point", label: "نقطة بيع" }],
+      order: 0,
+    };
+    expect(displayFieldValue(outletType, "sale_point")).toBe("نقطة بيع");
+    expect(displayFieldValue(fields[0], "outlet")).toBe("منفذ");
+    expect(displayFieldValue(undefined, "outlet")).toBe("منفذ");
+    expect(displayFieldValue(fields[2], true)).toBe("نعم");
   });
 
   it("returns all items when no filter active", () => {

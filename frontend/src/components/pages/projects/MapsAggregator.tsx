@@ -7,6 +7,7 @@ import {
   applyDynamicFilters,
   mergeFields,
   sumMasked,
+  displayFieldValue,
   type DynamicFilters,
 } from "./filters";
 import DynamicFilterBar from "./DynamicFilterBar";
@@ -152,7 +153,7 @@ export default function MapsAggregator() {
               return (
                 <div key={key}>
                   <span className="text-brand-gray">{field.label}:</span>{" "}
-                  <strong>{typeof value === "boolean" ? (value ? "نعم" : "لا") : String(value)}</strong>
+                  <strong>{displayFieldValue(field, value)}</strong>
                 </div>
               );
             })}

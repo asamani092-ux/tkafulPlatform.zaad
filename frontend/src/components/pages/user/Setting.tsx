@@ -23,8 +23,17 @@ export default function UserSettings() {
         method: "POST",
         body: JSON.stringify({ new_password: newPassword }),
       });
-      const data = await res.json();
-      if (!res.ok) { error({ title: "تعذّر التحديث", description: passwordErrorsToAr(data.detail) }); }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        error({
+          title: "تعذّر التحديث",
+          description: passwordErrorsToAr(
+            (data as { detail?: unknown; new_password?: unknown }).detail
+              ?? (data as { new_password?: unknown }).new_password
+              ?? data,
+          ),
+        });
+      }
       else { success({ title: "تم تحديث كلمة المرور بنجاح" }); setNewPassword(""); setConfirm(""); }
     } catch { error({ title: "خطأ في الاتصال" }); }
     setSubmitting(false);

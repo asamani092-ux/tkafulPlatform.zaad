@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import Card from "../../ui/Card";
 import { LoadingState, EmptyState, ErrorState } from "../../feedback/PageStates";
 import { fetchPublicMapDetail, fetchPublicMapsIndex, fetchPublicMapSummary } from "./api";
-import { applyDynamicFilters, type DynamicFilters } from "./filters";
+import { applyDynamicFilters, displayFieldValue, type DynamicFilters } from "./filters";
 import DynamicFilterBar from "./DynamicFilterBar";
 import GenericMapView from "./GenericMapView";
 import type { MapSummaryInfo, PublicMapDetail, PublicMapIndexEntry } from "./types";
@@ -108,7 +108,7 @@ export default function ProjectMapPage() {
               return (
                 <div key={key}>
                   <span className="text-brand-gray">{field.label}:</span>{" "}
-                  <strong>{typeof value === "boolean" ? (value ? "نعم" : "لا") : String(value)}</strong>
+                  <strong>{displayFieldValue(field, value)}</strong>
                 </div>
               );
             })}

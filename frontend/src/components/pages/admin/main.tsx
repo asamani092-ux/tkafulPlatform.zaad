@@ -41,23 +41,23 @@ async function countList(url: string, access: string | null): Promise<number | n
 
 /** نظرة عامة — بطاقة KPI واحدة لكل نطاق عمل. */
 export default function AdminMain() {
-  const { access } = useAuth();
+  const { access: token } = useAuth();
   const { access } = useMembershipsContext();
   const [counts, setCounts] = useState<DomainCounts | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (!access) return;
+    if (!token) return;
     let cancelled = false;
     (async () => {
       try {
         const [projects, volunteers, requests, maps, staff, suggestions] = await Promise.all([
-          countList("/api/platform/projects/", access),
-          countList("/api/volunteers/", access),
-          countList("/api/service-requests/?status=PENDING", access),
-          countList("/api/maps/", access),
-          countList("/api/dashboard/executive/", access),
-          countList("/api/suggestions/", access),
+          countList("/api/platform/projects/", token),
+          countList("/api/volunteers/", token),
+          countList("/api/service-requests/?status=PENDING", token),
+          countList("/api/maps/", token),
+          countList("/api/dashboard/executive/", token),
+          countList("/api/suggestions/", token),
         ]);
         // كفالات: عدد المشاريع التي تفعّل أداة الكفالات
         let sponsorships: number | null = null;
@@ -88,7 +88,7 @@ export default function AdminMain() {
       }
     })();
     return () => { cancelled = true; };
-  }, [access]);
+  }, [token]);
 
   const visible = visibleDomainsForUser(access);
 
