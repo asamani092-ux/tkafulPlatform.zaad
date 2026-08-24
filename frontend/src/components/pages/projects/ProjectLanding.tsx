@@ -5,6 +5,7 @@ import Card from "../../ui/Card";
 import Badge from "../../ui/Badge";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { fetchPublicProject } from "./api";
+import { WATER_SUPPLY_FORM_ENABLED } from "../../../config";
 import { TOOL_LABELS, type PublicProjectDetail } from "./types";
 
 const TOOL_ICONS: Record<string, typeof MapIcon> = {
@@ -43,7 +44,7 @@ export default function ProjectLanding() {
       case "volunteering":
         return "/volunteers";
       case "services":
-        // سقيا الماء مربوطة بمشروع السقيا؛ بقية المشاريع → صفحة الخدمات العامة
+        if (project.slug === "saqya" && !WATER_SUPPLY_FORM_ENABLED) return null;
         return project.slug === "saqya"
           ? `/services/water-supply?project=${project.slug}`
           : "/services";

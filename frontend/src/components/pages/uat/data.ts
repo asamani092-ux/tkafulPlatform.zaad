@@ -63,22 +63,17 @@ export const UAT_SECTIONS: UatSection[] = [
       {
         id: "1.4",
         title: "فتح /projects/saqya و /projects/tafaqqadhum و /projects/takaful-athar",
-        expected: "صفحة هبوط: الهوية + الأدوات من ProjectTool (مُفعّلة في قاعدة البيانات)؛ الخريطة تظهر فقط إن وُجدت خريطة منشورة",
+        expected: "صفحة هبوط + أدوات ProjectTool؛ إخفاء نموذج سقيا عبر VITE_ENABLE_WATER_SUPPLY_FORM=false",
       },
       {
         id: "1.5",
         title: "فتح /map",
-        expected: "مجمّع عام (يتطلب seed_impact_map)؛ اختر عنصراً ثم «ساهم هنا» للتعهد",
+        expected: "بعد seed_impact_map: KPI + فلترة + عناصر على الخريطة (عرض فقط)",
       },
       {
         id: "1.6",
         title: "فتح /projects/tafaqqadhum/map",
-        expected: "خريطة المشروع فقط؛ عناصر/فلاتر ديناميكية؛ لا إدارة أدمن من هنا",
-      },
-      {
-        id: "1.7",
-        title: "إرسال تعهد من الخريطة (اسم + 05XXXXXXXX + كمية)",
-        expected: "اختر عنصراً على الخريطة → «ساهم هنا» → «تم استلام تعهدكم بنجاح» (pending)",
+        expected: "بعد seed_impact_map: خريطة تفقدهم + فلاتر ديناميكية (عرض فقط)",
       },
       {
         id: "1.8",
@@ -127,7 +122,7 @@ export const UAT_SECTIONS: UatSection[] = [
       {
         id: "2.5",
         title: "تسجيل مستخدم جديد + دخول/خروج JWT",
-        expected: "تسجيل → الرئيسية؛ اعتماد المتطوعين في /Admin/volunteers/applications (للمشرف العام)",
+        expected: "تسجيل → /user/main؛ القبول في /Admin/volunteers/join-requests؛ إدارة المعتمدين في /Admin/volunteers",
       },
     ],
   },

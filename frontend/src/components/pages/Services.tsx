@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { API_BASE_URL } from "../../config";
+import { API_BASE_URL, WATER_SUPPLY_FORM_ENABLED } from "../../config";
 import Card from "../ui/Card";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
@@ -37,7 +37,9 @@ export default function Services() {
           <div className="flex flex-wrap gap-2">
             <Link to="/request-service"><Button variant="secondary">طلب خدمة</Button></Link>
             <Link to="/suggest"><Button variant="secondary">اقتراح مبادرة</Button></Link>
-            <Link to="/services/water-supply?project=saqya"><Button variant="secondary">طلب سقيا الماء</Button></Link>
+            {WATER_SUPPLY_FORM_ENABLED && (
+              <Link to="/services/water-supply?project=saqya"><Button variant="secondary">طلب سقيا الماء</Button></Link>
+            )}
           </div>
         </Card>
         {loading ? (

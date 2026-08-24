@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { HandHeart, Lightbulb, Droplets } from "lucide-react";
-import { API_BASE_URL } from "../../config";
+import { API_BASE_URL, WATER_SUPPLY_FORM_ENABLED } from "../../config";
 import Card from "../ui/Card";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
@@ -159,7 +159,11 @@ export default function Home() {
               </div>
               <Droplets className="text-secondary" size={32} />
             </div>
-            <Link to="/services/water-supply?project=saqya"><Button variant="secondary">قدّم طلباً</Button></Link>
+            {WATER_SUPPLY_FORM_ENABLED ? (
+              <Link to="/services/water-supply?project=saqya"><Button variant="secondary">قدّم طلباً</Button></Link>
+            ) : (
+              <p className="text-sm text-brand-gray">النموذج غير مفعّل حالياً — الطلبات عبر القنوات الخارجية.</p>
+            )}
           </Card>
         </div>
       </section>
