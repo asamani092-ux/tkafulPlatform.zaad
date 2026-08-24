@@ -25,6 +25,10 @@ function StaffGate({ children, signInPath }: { children: ReactNode; signInPath: 
   }
   if (loading) return <LoadingState title="جاري التحقق من الصلاحيات…" />;
   if (!canAccessAdminPath(location.pathname, access)) {
+    // مستخدم عادي فقد عضوية المشروع → بوابة المتطوّع (لا 403 ولا «تعذّر التحميل»)
+    if (!access.isGlobalAdmin && !access.hasMemberships && access.userRole === "user") {
+      return <Navigate to="/user/main" replace />;
+    }
     return <Navigate to="/403" replace />;
   }
   return <>{children}</>;
