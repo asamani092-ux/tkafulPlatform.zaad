@@ -12,6 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from core.throttles import PublicWriteRateThrottle
+from core.roles import CAP_CREATE_SPONSORSHIP, CAP_UPLOAD_DOCUMENTATION, has_capability
 from .models import (
     SupplierProfile, RepresentativeProfile, Sponsorship, Order, Invoice, Payment, Documentation,
 )
@@ -71,7 +72,7 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
         serializer.save(donor=self.request.user)
 
     def create(self, request, *args, **kwargs):
-        if role(request.user) != "donor":
+        if not has_capability(request.user, CAP_CREATE_SPONSORSHIP):
             return Response({"detail": "إنشاء الكفالة متاح للمتبرّع فقط"}, status=status.HTTP_403_FORBIDDEN)
         return super().create(request, *args, **kwargs)
 
@@ -295,7 +296,7 @@ class DocumentationViewSet(viewsets.ModelViewSet):
         return qs.none()
 
     def create(self, request, *args, **kwargs):
-        if role(request.user) not in ("representative", "supplier", "admin"):
+        if not has_capability(request.user, CAP_UPLOAD_DOCUMENTATION):
             return Response({"detail": "رفع التوثيق للمندوب/المورّد فقط"}, status=403)
         f = request.FILES.get("file")
         err = validate_upload_file(f)

@@ -126,6 +126,7 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     links: [
       { to: "/Admin/settings", label: "إعدادات المنصّة" },
       { to: "/Admin/settings/broadcast", label: "بث إشعار" },
+      { to: "/Admin/settings/roles", label: "الأدوار" },
     ],
   },
 ];

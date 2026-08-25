@@ -5,15 +5,12 @@
 """
 from rest_framework.permissions import IsAuthenticated
 
+from core.roles import CAP_PLATFORM_ADMIN, has_capability
+
 
 def is_super_admin(user) -> bool:
-    """super-admin = الدور العالمي admin في accounts.Profile (بدون أدوار جديدة — D-06)."""
-    return bool(
-        user
-        and user.is_authenticated
-        and hasattr(user, "profile")
-        and user.profile.role == "admin"
-    )
+    """super-admin = القدرة platform_admin (دور admin فقط — D-06 / D-41)."""
+    return has_capability(user, CAP_PLATFORM_ADMIN)
 
 
 class IsAdmin(IsAuthenticated):
