@@ -11,6 +11,7 @@ import { useMemberships } from "../../../hooks/useMemberships";
 
 interface DomainCounts {
   projects: number | null;
+  users: number | null;
   volunteers: number | null;
   requests: number | null;
   sponsorships: number | null;
@@ -51,8 +52,9 @@ export default function AdminMain() {
     let cancelled = false;
     (async () => {
       try {
-        const [projects, volunteers, requests, maps, staff, suggestions] = await Promise.all([
+        const [projects, users, volunteers, requests, maps, staff, suggestions] = await Promise.all([
           countList("/api/platform/projects/", access),
+          countList("/api/accounts/users/", access),
           countList("/api/volunteers/", access),
           countList("/api/service-requests/?status=PENDING", access),
           countList("/api/maps/", access),
@@ -73,6 +75,7 @@ export default function AdminMain() {
         if (!cancelled) {
           setCounts({
             projects,
+            users,
             volunteers,
             requests: requests != null || suggestions != null
               ? (requests || 0) + (suggestions || 0)

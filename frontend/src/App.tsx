@@ -33,6 +33,7 @@ const PersonalInfo = lazy(() => import("./components/pages/user/PersonalInfo"));
 const AdminMain = lazy(() => import("./components/pages/admin/main"));
 const VolunteerRequests = lazy(() => import("./components/pages/admin/VolunteerRequests"));
 const VolunteerApplications = lazy(() => import("./components/pages/admin/VolunteerApplications"));
+const UsersAdmin = lazy(() => import("./components/pages/admin/UsersAdmin"));
 const VolunteerManagement = lazy(() => import("./components/pages/admin/VolunteerManagement"));
 const AddProjectPage = lazy(() => import("./components/pages/admin/AddProject"));
 const ProjectIdeas = lazy(() => import("./components/pages/admin/ProjectIdeas"));
@@ -101,12 +102,15 @@ function AppContent() {
           <Route path="/Admin/projects" element={<Lazy><ProtectedRoute requiredRole="staff"><PlatformProjects /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/projects/create" element={<Lazy><ProtectedRoute requiredRole="admin"><AddProjectPage /></ProtectedRoute></Lazy>} />
 
-          {/* 2. المتطوعون */}
+          {/* 2. المستخدمون */}
+          <Route path="/Admin/users" element={<Lazy><ProtectedRoute requiredRole="admin"><UsersAdmin /></ProtectedRoute></Lazy>} />
+
+          {/* 3. المتطوعون */}
           <Route path="/Admin/volunteers" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerManagement /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/volunteers/applications" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerApplications /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/volunteers/join-requests" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerRequests /></ProtectedRoute></Lazy>} />
 
-          {/* 3. الطلبات */}
+          {/* 4. الطلبات */}
           <Route path="/Admin/requests" element={<Lazy><ProtectedRoute requiredRole="admin"><ServiceRequests /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/requests/water-supply" element={<Lazy><ProtectedRoute requiredRole="admin"><WaterSupplyRequests /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/requests/suggestions" element={<Lazy><ProtectedRoute requiredRole="admin"><ProjectIdeas /></ProtectedRoute></Lazy>} />

@@ -6,6 +6,7 @@
 export type AdminDomainId =
   | "overview"
   | "projects"
+  | "users"
   | "volunteers"
   | "requests"
   | "sponsorships"
@@ -41,6 +42,16 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     links: [
       { to: "/Admin/projects", label: "كل المشاريع", staffVisible: true },
       { to: "/Admin/projects/create", label: "إنشاء مشروع" },
+    ],
+  },
+  {
+    id: "users",
+    label: "المستخدمون",
+    to: "/Admin/users",
+    blurb: "عرض وإضافة وتعديل وحذف الحسابات والأدوار",
+    superAdminOnly: true,
+    links: [
+      { to: "/Admin/users", label: "إدارة المستخدمين" },
     ],
   },
   {
@@ -136,6 +147,7 @@ export function domainForPath(pathname: string): AdminDomainId | "overview" {
   const p = pathname.toLowerCase();
   if (p === "/admin" || p === "/admin/") return "overview";
   if (p.startsWith("/admin/projects")) return "projects";
+  if (p.startsWith("/admin/users")) return "users";
   if (p.startsWith("/admin/volunteers")) return "volunteers";
   if (p.startsWith("/admin/requests")) return "requests";
   if (p.startsWith("/admin/sponsorships")) return "sponsorships";
