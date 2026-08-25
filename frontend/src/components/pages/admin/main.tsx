@@ -18,6 +18,7 @@ interface DomainCounts {
   maps: number | null;
   staff: number | null;
   reports: number | null;
+  settings: number | null;
 }
 
 async function countList(url: string, access: string | null): Promise<number | null> {
@@ -84,6 +85,7 @@ export default function AdminMain() {
             maps,
             staff,
             reports: null,
+            settings: null,
           });
         }
       } catch {

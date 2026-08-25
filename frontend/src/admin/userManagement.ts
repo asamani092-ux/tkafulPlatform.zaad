@@ -35,6 +35,7 @@ export function extractErrorDetail(body: unknown): string {
   if (!body || typeof body !== "object") return "تعذّر تنفيذ العملية";
   const rec = body as Record<string, unknown>;
   if (typeof rec.detail === "string") return rec.detail;
+  if (Array.isArray(rec.detail) && typeof rec.detail[0] === "string") return rec.detail[0];
   const first = Object.values(rec).find((v) => Array.isArray(v) && typeof v[0] === "string");
   if (Array.isArray(first) && typeof first[0] === "string") return first[0];
   return "تعذّر تنفيذ العملية";

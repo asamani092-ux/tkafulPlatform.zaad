@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 import { AuthProvider } from "./contexts/AuthContext";
+import { PlatformSettingsProvider } from "./contexts/PlatformSettingsContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { DashboardSettingsProvider } from "./contexts/DashboardSettingsContext";
 import ProtectedRoute from "./components/routing/ProtectedRoute";
@@ -51,6 +52,8 @@ const ProjectMapPage = lazy(() => import("./components/pages/projects/ProjectMap
 const MapsAggregator = lazy(() => import("./components/pages/projects/MapsAggregator"));
 const PlatformProjects = lazy(() => import("./components/pages/admin/PlatformProjects"));
 const MapsAdmin = lazy(() => import("./components/pages/admin/MapsAdmin"));
+const PlatformSettingsPage = lazy(() => import("./components/pages/admin/PlatformSettings"));
+const PublicStaticPage = lazy(() => import("./components/pages/PublicStaticPage"));
 // Dead-code-eliminated unless VITE_ENABLE_UAT === "true" (production builds omit the chunk).
 const UatPage = import.meta.env.VITE_ENABLE_UAT === "true"
   ? lazy(() => import("./components/pages/uat"))
@@ -82,6 +85,7 @@ function AppContent() {
           <Route path="/services" element={<Services />} />
           <Route path="/volunteers" element={<Volunteers />} />
           <Route path="/about" element={<About />} />
+          <Route path="/pages/:slug" element={<Lazy><PublicStaticPage /></Lazy>} />
           <Route path="/suggest" element={<Suggest />} />
           <Route path="/request-service" element={<RequestService />} />
           <Route path="/services/water-supply" element={<WaterSupplyRequestPage />} />
@@ -125,8 +129,11 @@ function AppContent() {
           <Route path="/Admin/staff" element={<Lazy><ProtectedRoute requiredRole="orgStaff"><ExecutiveDashboard /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/staff/manage" element={<Lazy><ProtectedRoute requiredRole="orgStaff"><ManageDashboard /></ProtectedRoute></Lazy>} />
 
-          {/* 7. التقارير */}
+          {/* 8. التقارير */}
           <Route path="/Admin/reports" element={<Lazy><ProtectedRoute requiredRole="admin"><Reports /></ProtectedRoute></Lazy>} />
+
+          {/* 9. إعدادات المنصّة */}
+          <Route path="/Admin/settings" element={<Lazy><ProtectedRoute requiredRole="admin"><PlatformSettingsPage /></ProtectedRoute></Lazy>} />
 
           {/* توافق خلفي: كل المسارات القديمة */}
           {ACTIVE_LEGACY_REDIRECTS.map((r) => (
@@ -152,13 +159,15 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <ToastProvider>
-        <DashboardSettingsProvider>
-          <Router>
-            <AppContent />
-          </Router>
-        </DashboardSettingsProvider>
-      </ToastProvider>
+      <PlatformSettingsProvider>
+        <ToastProvider>
+          <DashboardSettingsProvider>
+            <Router>
+              <AppContent />
+            </Router>
+          </DashboardSettingsProvider>
+        </ToastProvider>
+      </PlatformSettingsProvider>
     </AuthProvider>
   );
 }

@@ -3,15 +3,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, User, LogOut } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useMemberships } from "../../hooks/useMemberships";
-
-const navLinks = [
-  { to: "/", label: "الرئيسية" },
-  { to: "/projects", label: "المشاريع" },
-  { to: "/services", label: "الخدمات" },
-  { to: "/volunteers", label: "المتطوعون" },
-  { to: "/map", label: "الخرائط" },
-  { to: "/about", label: "من نحن" },
-];
+import { usePlatformSettings } from "../../contexts/PlatformSettingsContext";
+import { visiblePublicNav, displayPlatformName, displayLogoUrl } from "../../admin/publicNav";
 
 /** شريط التنقّل العام — قائمة جانبية (drawer) على الشاشات الصغيرة. */
 export default function Navbar() {
@@ -19,7 +12,11 @@ export default function Navbar() {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
   const { memberships, isSuperAdmin } = useMemberships();
+  const { settings } = usePlatformSettings();
   const [open, setOpen] = useState(false);
+  const navLinks = visiblePublicNav(settings);
+  const brandName = displayPlatformName(settings.platform_name);
+  const logoSrc = displayLogoUrl(settings.logo_url);
 
   const staffRoles = ["admin", "manager", "employee"];
   const isStaff =
@@ -66,8 +63,8 @@ export default function Navbar() {
             <Menu size={22} />
           </button>
           <Link to="/" className="flex min-w-0 items-center gap-2 text-xl font-extrabold text-primary">
-            <img src="/logo.png" alt="جمعية الزاد" style={{ height: 40, width: "auto" }} />
-            <span className="truncate">تكافل وأثر</span>
+            <img src={logoSrc} alt={brandName} style={{ height: 40, width: "auto" }} />
+            <span className="truncate">{brandName}</span>
           </Link>
         </div>
 
