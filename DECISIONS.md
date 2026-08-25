@@ -302,3 +302,17 @@
 - **الواجهة**: جرس في AdminShell وUserShell وNavbar للمصادق؛ تفضيلات في `/user/settings`؛ مؤلف البث تحت الإعدادات.
 - **التعقيد**: notify O(R) للمستلمين مع استعلام تفضيلات دفعة واحدة؛ القائمة صفحة P مع ترتيب غير المقروء أولاً.
 
+## D-41 — كتالوج الأدوار ثابت في الكود
+- **القرار**: الأدوار غير قابلة للتحرير. المصدر الوحيد `core/roles.py::ROLE_CAPABILITIES` + `has_capability()`.
+- **الربط**: `IsAdmin` / `is_super_admin` عبر `CAP_PLATFORM_ADMIN`؛ `IsSaqyaAdmin` عبر `CAP_APPROVE_SPONSORSHIP`؛ `IsDonor` عبر `CAP_CREATE_SPONSORSHIP`؛ `IsStaffOrReadOnly` عبر `CAP_MANAGE_STAFF`.
+- **التعيين**: يبقى في مرحلة 1 (`set_role`)؛ هذه المرحلة للعرض فقط.
+- **الواجهة**: `/Admin/settings/roles` مصفوفة قراءة.
+- **التعقيد**: has_capability O(1)؛ الكتالوج O(R·C).
+
+## D-42 — سجل النشاط داخل `core` وإضافة فقط
+- **القرار**: طيّ `ActivityLog` في `core` (لا تطبيق `audit` جديد) بجانب الإعدادات الأفقية.
+- **الكتابة**: `log_activity()` من الإجراءات الحسّاسة فقط؛ الملخص بلا كلمات مرور/توكنات؛ `actor` SET_NULL عند حذف المستخدم.
+- **القراءة**: `GET /api/activity-logs/` IsAdmin، paginated، فلاتر actor/action/date/target_type. لا PATCH/DELETE عبر API.
+- **الواجهة**: `/Admin/settings/activity`.
+- **التعقيد**: الإدراج O(1)؛ القائمة صفحة P.
+

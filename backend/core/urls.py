@@ -4,9 +4,11 @@ from rest_framework.routers import DefaultRouter
 from .views import ping, uat_status
 from .views_platform import admin_platform_settings, public_platform_settings, StaticPageViewSet
 from .views_roles import role_catalog_view
+from .views_activity import ActivityLogViewSet
 
 router = DefaultRouter()
 router.register(r"static-pages", StaticPageViewSet, basename="static-pages")
+router.register(r"activity-logs", ActivityLogViewSet, basename="activity-logs")
 
 urlpatterns = [
     path("ping/", ping, name="ping"),

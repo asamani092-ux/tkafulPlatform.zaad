@@ -53,3 +53,30 @@ class StaticPage(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class ActivityLog(models.Model):
+    """سجل نشاط للإجراءات الحسّاسة — إضافة فقط."""
+
+    actor = models.ForeignKey(
+        "auth.User",
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="activity_logs",
+    )
+    action = models.CharField(max_length=40, db_index=True)
+    target_type = models.CharField(max_length=80, blank=True, db_index=True)
+    target_id = models.CharField(max_length=64, blank=True)
+    summary = models.CharField(max_length=240)
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["actor", "created_at"], name="core_activi_actor_i_idx"),
+            models.Index(fields=["action", "created_at"], name="core_activi_action_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.action} @ {self.created_at}"

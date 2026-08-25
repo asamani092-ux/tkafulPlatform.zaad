@@ -8,6 +8,7 @@ from rest_framework.response import Response
 
 from core.permissions import IsAdmin
 from core.throttles import BroadcastRateThrottle
+from core.activity import ACTION_BROADCAST, log_activity
 
 from .models import Notification, NotificationPreference
 from .serializers import NotificationPreferenceSerializer, NotificationSerializer
@@ -89,6 +90,12 @@ def broadcast(request):
         notification_type=request.data.get("notification_type", "info"),
         link=request.data.get("link", ""),
         event_type=EVENT_BROADCAST,
+    )
+    log_activity(
+        actor=request.user,
+        action=ACTION_BROADCAST,
+        summary="بث إشعار داخل المنصّة",
+        request=request,
     )
     return Response({"success": True, "sent": n}, status=status.HTTP_201_CREATED)
 

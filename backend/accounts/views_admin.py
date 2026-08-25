@@ -9,6 +9,14 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from core.permissions import IsAdmin
+from core.activity import (
+    ACTION_USER_CREATE,
+    ACTION_USER_DELETE,
+    ACTION_USER_SET_ACTIVE,
+    ACTION_USER_SET_ROLE,
+    ACTION_USER_UPDATE,
+    log_activity,
+)
 
 from .admin_users import (
     MSG_LAST_ADMIN_DELETE,
@@ -56,6 +64,13 @@ class AdminUserViewSet(viewsets.GenericViewSet):
         serializer = AdminUserCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        log_activity(
+            actor=request.user,
+            action=ACTION_USER_CREATE,
+            target=user,
+            summary=f"إنشاء مستخدم {user.email}",
+            request=request,
+        )
         return Response(AdminUserSerializer(user).data, status=status.HTTP_201_CREATED)
 
     def partial_update(self, request, pk=None):
@@ -81,6 +96,13 @@ class AdminUserViewSet(viewsets.GenericViewSet):
             user.save(update_fields=["is_active"])
 
         user.refresh_from_db()
+        log_activity(
+            actor=request.user,
+            action=ACTION_USER_UPDATE,
+            target=user,
+            summary=f"تعديل مستخدم {user.email}",
+            request=request,
+        )
         return Response(AdminUserSerializer(user).data)
 
     def update(self, request, pk=None):
@@ -92,6 +114,7 @@ class AdminUserViewSet(viewsets.GenericViewSet):
             return Response({"detail": MSG_SELF_DELETE}, status=status.HTTP_400_BAD_REQUEST)
         if would_remove_last_admin(user):
             return Response({"detail": MSG_LAST_ADMIN_DELETE}, status=status.HTTP_400_BAD_REQUEST)
+        email = user.email
         try:
             user.delete()
         except ProtectedError:
@@ -99,6 +122,12 @@ class AdminUserViewSet(viewsets.GenericViewSet):
                 {"detail": "لا يمكن حذف المستخدم لارتباطه بسجلات محمية"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        log_activity(
+            actor=request.user,
+            action=ACTION_USER_DELETE,
+            summary=f"حذف مستخدم {email}",
+            request=request,
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["post"], url_path="set_role")
@@ -111,6 +140,13 @@ class AdminUserViewSet(viewsets.GenericViewSet):
             return Response({"detail": MSG_LAST_ADMIN_ROLE}, status=status.HTTP_400_BAD_REQUEST)
         user.profile.role = role
         user.profile.save(update_fields=["role"])
+        log_activity(
+            actor=request.user,
+            action=ACTION_USER_SET_ROLE,
+            target=user,
+            summary=f"تعيين دور {role} للمستخدم {user.email}",
+            request=request,
+        )
         return Response(AdminUserSerializer(user).data)
 
     @action(detail=True, methods=["post"], url_path="set_active")
@@ -128,4 +164,11 @@ class AdminUserViewSet(viewsets.GenericViewSet):
             return Response({"detail": MSG_LAST_ADMIN_DISABLE}, status=status.HTTP_400_BAD_REQUEST)
         user.is_active = is_active
         user.save(update_fields=["is_active"])
+        log_activity(
+            actor=request.user,
+            action=ACTION_USER_SET_ACTIVE,
+            target=user,
+            summary=f"{'تفعيل' if is_active else 'تعطيل'} المستخدم {user.email}",
+            request=request,
+        )
         return Response(AdminUserSerializer(user).data)

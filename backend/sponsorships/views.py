@@ -23,6 +23,7 @@ from .serializers import (
 from .permissions import IsSaqyaAdmin, IsSaqyaStaffOrReadOnly
 from . import notifications as notify
 from notifications.services import notify as platform_notify, EVENT_SPONSORSHIP
+from core.activity import ACTION_ORDER_ASSIGN, ACTION_SPONSORSHIP_APPROVE, log_activity
 from . import services as sponsorship_services
 from .validators import validate_upload_file, validate_gps
 from .payments import get_payment_provider, CheckoutRequest
@@ -93,6 +94,13 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
             notification_type="success",
             link="/Admin/sponsorships",
             event_type=EVENT_SPONSORSHIP,
+        )
+        log_activity(
+            actor=request.user,
+            action=ACTION_SPONSORSHIP_APPROVE,
+            target=sp,
+            summary=f"اعتماد الكفالة #{sp.id}",
+            request=request,
         )
         return Response({"message": "تم اعتماد الكفالة", "sponsorship": SponsorshipSerializer(sp).data})
 
@@ -187,6 +195,13 @@ class OrderViewSet(viewsets.ModelViewSet):
             notification_type="action",
             link="/Admin/sponsorships",
             event_type=EVENT_SPONSORSHIP,
+        )
+        log_activity(
+            actor=request.user,
+            action=ACTION_ORDER_ASSIGN,
+            target=order,
+            summary=f"إسناد الطلب #{order.id}",
+            request=request,
         )
         return Response({"message": "تم إسناد الطلب", "order": OrderSerializer(order).data})
 

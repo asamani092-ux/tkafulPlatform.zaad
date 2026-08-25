@@ -9,6 +9,7 @@ from rest_framework import serializers
 from core.permissions import IsAdmin
 from core.models import PlatformSetting, StaticPage
 from core.platform_settings import apply_settings_patch, public_payload, settings_to_dict
+from core.activity import ACTION_SETTINGS_CHANGE, ACTION_STATIC_PAGE_PUBLISH, log_activity
 
 
 class StaticPageSerializer(serializers.ModelSerializer):
@@ -39,6 +40,13 @@ def admin_platform_settings(request):
             return Response(exc.message_dict, status=status.HTTP_400_BAD_REQUEST)
         msgs = getattr(exc, "messages", None) or [str(exc)]
         return Response({"detail": msgs}, status=status.HTTP_400_BAD_REQUEST)
+    log_activity(
+        actor=request.user,
+        action=ACTION_SETTINGS_CHANGE,
+        target=obj,
+        summary="تعديل إعدادات المنصّة",
+        request=request,
+    )
     return Response(settings_to_dict(obj))
 
 
@@ -47,3 +55,27 @@ class StaticPageViewSet(viewsets.ModelViewSet):
     serializer_class = StaticPageSerializer
     queryset = StaticPage.objects.all()
     lookup_field = "slug"
+
+    def perform_create(self, serializer):
+        serializer.save()
+        if serializer.instance.is_published:
+            log_activity(
+                actor=self.request.user,
+                action=ACTION_STATIC_PAGE_PUBLISH,
+                target=serializer.instance,
+                summary=f"نشر صفحة {serializer.instance.slug}",
+                request=self.request,
+            )
+
+    def perform_update(self, serializer):
+        previous = self.get_object()
+        was_published = previous.is_published
+        serializer.save()
+        if serializer.instance.is_published and not was_published:
+            log_activity(
+                actor=self.request.user,
+                action=ACTION_STATIC_PAGE_PUBLISH,
+                target=serializer.instance,
+                summary=f"نشر صفحة {serializer.instance.slug}",
+                request=self.request,
+            )

@@ -14,6 +14,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from core.permissions import IsSuperAdmin, is_super_admin
+from core.activity import ACTION_PROJECT_CREATE, ACTION_PROJECT_DELETE, log_activity
 from notifications.services import notify, EVENT_PROJECT
 
 from . import services
@@ -93,7 +94,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 {"detail": "إنشاء المشاريع متاح للمشرف العام فقط"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        return super().create(request, *args, **kwargs)
+        response = super().create(request, *args, **kwargs)
+        project = Project.objects.filter(pk=response.data.get("id")).first()
+        if project:
+            log_activity(
+                actor=request.user,
+                action=ACTION_PROJECT_CREATE,
+                target=project,
+                summary=f"إنشاء المشروع {project.name}",
+                request=request,
+            )
+        return response
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -119,6 +130,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 {"detail": "حذف المشاريع متاح للمشرف العام فقط"},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        instance = self.get_object()
+        log_activity(
+            actor=request.user,
+            action=ACTION_PROJECT_DELETE,
+            target=instance,
+            summary=f"حذف المشروع {instance.name}",
+            request=request,
+        )
         return super().destroy(request, *args, **kwargs)
 
     # ---- إدارة الأعضاء ----

@@ -20,6 +20,7 @@ CAP_DELIVER_ORDER = "deliver_order"
 CAP_UPLOAD_DOCUMENTATION = "upload_documentation"
 CAP_APPLY_VOLUNTEER = "apply_volunteer"
 CAP_MANAGE_STAFF = "manage_staff_dashboard"
+CAP_VIEW_AUDIT = "view_audit_log"
 CAP_PLATFORM_ADMIN = "platform_admin"
 
 CAPABILITY_LABELS: dict[str, str] = {
@@ -39,6 +40,7 @@ CAPABILITY_LABELS: dict[str, str] = {
     CAP_UPLOAD_DOCUMENTATION: "رفع توثيق التنفيذ",
     CAP_APPLY_VOLUNTEER: "التقدّم لفرصة تطوع",
     CAP_MANAGE_STAFF: "تغذية لوحة الكادر (أقسام/موظفون/مهام)",
+    CAP_VIEW_AUDIT: "عرض سجل النشاط",
 }
 
 ROLE_LABELS: dict[str, str] = {
@@ -78,6 +80,7 @@ _ADMIN = frozenset({
     CAP_DELIVER_ORDER,
     CAP_UPLOAD_DOCUMENTATION,
     CAP_MANAGE_STAFF,
+    CAP_VIEW_AUDIT,
 })
 
 ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
