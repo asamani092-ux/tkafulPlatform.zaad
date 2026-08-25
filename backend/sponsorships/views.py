@@ -21,6 +21,7 @@ from .serializers import (
 )
 from .permissions import IsSaqyaAdmin, IsSaqyaStaffOrReadOnly
 from . import notifications as notify
+from notifications.services import notify as platform_notify, EVENT_SPONSORSHIP
 from . import services as sponsorship_services
 from .validators import validate_upload_file, validate_gps
 from .payments import get_payment_provider, CheckoutRequest
@@ -84,6 +85,14 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
         sp.admin_notes = request.data.get("admin_notes", "")
         sp.save()
         Order.objects.create(sponsorship=sp, status="pending")  # طلب أوّلي بانتظار الإسناد
+        platform_notify(
+            message=f"تم اعتماد الكفالة #{sp.id}",
+            users=[sp.donor] if sp.donor_id else None,
+            roles=["admin"],
+            notification_type="success",
+            link="/Admin/sponsorships",
+            event_type=EVENT_SPONSORSHIP,
+        )
         return Response({"message": "تم اعتماد الكفالة", "sponsorship": SponsorshipSerializer(sp).data})
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
@@ -170,6 +179,14 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.assigned_at = timezone.now()
         order.save()
         notify.notify_order_assigned(order)
+        platform_notify(
+            message=f"تم إسناد الطلب #{order.id}",
+            users=[u for u in (order.supplier, order.representative) if u],
+            roles=["admin"],
+            notification_type="action",
+            link="/Admin/sponsorships",
+            event_type=EVENT_SPONSORSHIP,
+        )
         return Response({"message": "تم إسناد الطلب", "order": OrderSerializer(order).data})
 
     @action(detail=True, methods=["post"])
@@ -201,6 +218,14 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.status = "delivered"
         order.delivered_at = timezone.now()
         order.save()
+        platform_notify(
+            message=f"تم تسليم الطلب #{order.id}",
+            users=[order.sponsorship.donor] if order.sponsorship.donor_id else None,
+            roles=["admin"],
+            notification_type="success",
+            link="/Admin/sponsorships",
+            event_type=EVENT_SPONSORSHIP,
+        )
         return Response({"message": "تم التسليم"})
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
@@ -285,6 +310,13 @@ class DocumentationViewSet(viewsets.ModelViewSet):
         if f:
             extra.update(file_name=f.name, file_size=f.size, mime_type=getattr(f, "content_type", ""))
         serializer.save(**extra)
+        platform_notify(
+            message=f"تم توثيق الطلب #{serializer.instance.order_id}",
+            roles=["admin"],
+            notification_type="info",
+            link="/Admin/sponsorships",
+            event_type=EVENT_SPONSORSHIP,
+        )
         return Response(serializer.data, status=201)
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])

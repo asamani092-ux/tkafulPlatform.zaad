@@ -235,6 +235,7 @@ REST_FRAMEWORK = {
         "user": "240/min",
         "auth": "10/min",      # تسجيل/دخول
         "public_write": "20/min",  # النماذج العامة (اقتراح/طلب خدمة/سقيا)
+        "broadcast": "10/hour",    # بث إشعارات المشرف
     },
 }
 

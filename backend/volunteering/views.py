@@ -4,6 +4,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from notifications.services import notify, EVENT_VOLUNTEER
 
 logger = logging.getLogger(__name__)
 from django.contrib.auth.models import User
@@ -678,6 +679,14 @@ def apply_to_opportunity(request, project_id):
             project=platform_project,
             message=request.data.get('message', ''),
             status='قيد المراجعة'
+        )
+
+        notify(
+            message=f"طلب تطوع جديد على مشروع {platform_project.name}",
+            roles=["admin"],
+            notification_type="action",
+            link="/Admin/volunteers/applications",
+            event_type=EVENT_VOLUNTEER,
         )
 
         return Response({

@@ -5,6 +5,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useMemberships } from "../../hooks/useMemberships";
 import { usePlatformSettings } from "../../contexts/PlatformSettingsContext";
 import { visiblePublicNav, displayPlatformName, displayLogoUrl } from "../../admin/publicNav";
+import NotificationBell from "./NotificationBell";
 
 /** شريط التنقّل العام — قائمة جانبية (drawer) على الشاشات الصغيرة. */
 export default function Navbar() {
@@ -85,6 +86,7 @@ export default function Navbar() {
         <div className="hidden items-center gap-3 md:flex">
           {isAuthenticated ? (
             <>
+              <NotificationBell />
               <Link to={dashboardPath} className="flex items-center gap-2 text-sm font-semibold text-primary">
                 <User size={16} /> {isStaff ? "لوحة الإدارة" : (user?.name || "حسابي")}
               </Link>
@@ -125,6 +127,7 @@ export default function Navbar() {
               <div className="mt-3 border-t border-surface-border pt-3">
                 {isAuthenticated ? (
                   <>
+                    <div className="px-1 py-2"><NotificationBell /></div>
                     <Link to={dashboardPath} onClick={close} className="zad-nav-link">
                       <User size={16} /> {isStaff ? "لوحة الإدارة" : "حسابي"}
                     </Link>

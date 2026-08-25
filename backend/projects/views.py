@@ -14,6 +14,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from core.permissions import IsSuperAdmin, is_super_admin
+from notifications.services import notify, EVENT_PROJECT
 
 from . import services
 from .models import Project, ProjectMember, ProjectTool
@@ -96,6 +97,21 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        old_status = instance.status
+        response = super().update(request, *args, **kwargs)
+        instance.refresh_from_db()
+        if instance.status != old_status:
+            notify(
+                message=f"تغيّرت حالة المشروع «{instance.name}» إلى {instance.status}",
+                roles=["admin"],
+                notification_type="info",
+                link=f"/projects/{instance.slug}",
+                event_type=EVENT_PROJECT,
+            )
+        return response
 
     def destroy(self, request, *args, **kwargs):
         if not is_super_admin(request.user):

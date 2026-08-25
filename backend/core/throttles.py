@@ -32,3 +32,15 @@ class PublicWriteRateThrottle(SimpleRateThrottle):
             "scope": self.scope,
             "ident": self.get_ident(request),
         }
+
+
+class BroadcastRateThrottle(SimpleRateThrottle):
+    """بث المشرف — scope='broadcast'."""
+    scope = "broadcast"
+
+    def get_rate(self):
+        return api_settings.DEFAULT_THROTTLE_RATES.get(self.scope)
+
+    def get_cache_key(self, request, view):
+        ident = request.user.pk if request.user and request.user.is_authenticated else self.get_ident(request)
+        return self.cache_format % {"scope": self.scope, "ident": ident}

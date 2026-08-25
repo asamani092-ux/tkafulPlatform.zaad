@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Home, ListTodo, User, Settings, LogOut, Menu, X } from "lucide-react";
+import NotificationBell from "./NotificationBell";
 import { useAuth } from "../../contexts/AuthContext";
 import { useEffect, useState } from "react";
 
@@ -42,7 +43,10 @@ export default function UserShell({ children }: { children: ReactNode }) {
         <img src="/logo.png" alt="جمعية الزاد" style={{ height: 36, width: "auto" }} />
         تكافل وأثر
       </div>
-      <div className="mb-4 text-sm text-brand-gray">مرحبًا {user?.name || "متطوّع"}</div>
+      <div className="mb-4 flex items-center justify-between gap-2 text-sm text-brand-gray">
+        <span>مرحبًا {user?.name || "متطوّع"}</span>
+        <NotificationBell />
+      </div>
       <nav className="space-y-1">
         {links.map((l) => {
           const active = loc.pathname === l.to;
@@ -74,7 +78,7 @@ export default function UserShell({ children }: { children: ReactNode }) {
           <Menu size={22} />
         </button>
         <span className="text-sm font-extrabold text-primary">تكافل وأثر</span>
-        <span className="w-6" aria-hidden />
+        <NotificationBell />
       </header>
 
       <aside className="hidden w-60 shrink-0 border-l border-surface-border bg-surface p-5 md:block">
