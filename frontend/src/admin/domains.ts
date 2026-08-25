@@ -47,11 +47,10 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
   {
     id: "volunteers",
     label: "المتطوعون",
-    to: "/Admin/users",
-    blurb: "المستخدمون والمتطوعون وطلبات الانضمام",
+    to: "/Admin/volunteers",
+    blurb: "المتطوعون وطلبات التطوع والانضمام",
     superAdminOnly: true,
     links: [
-      { to: "/Admin/users", label: "إدارة المستخدمين" },
       { to: "/Admin/volunteers", label: "إدارة المتطوعين" },
       { to: "/Admin/volunteers/applications", label: "طلبات التطوع" },
       { to: "/Admin/volunteers/join-requests", label: "طلبات الانضمام" },
@@ -111,10 +110,11 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     id: "settings",
     label: "إعدادات المنصّة",
     to: "/Admin/settings",
-    blurb: "أعلام التشغيل والتواصل العام",
+    blurb: "إدارة المستخدمين وأعلام التشغيل والتواصل العام",
     superAdminOnly: true,
     links: [
       { to: "/Admin/settings", label: "إعدادات المنصّة" },
+      { to: "/Admin/users", label: "إدارة المستخدمين" },
     ],
   },
 ];
@@ -148,7 +148,8 @@ export function domainForPath(pathname: string): AdminDomainId | "overview" {
   const p = pathname.toLowerCase();
   if (p === "/admin" || p === "/admin/") return "overview";
   if (p.startsWith("/admin/projects")) return "projects";
-  if (p.startsWith("/admin/users") || p.startsWith("/admin/volunteers")) return "volunteers";
+  if (p.startsWith("/admin/users") || p.startsWith("/admin/settings")) return "settings";
+  if (p.startsWith("/admin/volunteers")) return "volunteers";
   if (p.startsWith("/admin/requests")) return "requests";
   if (p.startsWith("/admin/sponsorships")) return "sponsorships";
   if (p.startsWith("/admin/maps") || p === "/admin/map") return "maps";
