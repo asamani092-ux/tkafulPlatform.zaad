@@ -31,6 +31,14 @@ const STATUS_BADGE: Record<string, "success" | "warning" | "danger" | "primary">
 };
 
 const ALL_TOOLS = Object.keys(TOOL_LABELS);
+// تلميح المفاتيح المقبولة لكل أداة (يطابق backend/projects/tool_config.py و PROJECT_TOOLS.md)
+const TOOL_CONFIG_KEYS: Record<string, string> = {
+  map: "default_center [lat,lng]، default_zoom (1-20)",
+  sponsorships: "show_target_amount (bool)، target_amount (رقم ≥ 0)",
+  volunteering: "show_opportunities (bool)",
+  services: 'request_form ("service"|"water_supply")، show_request_button (bool)',
+  reports: "public (bool)",
+};
 const MEMBER_ROLES = [
   { value: "project_admin", label: "مدير مشروع" },
   { value: "project_editor", label: "محرر" },
@@ -103,13 +111,37 @@ export default function PlatformProjects() {
     else toast.error({ title: "تعذّر تحديث النوع" });
   };
 
-  const setTool = async (project: AdminProject, toolKey: string, enable: boolean) => {
+  const setTool = async (
+    project: AdminProject,
+    toolKey: string,
+    enable: boolean,
+    config?: Record<string, unknown>,
+  ) => {
+    const existing = project.tools.find((t) => t.tool_key === toolKey);
+    const body: Record<string, unknown> = { tool_key: toolKey, is_enabled: enable };
+    body.config = config ?? existing?.config ?? {};
     const res = await authFetch(`/api/platform/projects/${project.id}/set_tool/`, {
       method: "POST",
-      body: JSON.stringify({ tool_key: toolKey, is_enabled: enable }),
+      body: JSON.stringify(body),
     });
-    if (res.ok) { toast.success({ title: "تم تحديث الأداة" }); void load(); }
-    else toast.error({ title: "تعذّر تحديث الأداة (صلاحية المشرف العام)" });
+    if (res.ok) { toast.success({ title: "تم تحديث الأداة" }); setCfgEdit(null); void load(); return true; }
+    const data = await res.json().catch(() => ({}));
+    const msg = data.config?.[0] || data.config || data.detail || "تعذّر تحديث الأداة (صلاحية المشرف العام)";
+    toast.error({ title: typeof msg === "string" ? msg : JSON.stringify(msg) });
+    return false;
+  };
+
+  const [cfgEdit, setCfgEdit] = useState<{ projectId: number; toolKey: string; text: string } | null>(null);
+
+  const saveToolConfig = async (project: AdminProject, toolKey: string, text: string) => {
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = text.trim() ? JSON.parse(text) : {};
+    } catch {
+      toast.error({ title: "JSON غير صالح" });
+      return;
+    }
+    await setTool(project, toolKey, true, parsed);
   };
 
   const [editDonation, setEditDonation] = useState({ projectId: 0, donation_url: "", donation_label: "تبرع الآن" });
@@ -332,13 +364,35 @@ export default function PlatformProjects() {
                 const tool = p.tools.find((t) => t.tool_key === toolKey);
                 const enabled = !!tool?.is_enabled;
                 return (
-                  <button key={toolKey} type="button" disabled={!isSuperAdmin}
-                    className={`m-1 rounded-full px-3 py-1 text-xs font-bold${enabled ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
-                    onClick={() => isSuperAdmin && setTool(p, toolKey, !enabled)}>
-                    {TOOL_LABELS[toolKey]}
-                  </button>
+                  <span key={toolKey} className="m-1 inline-flex items-center gap-1">
+                    <button type="button" disabled={!isSuperAdmin}
+                      className={`rounded-full px-3 py-1 text-xs font-bold${enabled ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
+                      onClick={() => isSuperAdmin && setTool(p, toolKey, !enabled)}>
+                      {TOOL_LABELS[toolKey]}
+                    </button>
+                    {isSuperAdmin && enabled && TOOL_CONFIG_KEYS[toolKey] && (
+                      <button type="button" className="text-[11px] text-primary underline"
+                        onClick={() => setCfgEdit({ projectId: p.id, toolKey, text: JSON.stringify(tool?.config ?? {}, null, 2) })}>
+                        إعدادات
+                      </button>
+                    )}
+                  </span>
                 );
               })}
+              {cfgEdit && cfgEdit.projectId === p.id && (
+                <div className="mt-2 rounded-lg border border-surface-border p-3">
+                  <p className="mb-1 text-xs font-bold text-primary">
+                    إعدادات «{TOOL_LABELS[cfgEdit.toolKey]}» — المفاتيح: {TOOL_CONFIG_KEYS[cfgEdit.toolKey]}
+                  </p>
+                  <textarea dir="ltr" className="input-field min-h-[6rem] font-mono text-xs"
+                    value={cfgEdit.text}
+                    onChange={(e) => setCfgEdit({ ...cfgEdit, text: e.target.value })} />
+                  <div className="mt-2 flex gap-2">
+                    <Button type="button" onClick={() => void saveToolConfig(p, cfgEdit.toolKey, cfgEdit.text)}>حفظ الإعدادات</Button>
+                    <Button type="button" variant="secondary" onClick={() => setCfgEdit(null)}>إلغاء</Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>

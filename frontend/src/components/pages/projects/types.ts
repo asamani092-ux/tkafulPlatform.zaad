@@ -27,6 +27,7 @@ export interface ProjectType {
 
 export interface PublicProjectDetail extends PlatformProject {
   maps: PublicMapIndexEntry[];
+  tool_config?: Record<string, Record<string, unknown>>;
 }
 
 export interface PublicMapIndexEntry {

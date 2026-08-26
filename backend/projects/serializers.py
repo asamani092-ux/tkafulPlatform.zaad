@@ -19,6 +19,7 @@ class ProjectToolSerializer(serializers.ModelSerializer):
 
 class PublicProjectSerializer(serializers.ModelSerializer):
     tools = serializers.SerializerMethodField()
+    tool_config = serializers.SerializerMethodField()
     type_name = serializers.CharField(source="type.name", read_only=True, allow_null=True)
     type_slug = serializers.CharField(source="type.slug", read_only=True, allow_null=True)
 
@@ -27,12 +28,16 @@ class PublicProjectSerializer(serializers.ModelSerializer):
         fields = [
             "id", "name", "slug", "description", "brand_color", "cover_image",
             "donation_url", "donation_label",
-            "start_date", "end_date", "status", "is_featured", "tools",
+            "start_date", "end_date", "status", "is_featured", "tools", "tool_config",
             "type_name", "type_slug",
         ]
 
     def get_tools(self, obj):
         return obj.enabled_tool_keys()
+
+    def get_tool_config(self, obj):
+        # إعدادات الأدوات المفعّلة فقط (قيَم غير حسّاسة: مركز/مقياس/أعلام) — لعرض الهبوط
+        return {t.tool_key: (t.config or {}) for t in obj.tools.all() if t.is_enabled}
 
 
 class ProjectMemberSerializer(serializers.ModelSerializer):

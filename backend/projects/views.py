@@ -10,6 +10,7 @@ from django.views.decorators.cache import cache_page
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
@@ -24,6 +25,7 @@ from notifications.services import notify, EVENT_PROJECT
 
 from . import services
 from . import lifecycle
+from .tool_config import validate_tool_config
 from .models import Project, ProjectMember, ProjectTool, ProjectType
 from .permissions import CanManageProjectObject, IsSuperAdminOrProjectMember
 from .serializers import (
@@ -253,12 +255,16 @@ class ProjectViewSet(viewsets.ModelViewSet):
         tool_key = request.data.get("tool_key")
         if tool_key not in dict(ProjectTool.TOOL_CHOICES):
             return Response({"detail": "أداة غير معروفة"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            config = validate_tool_config(tool_key, request.data.get("config", {}) or {})
+        except DRFValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
         tool, _created = ProjectTool.objects.update_or_create(
             project=project,
             tool_key=tool_key,
             defaults={
                 "is_enabled": bool(request.data.get("is_enabled", True)),
-                "config": request.data.get("config", {}) or {},
+                "config": config,
             },
         )
         return Response(ProjectToolSerializer(tool).data)
