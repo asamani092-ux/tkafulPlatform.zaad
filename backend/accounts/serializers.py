@@ -2,7 +2,9 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import Profile
+from .admin_users import ROLE_VALUES, MSG_INVALID_ROLE
 
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -142,3 +144,72 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
                 pass
 
         return super().validate(attrs)
+
+
+class AdminUserSerializer(serializers.ModelSerializer):
+    """قائمة/تفاصيل مستخدم للإدارة — بلا كلمات مرور أو هاشات."""
+
+    name = serializers.CharField(source="profile.name", read_only=True)
+    role = serializers.CharField(source="profile.role", read_only=True)
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "email",
+            "name",
+            "role",
+            "is_active",
+            "date_joined",
+            "last_login",
+        ]
+        read_only_fields = fields
+
+
+class AdminUserCreateSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    name = serializers.CharField(required=True, max_length=150)
+    role = serializers.CharField(required=True)
+    password = serializers.CharField(write_only=True, required=True, style={"input_type": "password"})
+
+    def validate_email(self, value):
+        email = value.lower()
+        if User.objects.filter(email=email).exists() or User.objects.filter(username=email).exists():
+            raise serializers.ValidationError("البريد الإلكتروني مسجّل مسبقاً")
+        return email
+
+    def validate_role(self, value):
+        if value not in ROLE_VALUES:
+            raise serializers.ValidationError(MSG_INVALID_ROLE)
+        return value
+
+    def validate_password(self, value):
+        try:
+            validate_password(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages))
+        return value
+
+    def create(self, validated_data):
+        email = validated_data["email"]
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            password=validated_data["password"],
+        )
+        profile = user.profile
+        profile.name = validated_data["name"]
+        profile.role = validated_data["role"]
+        profile.save(update_fields=["name", "role"])
+        return user
+
+
+class AdminUserUpdateSerializer(serializers.Serializer):
+    name = serializers.CharField(required=False, max_length=150)
+    role = serializers.CharField(required=False)
+    is_active = serializers.BooleanField(required=False)
+
+    def validate_role(self, value):
+        if value not in ROLE_VALUES:
+            raise serializers.ValidationError(MSG_INVALID_ROLE)
+        return value

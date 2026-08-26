@@ -12,6 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from core.throttles import PublicWriteRateThrottle
+from core.roles import CAP_CREATE_SPONSORSHIP, CAP_UPLOAD_DOCUMENTATION, has_capability
 from .models import (
     SupplierProfile, RepresentativeProfile, Sponsorship, Order, Invoice, Payment, Documentation,
 )
@@ -21,6 +22,8 @@ from .serializers import (
 )
 from .permissions import IsSaqyaAdmin, IsSaqyaStaffOrReadOnly
 from . import notifications as notify
+from notifications.services import notify as platform_notify, EVENT_SPONSORSHIP
+from core.activity import ACTION_ORDER_ASSIGN, ACTION_SPONSORSHIP_APPROVE, log_activity
 from . import services as sponsorship_services
 from .validators import validate_upload_file, validate_gps
 from .payments import get_payment_provider, CheckoutRequest
@@ -70,7 +73,7 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
         serializer.save(donor=self.request.user)
 
     def create(self, request, *args, **kwargs):
-        if role(request.user) != "donor":
+        if not has_capability(request.user, CAP_CREATE_SPONSORSHIP):
             return Response({"detail": "إنشاء الكفالة متاح للمتبرّع فقط"}, status=status.HTTP_403_FORBIDDEN)
         return super().create(request, *args, **kwargs)
 
@@ -84,6 +87,21 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
         sp.admin_notes = request.data.get("admin_notes", "")
         sp.save()
         Order.objects.create(sponsorship=sp, status="pending")  # طلب أوّلي بانتظار الإسناد
+        platform_notify(
+            message=f"تم اعتماد الكفالة #{sp.id}",
+            users=[sp.donor] if sp.donor_id else None,
+            roles=["admin"],
+            notification_type="success",
+            link="/Admin/sponsorships",
+            event_type=EVENT_SPONSORSHIP,
+        )
+        log_activity(
+            actor=request.user,
+            action=ACTION_SPONSORSHIP_APPROVE,
+            target=sp,
+            summary=f"اعتماد الكفالة #{sp.id}",
+            request=request,
+        )
         return Response({"message": "تم اعتماد الكفالة", "sponsorship": SponsorshipSerializer(sp).data})
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
@@ -170,6 +188,21 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.assigned_at = timezone.now()
         order.save()
         notify.notify_order_assigned(order)
+        platform_notify(
+            message=f"تم إسناد الطلب #{order.id}",
+            users=[u for u in (order.supplier, order.representative) if u],
+            roles=["admin"],
+            notification_type="action",
+            link="/Admin/sponsorships",
+            event_type=EVENT_SPONSORSHIP,
+        )
+        log_activity(
+            actor=request.user,
+            action=ACTION_ORDER_ASSIGN,
+            target=order,
+            summary=f"إسناد الطلب #{order.id}",
+            request=request,
+        )
         return Response({"message": "تم إسناد الطلب", "order": OrderSerializer(order).data})
 
     @action(detail=True, methods=["post"])
@@ -201,6 +234,14 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.status = "delivered"
         order.delivered_at = timezone.now()
         order.save()
+        platform_notify(
+            message=f"تم تسليم الطلب #{order.id}",
+            users=[order.sponsorship.donor] if order.sponsorship.donor_id else None,
+            roles=["admin"],
+            notification_type="success",
+            link="/Admin/sponsorships",
+            event_type=EVENT_SPONSORSHIP,
+        )
         return Response({"message": "تم التسليم"})
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
@@ -270,7 +311,7 @@ class DocumentationViewSet(viewsets.ModelViewSet):
         return qs.none()
 
     def create(self, request, *args, **kwargs):
-        if role(request.user) not in ("representative", "supplier", "admin"):
+        if not has_capability(request.user, CAP_UPLOAD_DOCUMENTATION):
             return Response({"detail": "رفع التوثيق للمندوب/المورّد فقط"}, status=403)
         f = request.FILES.get("file")
         err = validate_upload_file(f)
@@ -285,6 +326,13 @@ class DocumentationViewSet(viewsets.ModelViewSet):
         if f:
             extra.update(file_name=f.name, file_size=f.size, mime_type=getattr(f, "content_type", ""))
         serializer.save(**extra)
+        platform_notify(
+            message=f"تم توثيق الطلب #{serializer.instance.order_id}",
+            roles=["admin"],
+            notification_type="info",
+            link="/Admin/sponsorships",
+            event_type=EVENT_SPONSORSHIP,
+        )
         return Response(serializer.data, status=201)
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])

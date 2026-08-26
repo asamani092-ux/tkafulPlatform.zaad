@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { HandHeart, Lightbulb, Droplets } from "lucide-react";
 import { API_BASE_URL } from "../../config";
+import { usePlatformSettings } from "../../contexts/PlatformSettingsContext";
+import { displayPlatformName } from "../../admin/publicNav";
 import Card from "../ui/Card";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
@@ -40,6 +42,8 @@ const TOOL_AR: Record<string, string> = {
 
 /** الصفحة الرئيسية — رأس فاتح وفق نظام الزاد المعتمد (لا هيرو مارون ممتلئ). */
 export default function Home() {
+  const { settings } = usePlatformSettings();
+  const brandName = displayPlatformName(settings.platform_name);
   const [stats, setStats] = useState<Stats>({ beneficiaries: 0, potential_projects: 0, donations: 0 });
   const [services, setServices] = useState<BeneficiaryService[]>([]);
   const [platformProjects, setPlatformProjects] = useState<PlatformProjectCard[]>([]);
@@ -67,7 +71,7 @@ export default function Home() {
     <div className="bg-surface-muted">
       <header className="border-b border-surface-border bg-surface px-4 py-14 text-center">
         <div className="mx-auto max-w-page">
-          <h1 className="text-4xl font-extrabold text-primary md:text-5xl">تكافل وأثر</h1>
+          <h1 className="text-4xl font-extrabold text-primary md:text-5xl">{brandName}</h1>
           <p className="mt-3 text-lg text-brand-gray">
             منصّة واحدة للعمل الخيري والتطوعي — مشاريع، كفالات، خرائط أثر، وخدمات مجتمعية.
           </p>
@@ -78,7 +82,9 @@ export default function Home() {
           </div>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link to="/projects" className="btn-primary inline-flex">استكشف المشاريع</Link>
-            <Link to="/map" className="btn-register inline-flex" style={{ color: "var(--text-brand)" }}>خارطة الأثر</Link>
+            {settings.show_map && (
+              <Link to="/map" className="btn-register inline-flex" style={{ color: "var(--text-brand)" }}>خارطة الأثر</Link>
+            )}
           </div>
         </div>
       </header>
@@ -129,8 +135,10 @@ export default function Home() {
         )}
       </section>
 
+      {(settings.show_volunteering || settings.show_services) && (
       <section className="mx-auto max-w-page px-4 py-8">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {settings.show_volunteering && (
           <Card>
             <div className="mb-4 flex items-start justify-between">
               <div>
@@ -141,6 +149,7 @@ export default function Home() {
             </div>
             <Link to="/volunteers"><Button>المتطوعون</Button></Link>
           </Card>
+          )}
           <Card>
             <div className="mb-4 flex items-start justify-between">
               <div>
@@ -151,6 +160,7 @@ export default function Home() {
             </div>
             <Link to="/suggest"><Button variant="secondary">شارك اقتراحك</Button></Link>
           </Card>
+          {settings.show_services && (
           <Card>
             <div className="mb-4 flex items-start justify-between">
               <div>
@@ -161,9 +171,12 @@ export default function Home() {
             </div>
             <Link to="/services/water-supply?project=saqya"><Button variant="secondary">قدّم طلباً</Button></Link>
           </Card>
+          )}
         </div>
       </section>
+      )}
 
+      {settings.show_services && (
       <section className="bg-surface-muted py-12">
         <div className="mx-auto max-w-page px-4">
           <h2 className="mb-8 text-center text-3xl font-bold text-primary">الخدمات</h2>
@@ -178,6 +191,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+      )}
     </div>
   );
 }

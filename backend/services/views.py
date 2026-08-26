@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 
 from core.permissions import IsAdmin
 from core.throttles import PublicWriteRateThrottle
+from notifications.services import notify, EVENT_SERVICE_REQUEST, EVENT_WATER_SUPPLY
 
 from .models import Service, ServiceRequest, ServiceVolunteerApplication, Suggestion, WaterSupplyRequest
 from .serializers import (
@@ -173,6 +174,13 @@ def public_submit_service_request(request):
 
     if serializer.is_valid():
         serializer.save()
+        notify(
+            message="ورد طلب خدمة جديد",
+            roles=["admin"],
+            notification_type="action",
+            link="/Admin/requests",
+            event_type=EVENT_SERVICE_REQUEST,
+        )
         return Response({
             'message': 'تم استلام طلبك بنجاح. سيتم مراجعته من قبل الإدارة.',
             'request_id': serializer.data['id']
@@ -405,6 +413,13 @@ def public_water_supply_request(request):
     serializer = WaterSupplyRequestSerializer(data=mapped_data)
     if serializer.is_valid():
         serializer.save()
+        notify(
+            message="ورد طلب سقيا ماء جديد",
+            roles=["admin"],
+            notification_type="action",
+            link="/Admin/requests/water-supply",
+            event_type=EVENT_WATER_SUPPLY,
+        )
         return Response({
             'success': True,
             'message': 'تم إرسال طلبك بنجاح'

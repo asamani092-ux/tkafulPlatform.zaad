@@ -278,3 +278,41 @@
     `{"enabled": true}` عند التفعيل.
 - **لا تضبط** `VITE_ENABLE_UAT` أو `UAT_ENABLED` في الإنتاج (انظر DEPLOYMENT.md).
 
+## D-38 — إدارة المستخدمين أفقية في `accounts` بدون نموذج جديد
+- **المشكلة**: لا توجد واجهات مشرف لـ CRUD المستخدمين؛ الدور على `Profile.role` والحالة على `User.is_active`.
+- **القرار**: `AdminUserViewSet` تحت `/api/accounts/users/` (IsAdmin) دون جدول جديد — يستخدم User+Profile القائمين. بلا هجرة.
+- **حراسة آخر مشرف**: COUNT للمشرفين النشطين (`is_active` + `profile.role=admin`) O(1). منع حذف الحساب الذاتي، حذف/تنزيل/تعطيل آخر مشرف نشط (رسائل عربية 400).
+- **الواجهة**: نطاق مستقل «المستخدمون» `/Admin/users` — ليس تحت المتطوعين (خلط أنواع المستخدمين مع نطاق التطوّع).
+- **التعقيد**: بحث القائمة O(N) في قاعدة البيانات؛ صفحة الحجم P تسلسل O(P)؛ الإجراءات O(1).
+
+## D-39 — إعدادات المنصّة صف واحد داخل `core`
+- **القرار**: طيّ الإعدادات في تطبيق `core` الحالي (لا تطبيق Django جديد) لأن الطبقة أفقية ولا تحتاج دورة حياة تطبيق مستقلة.
+- **النموذج**: `PlatformSetting` singleton (`pk=1` في `save`) + `StaticPage(slug, title, body, is_published)`.
+- **عام**: `GET /api/public-settings/` (AllowAny + cache 60s) يعيد فقط الحقول الآمنة + الصفحات المنشورة — بلا `id`/`updated_at`/`is_published`.
+- **مشرف**: `GET/PATCH /api/settings/` وCRUD `/api/static-pages/` بـ IsAdmin.
+- **التحقق**: روابط الشعار/التواصل HTTPS؛ بريد ورقم هاتف.
+- **الواجهة**: نطاق «الإعدادات»؛ الموقع العام يقرأ الاسم/الشعار/التواصل/الأعلام مع fallback عند الفراغ.
+- **التعقيد**: load O(1)؛ الحمولة العامة O(P) لعدد الصفحات المنشورة.
+
+## D-40 — مركز الإشعارات داخل المنصّة فقط
+- **القرار**: لا بريد/SMS في هذه الطبقة. `notify()` في `notifications/services.py` هو المصدر الوحيد للأحداث؛ التفضيل الغائب = مفعّل.
+- **النوع**: `notification_type` + `link` + `event_type` على `Notification` القائم؛ `is_read` مشتق من `status` unread/read (لا عمود جديد).
+- **المستلمون**: طلب خدمة/سقيا → admin؛ تطوع جديد → admin؛ تغيير حالة مشروع → admin؛ أحداث الكفالة → الأدوار المعنية + admin.
+- **البث**: `POST /api/notifications/broadcast/` IsAdmin + `BroadcastRateThrottle` (10/hour).
+- **الواجهة**: جرس في AdminShell وUserShell وNavbar للمصادق؛ تفضيلات في `/user/settings`؛ مؤلف البث تحت الإعدادات.
+- **التعقيد**: notify O(R) للمستلمين مع استعلام تفضيلات دفعة واحدة؛ القائمة صفحة P مع ترتيب غير المقروء أولاً.
+
+## D-41 — كتالوج الأدوار ثابت في الكود
+- **القرار**: الأدوار غير قابلة للتحرير. المصدر الوحيد `core/roles.py::ROLE_CAPABILITIES` + `has_capability()`.
+- **الربط**: `IsAdmin` / `is_super_admin` عبر `CAP_PLATFORM_ADMIN`؛ `IsSaqyaAdmin` عبر `CAP_APPROVE_SPONSORSHIP`؛ `IsDonor` عبر `CAP_CREATE_SPONSORSHIP`؛ `IsStaffOrReadOnly` عبر `CAP_MANAGE_STAFF`.
+- **التعيين**: يبقى في مرحلة 1 (`set_role`)؛ هذه المرحلة للعرض فقط.
+- **الواجهة**: `/Admin/settings/roles` مصفوفة قراءة.
+- **التعقيد**: has_capability O(1)؛ الكتالوج O(R·C).
+
+## D-42 — سجل النشاط داخل `core` وإضافة فقط
+- **القرار**: طيّ `ActivityLog` في `core` (لا تطبيق `audit` جديد) بجانب الإعدادات الأفقية.
+- **الكتابة**: `log_activity()` من الإجراءات الحسّاسة فقط؛ الملخص بلا كلمات مرور/توكنات؛ `actor` SET_NULL عند حذف المستخدم.
+- **القراءة**: `GET /api/activity-logs/` IsAdmin، paginated، فلاتر actor/action/date/target_type. لا PATCH/DELETE عبر API.
+- **الواجهة**: `/Admin/settings/activity`.
+- **التعقيد**: الإدراج O(1)؛ القائمة صفحة P.
+

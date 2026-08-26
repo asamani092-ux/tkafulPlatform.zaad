@@ -1,7 +1,9 @@
 from rest_framework import viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated, SAFE_METHODS, BasePermission
+from rest_framework.permissions import AllowAny, SAFE_METHODS, BasePermission
+
+from core.roles import CAP_MANAGE_STAFF, has_capability, roles_with
 
 from .models import Employee, DashboardSection, DashboardKpi, StaffTask
 from .serializers import (
@@ -9,9 +11,8 @@ from .serializers import (
     DashboardKpiSerializer, StaffTaskSerializer,
 )
 
-
 # أدوار طاقم الإدارة الذين يحق لهم تغذية اللوحة التنفيذية (يطابق دخول المشروع الثاني)
-STAFF_ROLES = {"admin", "manager", "employee"}
+STAFF_ROLES = set(roles_with(CAP_MANAGE_STAFF))
 
 
 class IsStaffOrReadOnly(BasePermission):
@@ -25,8 +26,7 @@ class IsStaffOrReadOnly(BasePermission):
             return True
         user = request.user
         return bool(
-            user and user.is_authenticated and
-            hasattr(user, "profile") and user.profile.role in STAFF_ROLES
+            user and user.is_authenticated and has_capability(user, CAP_MANAGE_STAFF)
         )
 
 

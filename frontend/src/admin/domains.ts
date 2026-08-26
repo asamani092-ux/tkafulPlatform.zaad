@@ -6,12 +6,14 @@
 export type AdminDomainId =
   | "overview"
   | "projects"
+  | "users"
   | "volunteers"
   | "requests"
   | "sponsorships"
   | "maps"
   | "staff"
-  | "reports";
+  | "reports"
+  | "settings";
 
 export interface AdminNavLink {
   to: string;
@@ -41,6 +43,16 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     links: [
       { to: "/Admin/projects", label: "كل المشاريع", staffVisible: true },
       { to: "/Admin/projects/create", label: "إنشاء مشروع" },
+    ],
+  },
+  {
+    id: "users",
+    label: "المستخدمون",
+    to: "/Admin/users",
+    blurb: "عرض وإضافة وتعديل وحذف الحسابات والأدوار",
+    superAdminOnly: true,
+    links: [
+      { to: "/Admin/users", label: "إدارة المستخدمين" },
     ],
   },
   {
@@ -105,6 +117,19 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
       { to: "/Admin/reports", label: "التقارير" },
     ],
   },
+  {
+    id: "settings",
+    label: "الإعدادات",
+    to: "/Admin/settings",
+    blurb: "اسم المنصّة والتواصل وأعلام الأدوات والصفحات الثابتة",
+    superAdminOnly: true,
+    links: [
+      { to: "/Admin/settings", label: "إعدادات المنصّة" },
+      { to: "/Admin/settings/broadcast", label: "بث إشعار" },
+      { to: "/Admin/settings/roles", label: "الأدوار" },
+      { to: "/Admin/settings/activity", label: "سجل النشاط" },
+    ],
+  },
 ];
 
 /**
@@ -136,11 +161,13 @@ export function domainForPath(pathname: string): AdminDomainId | "overview" {
   const p = pathname.toLowerCase();
   if (p === "/admin" || p === "/admin/") return "overview";
   if (p.startsWith("/admin/projects")) return "projects";
+  if (p.startsWith("/admin/users")) return "users";
   if (p.startsWith("/admin/volunteers")) return "volunteers";
   if (p.startsWith("/admin/requests")) return "requests";
   if (p.startsWith("/admin/sponsorships")) return "sponsorships";
   if (p.startsWith("/admin/maps") || p === "/admin/map") return "maps";
   if (p.startsWith("/admin/staff") || p.startsWith("/admin/executive")) return "staff";
   if (p.startsWith("/admin/reports")) return "reports";
+  if (p.startsWith("/admin/settings")) return "settings";
   return "overview";
 }

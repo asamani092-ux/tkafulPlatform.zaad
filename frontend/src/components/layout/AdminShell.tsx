@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, ChevronDown, ChevronLeft, Menu, X } from "lucide-react";
+import NotificationBell from "./NotificationBell";
 import { useAuth } from "../../contexts/AuthContext";
 import { useMemberships } from "../../hooks/useMemberships";
 import { ADMIN_DOMAINS, domainForPath } from "../../admin/domains";
@@ -46,7 +47,10 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         <img src="/logo.png" alt="جمعية الزاد" style={{ height: 36, width: "auto" }} />
         لوحة الإدارة
       </Link>
-      <div className="mb-3 text-sm text-brand-gray">{user?.name || "المشرف"}</div>
+      <div className="mb-3 flex items-center justify-between gap-2 text-sm text-brand-gray">
+        <span>{user?.name || "المشرف"}</span>
+        <NotificationBell />
+      </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto">
         <Link
@@ -127,7 +131,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           <Menu size={22} />
         </button>
         <span className="text-sm font-extrabold text-primary">لوحة الإدارة</span>
-        <span className="w-6" aria-hidden />
+        <NotificationBell />
       </header>
 
       <aside className="hidden w-64 shrink-0 flex-col border-l border-surface-border bg-surface p-4 sm:p-5 md:flex">

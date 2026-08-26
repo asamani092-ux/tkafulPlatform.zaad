@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 import { AuthProvider } from "./contexts/AuthContext";
+import { PlatformSettingsProvider } from "./contexts/PlatformSettingsContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { DashboardSettingsProvider } from "./contexts/DashboardSettingsContext";
 import ProtectedRoute from "./components/routing/ProtectedRoute";
@@ -33,6 +34,7 @@ const PersonalInfo = lazy(() => import("./components/pages/user/PersonalInfo"));
 const AdminMain = lazy(() => import("./components/pages/admin/main"));
 const VolunteerRequests = lazy(() => import("./components/pages/admin/VolunteerRequests"));
 const VolunteerApplications = lazy(() => import("./components/pages/admin/VolunteerApplications"));
+const UsersAdmin = lazy(() => import("./components/pages/admin/UsersAdmin"));
 const VolunteerManagement = lazy(() => import("./components/pages/admin/VolunteerManagement"));
 const AddProjectPage = lazy(() => import("./components/pages/admin/AddProject"));
 const ProjectIdeas = lazy(() => import("./components/pages/admin/ProjectIdeas"));
@@ -50,6 +52,11 @@ const ProjectMapPage = lazy(() => import("./components/pages/projects/ProjectMap
 const MapsAggregator = lazy(() => import("./components/pages/projects/MapsAggregator"));
 const PlatformProjects = lazy(() => import("./components/pages/admin/PlatformProjects"));
 const MapsAdmin = lazy(() => import("./components/pages/admin/MapsAdmin"));
+const PlatformSettingsPage = lazy(() => import("./components/pages/admin/PlatformSettings"));
+const BroadcastAdmin = lazy(() => import("./components/pages/admin/BroadcastAdmin"));
+const RolesAdmin = lazy(() => import("./components/pages/admin/RolesAdmin"));
+const ActivityLogAdmin = lazy(() => import("./components/pages/admin/ActivityLogAdmin"));
+const PublicStaticPage = lazy(() => import("./components/pages/PublicStaticPage"));
 // Dead-code-eliminated unless VITE_ENABLE_UAT === "true" (production builds omit the chunk).
 const UatPage = import.meta.env.VITE_ENABLE_UAT === "true"
   ? lazy(() => import("./components/pages/uat"))
@@ -81,6 +88,7 @@ function AppContent() {
           <Route path="/services" element={<Services />} />
           <Route path="/volunteers" element={<Volunteers />} />
           <Route path="/about" element={<About />} />
+          <Route path="/pages/:slug" element={<Lazy><PublicStaticPage /></Lazy>} />
           <Route path="/suggest" element={<Suggest />} />
           <Route path="/request-service" element={<RequestService />} />
           <Route path="/services/water-supply" element={<WaterSupplyRequestPage />} />
@@ -101,12 +109,15 @@ function AppContent() {
           <Route path="/Admin/projects" element={<Lazy><ProtectedRoute requiredRole="staff"><PlatformProjects /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/projects/create" element={<Lazy><ProtectedRoute requiredRole="admin"><AddProjectPage /></ProtectedRoute></Lazy>} />
 
-          {/* 2. المتطوعون */}
+          {/* 2. المستخدمون */}
+          <Route path="/Admin/users" element={<Lazy><ProtectedRoute requiredRole="admin"><UsersAdmin /></ProtectedRoute></Lazy>} />
+
+          {/* 3. المتطوعون */}
           <Route path="/Admin/volunteers" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerManagement /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/volunteers/applications" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerApplications /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/volunteers/join-requests" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerRequests /></ProtectedRoute></Lazy>} />
 
-          {/* 3. الطلبات */}
+          {/* 4. الطلبات */}
           <Route path="/Admin/requests" element={<Lazy><ProtectedRoute requiredRole="admin"><ServiceRequests /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/requests/water-supply" element={<Lazy><ProtectedRoute requiredRole="admin"><WaterSupplyRequests /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/requests/suggestions" element={<Lazy><ProtectedRoute requiredRole="admin"><ProjectIdeas /></ProtectedRoute></Lazy>} />
@@ -121,8 +132,14 @@ function AppContent() {
           <Route path="/Admin/staff" element={<Lazy><ProtectedRoute requiredRole="orgStaff"><ExecutiveDashboard /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/staff/manage" element={<Lazy><ProtectedRoute requiredRole="orgStaff"><ManageDashboard /></ProtectedRoute></Lazy>} />
 
-          {/* 7. التقارير */}
+          {/* 8. التقارير */}
           <Route path="/Admin/reports" element={<Lazy><ProtectedRoute requiredRole="admin"><Reports /></ProtectedRoute></Lazy>} />
+
+          {/* 9. إعدادات المنصّة */}
+          <Route path="/Admin/settings" element={<Lazy><ProtectedRoute requiredRole="admin"><PlatformSettingsPage /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/settings/broadcast" element={<Lazy><ProtectedRoute requiredRole="admin"><BroadcastAdmin /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/settings/roles" element={<Lazy><ProtectedRoute requiredRole="admin"><RolesAdmin /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/settings/activity" element={<Lazy><ProtectedRoute requiredRole="admin"><ActivityLogAdmin /></ProtectedRoute></Lazy>} />
 
           {/* توافق خلفي: كل المسارات القديمة */}
           {ACTIVE_LEGACY_REDIRECTS.map((r) => (
@@ -148,13 +165,15 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <ToastProvider>
-        <DashboardSettingsProvider>
-          <Router>
-            <AppContent />
-          </Router>
-        </DashboardSettingsProvider>
-      </ToastProvider>
+      <PlatformSettingsProvider>
+        <ToastProvider>
+          <DashboardSettingsProvider>
+            <Router>
+              <AppContent />
+            </Router>
+          </DashboardSettingsProvider>
+        </ToastProvider>
+      </PlatformSettingsProvider>
     </AuthProvider>
   );
 }
