@@ -128,6 +128,7 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
       { to: "/Admin/settings/broadcast", label: "بث إشعار" },
       { to: "/Admin/settings/roles", label: "الأدوار" },
       { to: "/Admin/settings/activity", label: "سجل النشاط" },
+      { to: "/Admin/settings/project-types", label: "أنواع المشاريع" },
     ],
   },
 ];

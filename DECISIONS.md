@@ -316,3 +316,32 @@
 - **الواجهة**: `/Admin/settings/activity`.
 - **التعقيد**: الإدراج O(1)؛ القائمة صفحة P.
 
+## D-43 — انتقالات دورة حياة المشروع والظهور العام للنشطة فقط
+- **السياق**: هذه المراحل الأربع تُبنى فوق `feat/activity-log` (وليس `main` مباشرةً) لأنها تعتمد على طبقة التدقيق والإشعارات؛ الوثيقة تفترض دمجها في main.
+- **الخريطة**: مصدر حقيقة واحد `projects/lifecycle.py::TRANSITIONS`/`ALLOWED_TRANSITIONS`. الأفعال: activate (draft/completed→active)، complete (active→completed)، archive (أي→archived)، reopen (completed/archived→active).
+- **الأفعال**: `activate/complete/archive/reopen` على `ProjectViewSet` (المشرف العام فقط)؛ الانتقال غير القانوني 400 برسالة عربية؛ كل انتقال يسجّل `ACTION_PROJECT_STATUS` عبر `log_activity` + إشعار admin.
+- **الظهور العام**: النشطة فقط (`status="active"`) في `public_projects_queryset` و`maps.public_maps_index` و`_public_map_or_none` — draft/completed/archived للأدمن فقط.
+- **الواجهة**: `next_actions` في المسلسل؛ أزرار الانتقال القانونية فقط + شارة الحالة في جدول المشاريع.
+- **التعقيد**: `can_transition`/`next_actions` O(1).
+
+## D-44 — نوع المشروع كجدول قابل للتوسّع (ليس enum)
+- **القرار**: `ProjectType(name, slug, is_active, order)` + FK `Project.type` (SET_NULL، اختياري) بدل enum ثابت، ليتمكّن المشرف من التوسعة من الإعدادات.
+- **البذرة**: idempotent عبر `get_or_create` في هجرة `0005_project_type` (إغاثي/موسمي/كفالات/تطوّعي/توعوي)؛ العكس نظيف (drop الجدول)، unseed = noop.
+- **الواجهات**: `GET /api/platform/public/project-types/` (المفعّلة فقط)؛ CRUD `/api/platform/project-types/` IsAdmin؛ `type`/`type_name`/`type_slug` في مسلسلات المشروع.
+- **الواجهة**: منسدلة النوع في إنشاء/تعديل المشروع؛ شارة النوع وفلترة عامة في `/projects`؛ إدارة «أنواع المشاريع» تحت `/Admin/settings/project-types`.
+- **العكسية**: forward→reverse→forward مؤكّدة؛ 5 أنواع بعد الدورة.
+
+## D-45 — اكتمال إعدادات الأدوات لكل مشروع + لا أزرار ميتة
+- **المخطّط**: `projects/tool_config.py::TOOL_CONFIG_SCHEMA` مصدر حقيقة لمفاتيح config لكل أداة (موثّق في `PROJECT_TOOLS.md`)؛ `set_tool` يتحقّق (يرفض المفاتيح غير المعرّفة والأنواع/النطاقات) ويعيد 400.
+- **الظهور**: صفحة الهبوط تعرض الأدوات المفعّلة **التي لها وجهة فعلية فقط** (لا بطاقات «قريباً» ميتة)؛ التعطيل يخفي الأداة وconfigها من الحمولة العامة.
+- **ربط الخدمات**: أداة `services` تربط بنموذج الطلب حسب `request_form` (`water_supply` → صفحة سقيا المشروع؛ وإلا `/request-service`).
+- **زر التبرع**: يظهر فقط عند وجود `donation_url` وضمن سياق `sponsorships`/`services`، ويختفي عند الفراغ.
+- **الواجهة**: لوحة أدوات المشروع فيها تبديل + محرّر config لكل أداة مع تغذية راجعة للتحقق؛ منطق الوجهات في مساعد نقي `toolLinks.ts` مع اختبارات.
+
+## D-46 — كنس الاتساق النهائي قبل UAT
+- **الخصوصية**: اختبارات `core.tests_consistency` تؤكّد خلو حمولات المشاريع/الأنواع العامة من PII وحقول آمنة فقط.
+- **الصلاحيات**: كل كتابة جديدة (دورة الحياة، set_tool، project-types) IsAdmin/super-admin؛ غير المشرف 403 (مؤكّد).
+- **الإشعارات**: انتقالات دورة الحياة تُطلق إشعار admin داخل المنصّة (مؤكّد).
+- **المصفوفة**: `FEATURE_MATRIX.md` مصدر حقيقة لجولة `/uat` (صفحات/أدوار/مسارات/عمليات).
+- **ملاحظة**: بعض صفحات القوائم القديمة (طلبات/اقتراحات/متطوعون) تعتمد empty-state + toast للأخطاء بدل `ErrorState` مخصّص — مقبول وموثّق كملاحظة، دون إعادة كتابة صفحات مستقرّة.
+

@@ -9,7 +9,7 @@ import Badge from "../../ui/Badge";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
-import { TOOL_LABELS } from "../projects/types";
+import { TOOL_LABELS, STATUS_LABELS, LIFECYCLE_ACTION_LABELS, type ProjectType } from "../projects/types";
 
 interface AdminTool { id: number; tool_key: string; config: Record<string, unknown>; is_enabled: boolean }
 interface AdminMember { id: number; user: number; username: string; email: string; role: string }
@@ -19,9 +19,26 @@ interface AdminProject {
   status: string; is_active: boolean; is_featured: boolean; featured_order: number;
   tools: AdminTool[]; members: AdminMember[];
   my_role: string | null;
+  next_actions: string[];
+  type: number | null; type_name: string | null; type_slug: string | null;
 }
 
+const STATUS_BADGE: Record<string, "success" | "warning" | "danger" | "primary"> = {
+  active: "success",
+  draft: "warning",
+  completed: "primary",
+  archived: "danger",
+};
+
 const ALL_TOOLS = Object.keys(TOOL_LABELS);
+// تلميح المفاتيح المقبولة لكل أداة (يطابق backend/projects/tool_config.py و PROJECT_TOOLS.md)
+const TOOL_CONFIG_KEYS: Record<string, string> = {
+  map: "default_center [lat,lng]، default_zoom (1-20)",
+  sponsorships: "show_target_amount (bool)، target_amount (رقم ≥ 0)",
+  volunteering: "show_opportunities (bool)",
+  services: 'request_form ("service"|"water_supply")، show_request_button (bool)',
+  reports: "public (bool)",
+};
 const MEMBER_ROLES = [
   { value: "project_admin", label: "مدير مشروع" },
   { value: "project_editor", label: "محرر" },
@@ -35,20 +52,26 @@ export default function PlatformProjects() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [form, setForm] = useState({ name: "", slug: "", description: "", brand_color: "#8b1538" });
+  const [form, setForm] = useState({ name: "", slug: "", description: "", brand_color: "#8b1538", type: "" });
+  const [types, setTypes] = useState<ProjectType[]>([]);
   const [memberForm, setMemberForm] = useState({ projectId: 0, userId: "", role: "project_viewer" });
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(false);
     try {
-      const [projectsRes, meRes] = await Promise.all([
+      const [projectsRes, meRes, typesRes] = await Promise.all([
         authFetch("/api/platform/projects/"),
         authFetch("/api/platform/my-memberships/"),
+        authFetch("/api/platform/project-types/"),
       ]);
       if (!projectsRes.ok || !meRes.ok) throw new Error("fetch");
       setProjects(await projectsRes.json());
       setIsSuperAdmin((await meRes.json()).is_super_admin);
+      if (typesRes.ok) {
+        const td = await typesRes.json();
+        setTypes(Array.isArray(td) ? td : td.results || []);
+      }
     } catch {
       setError(true);
     } finally {
@@ -60,13 +83,17 @@ export default function PlatformProjects() {
 
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();
+    const payload: Record<string, unknown> = {
+      name: form.name, slug: form.slug, description: form.description, brand_color: form.brand_color,
+    };
+    if (form.type) payload.type = Number(form.type);
     const res = await authFetch("/api/platform/projects/", {
       method: "POST",
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     });
     if (res.ok) {
       toast.success({ title: "تم إنشاء المشروع" });
-      setForm({ name: "", slug: "", description: "", brand_color: "#8b1538" });
+      setForm({ name: "", slug: "", description: "", brand_color: "#8b1538", type: "" });
       void load();
     } else {
       const data = await res.json().catch(() => ({}));
@@ -74,13 +101,47 @@ export default function PlatformProjects() {
     }
   };
 
-  const setTool = async (project: AdminProject, toolKey: string, enable: boolean) => {
+  const changeType = async (project: AdminProject, typeId: string) => {
+    if (!isSuperAdmin) return;
+    const res = await authFetch(`/api/platform/projects/${project.id}/`, {
+      method: "PATCH",
+      body: JSON.stringify({ type: typeId ? Number(typeId) : null }),
+    });
+    if (res.ok) { toast.success({ title: "تم تحديث النوع" }); void load(); }
+    else toast.error({ title: "تعذّر تحديث النوع" });
+  };
+
+  const setTool = async (
+    project: AdminProject,
+    toolKey: string,
+    enable: boolean,
+    config?: Record<string, unknown>,
+  ) => {
+    const existing = project.tools.find((t) => t.tool_key === toolKey);
+    const body: Record<string, unknown> = { tool_key: toolKey, is_enabled: enable };
+    body.config = config ?? existing?.config ?? {};
     const res = await authFetch(`/api/platform/projects/${project.id}/set_tool/`, {
       method: "POST",
-      body: JSON.stringify({ tool_key: toolKey, is_enabled: enable }),
+      body: JSON.stringify(body),
     });
-    if (res.ok) { toast.success({ title: "تم تحديث الأداة" }); void load(); }
-    else toast.error({ title: "تعذّر تحديث الأداة (صلاحية المشرف العام)" });
+    if (res.ok) { toast.success({ title: "تم تحديث الأداة" }); setCfgEdit(null); void load(); return true; }
+    const data = await res.json().catch(() => ({}));
+    const msg = data.config?.[0] || data.config || data.detail || "تعذّر تحديث الأداة (صلاحية المشرف العام)";
+    toast.error({ title: typeof msg === "string" ? msg : JSON.stringify(msg) });
+    return false;
+  };
+
+  const [cfgEdit, setCfgEdit] = useState<{ projectId: number; toolKey: string; text: string } | null>(null);
+
+  const saveToolConfig = async (project: AdminProject, toolKey: string, text: string) => {
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = text.trim() ? JSON.parse(text) : {};
+    } catch {
+      toast.error({ title: "JSON غير صالح" });
+      return;
+    }
+    await setTool(project, toolKey, true, parsed);
   };
 
   const [editDonation, setEditDonation] = useState({ projectId: 0, donation_url: "", donation_label: "تبرع الآن" });
@@ -106,6 +167,23 @@ export default function PlatformProjects() {
     } else {
       const data = await res.json().catch(() => ({}));
       toast.error({ title: data.donation_url?.[0] || "تعذّر الحفظ" });
+    }
+  };
+
+  const runTransition = async (project: AdminProject, action: string) => {
+    if (!isSuperAdmin) return;
+    const label = LIFECYCLE_ACTION_LABELS[action] || action;
+    if (!window.confirm(`تأكيد ${label} المشروع «${project.name}»؟`)) return;
+    const res = await authFetch(`/api/platform/projects/${project.id}/${action}/`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    if (res.ok) {
+      toast.success({ title: `تم ${label} المشروع` });
+      void load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error({ title: data.detail || `تعذّر ${label} المشروع` });
     }
   };
 
@@ -174,6 +252,10 @@ export default function PlatformProjects() {
             <Input label="المعرّف (slug)" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} dir="ltr" required />
             <Input label="الوصف" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             <Input label="لون الهوية" type="color" value={form.brand_color} onChange={(e) => setForm({ ...form, brand_color: e.target.value })} />
+            <Select label="النوع (اختياري)" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+              <option value="">— بدون نوع —</option>
+              {types.filter((t) => t.is_active).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </Select>
             <div className="sm:col-span-2"><Button type="submit">إنشاء</Button></div>
           </form>
         </Card>
@@ -186,7 +268,8 @@ export default function PlatformProjects() {
               <div className="flex items-center gap-2">
                 <span style={{ width: 14, height: 14, borderRadius: 4, background: p.brand_color, display: "inline-block" }} />
                 <h3 className="text-lg font-bold text-primary">{p.name}</h3>
-                <Badge variant={p.status === "active" ? "success" : "warning"}>{p.status}</Badge>
+                <Badge variant={STATUS_BADGE[p.status] || "warning"}>{STATUS_LABELS[p.status] || p.status}</Badge>
+                {p.type_name && <Badge>{p.type_name}</Badge>}
                 {p.is_featured && <Badge variant="success">مميز في الرئيسية</Badge>}
                 {p.my_role && <Badge>{p.my_role === "super_admin" ? "مشرف عام" : p.my_role}</Badge>}
               </div>
@@ -194,7 +277,30 @@ export default function PlatformProjects() {
             </div>
 
             {isSuperAdmin && (
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-surface-border p-3">
+                <span className="text-xs font-bold text-brand-gray">الحالة: {STATUS_LABELS[p.status] || p.status} —</span>
+                {p.next_actions.length === 0 && <span className="text-xs text-brand-gray">لا إجراءات متاحة</span>}
+                {p.next_actions.map((action) => (
+                  <button
+                    key={action}
+                    type="button"
+                    className="rounded-full border border-surface-border bg-surface px-3 py-1 text-xs font-bold text-primary hover:bg-primary hover:text-white"
+                    onClick={() => void runTransition(p, action)}
+                  >
+                    {LIFECYCLE_ACTION_LABELS[action] || action}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {isSuperAdmin && (
               <div className="mb-3 flex flex-wrap items-end gap-3 rounded-lg border border-surface-border p-3">
+                <div className="w-48">
+                  <Select label="النوع" value={p.type ? String(p.type) : ""} onChange={(e) => void changeType(p, e.target.value)}>
+                    <option value="">— بدون نوع —</option>
+                    {types.filter((t) => t.is_active || t.id === p.type).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </Select>
+                </div>
                 <button
                   type="button"
                   className={`rounded-full px-3 py-1 text-xs font-bold${p.is_featured ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
@@ -258,13 +364,35 @@ export default function PlatformProjects() {
                 const tool = p.tools.find((t) => t.tool_key === toolKey);
                 const enabled = !!tool?.is_enabled;
                 return (
-                  <button key={toolKey} type="button" disabled={!isSuperAdmin}
-                    className={`m-1 rounded-full px-3 py-1 text-xs font-bold${enabled ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
-                    onClick={() => isSuperAdmin && setTool(p, toolKey, !enabled)}>
-                    {TOOL_LABELS[toolKey]}
-                  </button>
+                  <span key={toolKey} className="m-1 inline-flex items-center gap-1">
+                    <button type="button" disabled={!isSuperAdmin}
+                      className={`rounded-full px-3 py-1 text-xs font-bold${enabled ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
+                      onClick={() => isSuperAdmin && setTool(p, toolKey, !enabled)}>
+                      {TOOL_LABELS[toolKey]}
+                    </button>
+                    {isSuperAdmin && enabled && TOOL_CONFIG_KEYS[toolKey] && (
+                      <button type="button" className="text-[11px] text-primary underline"
+                        onClick={() => setCfgEdit({ projectId: p.id, toolKey, text: JSON.stringify(tool?.config ?? {}, null, 2) })}>
+                        إعدادات
+                      </button>
+                    )}
+                  </span>
                 );
               })}
+              {cfgEdit && cfgEdit.projectId === p.id && (
+                <div className="mt-2 rounded-lg border border-surface-border p-3">
+                  <p className="mb-1 text-xs font-bold text-primary">
+                    إعدادات «{TOOL_LABELS[cfgEdit.toolKey]}» — المفاتيح: {TOOL_CONFIG_KEYS[cfgEdit.toolKey]}
+                  </p>
+                  <textarea dir="ltr" className="input-field min-h-[6rem] font-mono text-xs"
+                    value={cfgEdit.text}
+                    onChange={(e) => setCfgEdit({ ...cfgEdit, text: e.target.value })} />
+                  <div className="mt-2 flex gap-2">
+                    <Button type="button" onClick={() => void saveToolConfig(p, cfgEdit.toolKey, cfgEdit.text)}>حفظ الإعدادات</Button>
+                    <Button type="button" variant="secondary" onClick={() => setCfgEdit(null)}>إلغاء</Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>

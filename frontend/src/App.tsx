@@ -56,6 +56,7 @@ const PlatformSettingsPage = lazy(() => import("./components/pages/admin/Platfor
 const BroadcastAdmin = lazy(() => import("./components/pages/admin/BroadcastAdmin"));
 const RolesAdmin = lazy(() => import("./components/pages/admin/RolesAdmin"));
 const ActivityLogAdmin = lazy(() => import("./components/pages/admin/ActivityLogAdmin"));
+const ProjectTypesAdmin = lazy(() => import("./components/pages/admin/ProjectTypesAdmin"));
 const PublicStaticPage = lazy(() => import("./components/pages/PublicStaticPage"));
 // Dead-code-eliminated unless VITE_ENABLE_UAT === "true" (production builds omit the chunk).
 const UatPage = import.meta.env.VITE_ENABLE_UAT === "true"
@@ -140,6 +141,7 @@ function AppContent() {
           <Route path="/Admin/settings/broadcast" element={<Lazy><ProtectedRoute requiredRole="admin"><BroadcastAdmin /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/settings/roles" element={<Lazy><ProtectedRoute requiredRole="admin"><RolesAdmin /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/settings/activity" element={<Lazy><ProtectedRoute requiredRole="admin"><ActivityLogAdmin /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/settings/project-types" element={<Lazy><ProtectedRoute requiredRole="admin"><ProjectTypesAdmin /></ProtectedRoute></Lazy>} />
 
           {/* توافق خلفي: كل المسارات القديمة */}
           {ACTIVE_LEGACY_REDIRECTS.map((r) => (

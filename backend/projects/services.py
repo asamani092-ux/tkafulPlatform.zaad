@@ -53,9 +53,11 @@ def can_edit_project_content(user, project) -> bool:
 
 
 def public_projects_queryset():
+    """المشاريع العامة: النشطة فقط (draft/completed/archived للأدمن فقط) — D-43."""
+    from .lifecycle import PUBLIC_STATUSES
+
     return (
-        Project.objects.filter(is_active=True)
-        .exclude(status__in=["draft", "archived"])
+        Project.objects.filter(is_active=True, status__in=PUBLIC_STATUSES)
         .prefetch_related("tools")
     )
 

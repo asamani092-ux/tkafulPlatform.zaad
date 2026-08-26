@@ -10,26 +10,43 @@ from django.views.decorators.cache import cache_page
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from core.permissions import IsSuperAdmin, is_super_admin
-from core.activity import ACTION_PROJECT_CREATE, ACTION_PROJECT_DELETE, log_activity
+from core.permissions import IsAdmin, IsSuperAdmin, is_super_admin
+from core.activity import (
+    ACTION_PROJECT_CREATE,
+    ACTION_PROJECT_DELETE,
+    ACTION_PROJECT_STATUS,
+    log_activity,
+)
 from notifications.services import notify, EVENT_PROJECT
 
 from . import services
-from .models import Project, ProjectMember, ProjectTool
+from . import lifecycle
+from .tool_config import validate_tool_config
+from .models import Project, ProjectMember, ProjectTool, ProjectType
 from .permissions import CanManageProjectObject, IsSuperAdminOrProjectMember
 from .serializers import (
     MembershipSerializer,
     ProjectAdminSerializer,
     ProjectMemberSerializer,
     ProjectToolSerializer,
+    ProjectTypeSerializer,
     PublicProjectSerializer,
 )
 
 
 # ---- عام ----
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def public_project_types(request):
+    """أنواع المشاريع المفعّلة — للفلترة والعرض العام."""
+    qs = ProjectType.objects.filter(is_active=True)
+    return Response(ProjectTypeSerializer(qs, many=True).data)
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 @cache_page(60)
@@ -76,6 +93,14 @@ def my_memberships(request):
         "is_super_admin": is_super_admin(request.user),
         "memberships": MembershipSerializer(memberships, many=True).data,
     })
+
+
+class ProjectTypeViewSet(viewsets.ModelViewSet):
+    """CRUD أنواع المشاريع — المشرف العام فقط (قابلة للتوسّع من الإعدادات)."""
+
+    permission_classes = [IsAdmin]
+    serializer_class = ProjectTypeSerializer
+    queryset = ProjectType.objects.all()
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -168,6 +193,56 @@ class ProjectViewSet(viewsets.ModelViewSet):
         ).delete()
         return Response({"removed": deleted})
 
+    # ---- انتقالات دورة الحياة (المشرف العام فقط) ----
+    def _transition(self, request, action_name):
+        if not is_super_admin(request.user):
+            return Response(
+                {"detail": "تغيير حالة المشروع متاح للمشرف العام فقط"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        project = self.get_object()
+        old_status = project.status
+        if not lifecycle.can_transition(old_status, action_name):
+            label = lifecycle.ACTION_LABELS_AR.get(action_name, action_name)
+            return Response(
+                {"detail": f"لا يمكن {label} مشروع حالته «{old_status}»"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        new_status = lifecycle.target_status(action_name)
+        project.status = new_status
+        project.save(update_fields=["status", "updated_at"])
+        log_activity(
+            actor=request.user,
+            action=ACTION_PROJECT_STATUS,
+            target=project,
+            summary=f"حالة المشروع {project.name}: {old_status} → {new_status}",
+            request=request,
+        )
+        notify(
+            message=f"تغيّرت حالة المشروع «{project.name}» إلى {new_status}",
+            roles=["admin"],
+            notification_type="info",
+            link=f"/projects/{project.slug}",
+            event_type=EVENT_PROJECT,
+        )
+        return Response(ProjectAdminSerializer(project, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"])
+    def activate(self, request, pk=None):
+        return self._transition(request, "activate")
+
+    @action(detail=True, methods=["post"])
+    def complete(self, request, pk=None):
+        return self._transition(request, "complete")
+
+    @action(detail=True, methods=["post"])
+    def archive(self, request, pk=None):
+        return self._transition(request, "archive")
+
+    @action(detail=True, methods=["post"])
+    def reopen(self, request, pk=None):
+        return self._transition(request, "reopen")
+
     # ---- تفعيل/تعطيل الأدوات (provisioning للمشرف العام فقط) ----
     @action(detail=True, methods=["post"])
     def set_tool(self, request, pk=None):
@@ -180,12 +255,16 @@ class ProjectViewSet(viewsets.ModelViewSet):
         tool_key = request.data.get("tool_key")
         if tool_key not in dict(ProjectTool.TOOL_CHOICES):
             return Response({"detail": "أداة غير معروفة"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            config = validate_tool_config(tool_key, request.data.get("config", {}) or {})
+        except DRFValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
         tool, _created = ProjectTool.objects.update_or_create(
             project=project,
             tool_key=tool_key,
             defaults={
                 "is_enabled": bool(request.data.get("is_enabled", True)),
-                "config": request.data.get("config", {}) or {},
+                "config": config,
             },
         )
         return Response(ProjectToolSerializer(tool).data)

@@ -37,8 +37,8 @@ def _public_map_or_none(pk):
             visibility__in=["public", "mixed"],
             published_at__isnull=False,
             project__is_active=True,
+            project__status="active",  # النشطة فقط تظهر عامّاً (D-43)
         )
-        .exclude(project__status__in=["draft", "archived"])
         .select_related("project")
         .first()
     )

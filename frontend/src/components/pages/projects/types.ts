@@ -13,10 +13,21 @@ export interface PlatformProject {
   end_date: string | null;
   status: string;
   tools: string[];
+  type_name?: string | null;
+  type_slug?: string | null;
+}
+
+export interface ProjectType {
+  id: number;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  order: number;
 }
 
 export interface PublicProjectDetail extends PlatformProject {
   maps: PublicMapIndexEntry[];
+  tool_config?: Record<string, Record<string, unknown>>;
 }
 
 export interface PublicMapIndexEntry {
@@ -88,6 +99,22 @@ export const TOOL_LABELS: Record<string, string> = {
   volunteering: "التطوع",
   services: "الخدمات",
   reports: "التقارير",
+};
+
+/** تسميات حالات المشروع (دورة الحياة). */
+export const STATUS_LABELS: Record<string, string> = {
+  draft: "مسودة",
+  active: "نشط",
+  completed: "مكتمل",
+  archived: "مؤرشف",
+};
+
+/** تسميات إجراءات الانتقال (تطابق أسماء أفعال الخادم). */
+export const LIFECYCLE_ACTION_LABELS: Record<string, string> = {
+  activate: "تفعيل",
+  complete: "إكمال",
+  archive: "أرشفة",
+  reopen: "إعادة فتح",
 };
 
 /** تسميات مفاتيح color_scheme المعروفة (وسيلة الإيضاح) — أي مفتاح آخر يُعرض كما هو. */

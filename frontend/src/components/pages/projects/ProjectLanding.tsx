@@ -6,6 +6,7 @@ import Badge from "../../ui/Badge";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { fetchPublicProject } from "./api";
 import { TOOL_LABELS, type PublicProjectDetail } from "./types";
+import { donationInContext, resolveToolLink, visibleTools } from "./toolLinks";
 
 const TOOL_ICONS: Record<string, typeof MapIcon> = {
   map: MapIcon,
@@ -34,23 +35,11 @@ export default function ProjectLanding() {
   if (loading) return <LoadingState title="جاري تحميل المشروع…" />;
   if (error || !project) return <ErrorState title="المشروع غير موجود" message="تأكد من الرابط أو عُد للصفحة الرئيسية." />;
 
-  const toolLink = (tool: string): string | null => {
-    switch (tool) {
-      case "map":
-        return project.maps.length ? `/projects/${project.slug}/map` : null;
-      case "sponsorships":
-        return `/projects/${project.slug}/sponsorships`;
-      case "volunteering":
-        return "/volunteers";
-      case "services":
-        // سقيا الماء مربوطة بمشروع السقيا؛ بقية المشاريع → صفحة الخدمات العامة
-        return project.slug === "saqya"
-          ? `/services/water-supply?project=${project.slug}`
-          : "/services";
-      default:
-        return null;
-    }
-  };
+  const linkCtx = { slug: project.slug, mapsCount: project.maps.length, toolConfig: project.tool_config };
+  // الأدوات المعروضة عامّاً = المفعّلة التي لها وجهة فعلية (لا أزرار ميتة)
+  const shownTools = visibleTools(project.tools, linkCtx);
+  // زر التبرع يظهر فقط ضمن سياق الكفالات/الخدمات وعند وجود الرابط
+  const showDonation = donationInContext(project.donation_url, project.tools);
 
   return (
     <div dir="rtl" className="bg-surface-muted">
@@ -64,7 +53,7 @@ export default function ProjectLanding() {
             <Badge variant="success">{project.status === "active" ? "نشط" : project.status}</Badge>
             {project.start_date && <span>البداية: {project.start_date}</span>}
             {project.end_date && <span>النهاية: {project.end_date}</span>}
-            {project.donation_url && (
+            {showDonation && (
               <a href={project.donation_url} className="btn-primary inline-block px-4 py-2 text-sm font-bold"
                 target="_blank" rel="noopener noreferrer">
                 {project.donation_label || "تبرع الآن"}
@@ -76,31 +65,27 @@ export default function ProjectLanding() {
 
       <section className="mx-auto max-w-page px-4 py-10">
         <h2 className="mb-6 text-2xl font-bold text-primary">أدوات المشروع</h2>
-        {project.tools.length === 0 ? (
+        {shownTools.length === 0 ? (
           <p className="text-brand-gray">لا توجد أدوات مفعّلة بعد.</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {project.tools.map((tool) => {
+            {shownTools.map((tool) => {
               const Icon = TOOL_ICONS[tool] || LayoutGrid;
-              const to = toolLink(tool);
-              const body = (
-                <Card className="h-full">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="mb-1 text-lg font-bold text-primary">{TOOL_LABELS[tool] || tool}</h3>
-                      {tool === "map" && project.maps.length > 0 && (
-                        <p className="text-xs text-brand-gray">{project.maps.map((m) => m.title).join("، ")}</p>
-                      )}
-                      {!to && <p className="text-xs text-brand-gray">قريباً</p>}
+              const to = resolveToolLink(tool, linkCtx) as string;
+              return (
+                <Link key={tool} to={to} className="block">
+                  <Card className="h-full">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="mb-1 text-lg font-bold text-primary">{TOOL_LABELS[tool] || tool}</h3>
+                        {tool === "map" && project.maps.length > 0 && (
+                          <p className="text-xs text-brand-gray">{project.maps.map((m) => m.title).join("، ")}</p>
+                        )}
+                      </div>
+                      <Icon className="text-secondary" size={28} />
                     </div>
-                    <Icon className="text-secondary" size={28} />
-                  </div>
-                </Card>
-              );
-              return to ? (
-                <Link key={tool} to={to} className="block">{body}</Link>
-              ) : (
-                <div key={tool}>{body}</div>
+                  </Card>
+                </Link>
               );
             })}
           </div>
