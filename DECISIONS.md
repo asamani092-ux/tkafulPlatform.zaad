@@ -324,3 +324,10 @@
 - **الواجهة**: `next_actions` في المسلسل؛ أزرار الانتقال القانونية فقط + شارة الحالة في جدول المشاريع.
 - **التعقيد**: `can_transition`/`next_actions` O(1).
 
+## D-44 — نوع المشروع كجدول قابل للتوسّع (ليس enum)
+- **القرار**: `ProjectType(name, slug, is_active, order)` + FK `Project.type` (SET_NULL، اختياري) بدل enum ثابت، ليتمكّن المشرف من التوسعة من الإعدادات.
+- **البذرة**: idempotent عبر `get_or_create` في هجرة `0005_project_type` (إغاثي/موسمي/كفالات/تطوّعي/توعوي)؛ العكس نظيف (drop الجدول)، unseed = noop.
+- **الواجهات**: `GET /api/platform/public/project-types/` (المفعّلة فقط)؛ CRUD `/api/platform/project-types/` IsAdmin؛ `type`/`type_name`/`type_slug` في مسلسلات المشروع.
+- **الواجهة**: منسدلة النوع في إنشاء/تعديل المشروع؛ شارة النوع وفلترة عامة في `/projects`؛ إدارة «أنواع المشاريع» تحت `/Admin/settings/project-types`.
+- **العكسية**: forward→reverse→forward مؤكّدة؛ 5 أنواع بعد الدورة.
+

@@ -13,7 +13,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from core.permissions import IsSuperAdmin, is_super_admin
+from core.permissions import IsAdmin, IsSuperAdmin, is_super_admin
 from core.activity import (
     ACTION_PROJECT_CREATE,
     ACTION_PROJECT_DELETE,
@@ -24,18 +24,27 @@ from notifications.services import notify, EVENT_PROJECT
 
 from . import services
 from . import lifecycle
-from .models import Project, ProjectMember, ProjectTool
+from .models import Project, ProjectMember, ProjectTool, ProjectType
 from .permissions import CanManageProjectObject, IsSuperAdminOrProjectMember
 from .serializers import (
     MembershipSerializer,
     ProjectAdminSerializer,
     ProjectMemberSerializer,
     ProjectToolSerializer,
+    ProjectTypeSerializer,
     PublicProjectSerializer,
 )
 
 
 # ---- عام ----
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def public_project_types(request):
+    """أنواع المشاريع المفعّلة — للفلترة والعرض العام."""
+    qs = ProjectType.objects.filter(is_active=True)
+    return Response(ProjectTypeSerializer(qs, many=True).data)
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 @cache_page(60)
@@ -82,6 +91,14 @@ def my_memberships(request):
         "is_super_admin": is_super_admin(request.user),
         "memberships": MembershipSerializer(memberships, many=True).data,
     })
+
+
+class ProjectTypeViewSet(viewsets.ModelViewSet):
+    """CRUD أنواع المشاريع — المشرف العام فقط (قابلة للتوسّع من الإعدادات)."""
+
+    permission_classes = [IsAdmin]
+    serializer_class = ProjectTypeSerializer
+    queryset = ProjectType.objects.all()
 
 
 class ProjectViewSet(viewsets.ModelViewSet):

@@ -13,6 +13,16 @@ export interface PlatformProject {
   end_date: string | null;
   status: string;
   tools: string[];
+  type_name?: string | null;
+  type_slug?: string | null;
+}
+
+export interface ProjectType {
+  id: number;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  order: number;
 }
 
 export interface PublicProjectDetail extends PlatformProject {

@@ -1,8 +1,14 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from .models import Project, ProjectMember, ProjectTool
+from .models import Project, ProjectMember, ProjectTool, ProjectType
 from .validators import validate_https_donation_url
+
+
+class ProjectTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectType
+        fields = ["id", "name", "slug", "is_active", "order"]
 
 
 class ProjectToolSerializer(serializers.ModelSerializer):
@@ -13,6 +19,8 @@ class ProjectToolSerializer(serializers.ModelSerializer):
 
 class PublicProjectSerializer(serializers.ModelSerializer):
     tools = serializers.SerializerMethodField()
+    type_name = serializers.CharField(source="type.name", read_only=True, allow_null=True)
+    type_slug = serializers.CharField(source="type.slug", read_only=True, allow_null=True)
 
     class Meta:
         model = Project
@@ -20,6 +28,7 @@ class PublicProjectSerializer(serializers.ModelSerializer):
             "id", "name", "slug", "description", "brand_color", "cover_image",
             "donation_url", "donation_label",
             "start_date", "end_date", "status", "is_featured", "tools",
+            "type_name", "type_slug",
         ]
 
     def get_tools(self, obj):
@@ -41,12 +50,15 @@ class ProjectAdminSerializer(serializers.ModelSerializer):
     members = ProjectMemberSerializer(many=True, read_only=True)
     my_role = serializers.SerializerMethodField()
     next_actions = serializers.SerializerMethodField()
+    type_name = serializers.CharField(source="type.name", read_only=True, allow_null=True)
+    type_slug = serializers.CharField(source="type.slug", read_only=True, allow_null=True)
 
     class Meta:
         model = Project
         fields = [
             "id", "name", "slug", "description", "brand_color", "cover_image",
             "donation_url", "donation_label",
+            "type", "type_name", "type_slug",
             "start_date", "end_date", "status", "is_active",
             "is_featured", "featured_order",
             "created_by",

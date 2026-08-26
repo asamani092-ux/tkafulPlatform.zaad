@@ -17,6 +17,8 @@ interface PlatformProjectCard {
   donation_label?: string;
   status: string;
   tools: string[];
+  type_name?: string | null;
+  type_slug?: string | null;
 }
 
 const TOOL_AR: Record<string, string> = {
@@ -32,6 +34,7 @@ export default function Projects() {
   const [projects, setProjects] = useState<PlatformProjectCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [typeFilter, setTypeFilter] = useState("");
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/platform/public/projects/`)
@@ -40,6 +43,11 @@ export default function Projects() {
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
+
+  const typeOptions = Array.from(
+    new Map(projects.filter((p) => p.type_slug).map((p) => [p.type_slug, p.type_name])).entries(),
+  );
+  const visible = typeFilter ? projects.filter((p) => p.type_slug === typeFilter) : projects;
 
   return (
     <div>
@@ -50,16 +58,40 @@ export default function Projects() {
         {!loading && !error && projects.length === 0 && (
           <EmptyState title="لا توجد مشاريع" message="ستظهر المشاريع النشطة هنا." />
         )}
+        {!loading && !error && typeOptions.length > 0 && (
+          <div className="mb-6 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setTypeFilter("")}
+              className={`rounded-full px-3 py-1 text-sm font-bold ${typeFilter === "" ? "bg-primary text-white" : "border border-surface-border bg-surface text-brand-gray"}`}
+            >
+              الكل
+            </button>
+            {typeOptions.map(([slug, name]) => (
+              <button
+                key={slug}
+                type="button"
+                onClick={() => setTypeFilter(slug as string)}
+                className={`rounded-full px-3 py-1 text-sm font-bold ${typeFilter === slug ? "bg-primary text-white" : "border border-surface-border bg-surface text-brand-gray"}`}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
         {!loading && !error && projects.length > 0 && (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {projects.map((p) => (
+            {visible.map((p) => (
               <Card key={p.id} className="flex h-full flex-col">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span style={{ width: 12, height: 12, borderRadius: 3, background: p.brand_color }} />
                     <h3 className="text-lg font-bold text-primary">{p.name}</h3>
                   </div>
-                  <Badge variant="success">{p.status === "active" ? "نشط" : p.status}</Badge>
+                  <div className="flex items-center gap-1">
+                    {p.type_name && <Badge>{p.type_name}</Badge>}
+                    <Badge variant="success">{p.status === "active" ? "نشط" : p.status}</Badge>
+                  </div>
                 </div>
                 <p className="mb-3 flex-1 text-sm text-brand-gray">{p.description}</p>
                 <div className="mb-4 flex flex-wrap gap-1">

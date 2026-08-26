@@ -9,7 +9,7 @@ import Badge from "../../ui/Badge";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
-import { TOOL_LABELS, STATUS_LABELS, LIFECYCLE_ACTION_LABELS } from "../projects/types";
+import { TOOL_LABELS, STATUS_LABELS, LIFECYCLE_ACTION_LABELS, type ProjectType } from "../projects/types";
 
 interface AdminTool { id: number; tool_key: string; config: Record<string, unknown>; is_enabled: boolean }
 interface AdminMember { id: number; user: number; username: string; email: string; role: string }
@@ -20,6 +20,7 @@ interface AdminProject {
   tools: AdminTool[]; members: AdminMember[];
   my_role: string | null;
   next_actions: string[];
+  type: number | null; type_name: string | null; type_slug: string | null;
 }
 
 const STATUS_BADGE: Record<string, "success" | "warning" | "danger" | "primary"> = {
@@ -43,20 +44,26 @@ export default function PlatformProjects() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [form, setForm] = useState({ name: "", slug: "", description: "", brand_color: "#8b1538" });
+  const [form, setForm] = useState({ name: "", slug: "", description: "", brand_color: "#8b1538", type: "" });
+  const [types, setTypes] = useState<ProjectType[]>([]);
   const [memberForm, setMemberForm] = useState({ projectId: 0, userId: "", role: "project_viewer" });
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(false);
     try {
-      const [projectsRes, meRes] = await Promise.all([
+      const [projectsRes, meRes, typesRes] = await Promise.all([
         authFetch("/api/platform/projects/"),
         authFetch("/api/platform/my-memberships/"),
+        authFetch("/api/platform/project-types/"),
       ]);
       if (!projectsRes.ok || !meRes.ok) throw new Error("fetch");
       setProjects(await projectsRes.json());
       setIsSuperAdmin((await meRes.json()).is_super_admin);
+      if (typesRes.ok) {
+        const td = await typesRes.json();
+        setTypes(Array.isArray(td) ? td : td.results || []);
+      }
     } catch {
       setError(true);
     } finally {
@@ -68,18 +75,32 @@ export default function PlatformProjects() {
 
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();
+    const payload: Record<string, unknown> = {
+      name: form.name, slug: form.slug, description: form.description, brand_color: form.brand_color,
+    };
+    if (form.type) payload.type = Number(form.type);
     const res = await authFetch("/api/platform/projects/", {
       method: "POST",
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     });
     if (res.ok) {
       toast.success({ title: "تم إنشاء المشروع" });
-      setForm({ name: "", slug: "", description: "", brand_color: "#8b1538" });
+      setForm({ name: "", slug: "", description: "", brand_color: "#8b1538", type: "" });
       void load();
     } else {
       const data = await res.json().catch(() => ({}));
       toast.error({ title: data.detail || data.slug?.[0] || "تعذّر إنشاء المشروع" });
     }
+  };
+
+  const changeType = async (project: AdminProject, typeId: string) => {
+    if (!isSuperAdmin) return;
+    const res = await authFetch(`/api/platform/projects/${project.id}/`, {
+      method: "PATCH",
+      body: JSON.stringify({ type: typeId ? Number(typeId) : null }),
+    });
+    if (res.ok) { toast.success({ title: "تم تحديث النوع" }); void load(); }
+    else toast.error({ title: "تعذّر تحديث النوع" });
   };
 
   const setTool = async (project: AdminProject, toolKey: string, enable: boolean) => {
@@ -199,6 +220,10 @@ export default function PlatformProjects() {
             <Input label="المعرّف (slug)" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} dir="ltr" required />
             <Input label="الوصف" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             <Input label="لون الهوية" type="color" value={form.brand_color} onChange={(e) => setForm({ ...form, brand_color: e.target.value })} />
+            <Select label="النوع (اختياري)" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+              <option value="">— بدون نوع —</option>
+              {types.filter((t) => t.is_active).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </Select>
             <div className="sm:col-span-2"><Button type="submit">إنشاء</Button></div>
           </form>
         </Card>
@@ -212,6 +237,7 @@ export default function PlatformProjects() {
                 <span style={{ width: 14, height: 14, borderRadius: 4, background: p.brand_color, display: "inline-block" }} />
                 <h3 className="text-lg font-bold text-primary">{p.name}</h3>
                 <Badge variant={STATUS_BADGE[p.status] || "warning"}>{STATUS_LABELS[p.status] || p.status}</Badge>
+                {p.type_name && <Badge>{p.type_name}</Badge>}
                 {p.is_featured && <Badge variant="success">مميز في الرئيسية</Badge>}
                 {p.my_role && <Badge>{p.my_role === "super_admin" ? "مشرف عام" : p.my_role}</Badge>}
               </div>
@@ -237,6 +263,12 @@ export default function PlatformProjects() {
 
             {isSuperAdmin && (
               <div className="mb-3 flex flex-wrap items-end gap-3 rounded-lg border border-surface-border p-3">
+                <div className="w-48">
+                  <Select label="النوع" value={p.type ? String(p.type) : ""} onChange={(e) => void changeType(p, e.target.value)}>
+                    <option value="">— بدون نوع —</option>
+                    {types.filter((t) => t.is_active || t.id === p.type).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </Select>
+                </div>
                 <button
                   type="button"
                   className={`rounded-full px-3 py-1 text-xs font-bold${p.is_featured ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
