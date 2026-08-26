@@ -316,3 +316,11 @@
 - **الواجهة**: `/Admin/settings/activity`.
 - **التعقيد**: الإدراج O(1)؛ القائمة صفحة P.
 
+## D-43 — انتقالات دورة حياة المشروع والظهور العام للنشطة فقط
+- **السياق**: هذه المراحل الأربع تُبنى فوق `feat/activity-log` (وليس `main` مباشرةً) لأنها تعتمد على طبقة التدقيق والإشعارات؛ الوثيقة تفترض دمجها في main.
+- **الخريطة**: مصدر حقيقة واحد `projects/lifecycle.py::TRANSITIONS`/`ALLOWED_TRANSITIONS`. الأفعال: activate (draft/completed→active)، complete (active→completed)، archive (أي→archived)، reopen (completed/archived→active).
+- **الأفعال**: `activate/complete/archive/reopen` على `ProjectViewSet` (المشرف العام فقط)؛ الانتقال غير القانوني 400 برسالة عربية؛ كل انتقال يسجّل `ACTION_PROJECT_STATUS` عبر `log_activity` + إشعار admin.
+- **الظهور العام**: النشطة فقط (`status="active"`) في `public_projects_queryset` و`maps.public_maps_index` و`_public_map_or_none` — draft/completed/archived للأدمن فقط.
+- **الواجهة**: `next_actions` في المسلسل؛ أزرار الانتقال القانونية فقط + شارة الحالة في جدول المشاريع.
+- **التعقيد**: `can_transition`/`next_actions` O(1).
+

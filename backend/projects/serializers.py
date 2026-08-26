@@ -40,6 +40,7 @@ class ProjectAdminSerializer(serializers.ModelSerializer):
     tools = ProjectToolSerializer(many=True, read_only=True)
     members = ProjectMemberSerializer(many=True, read_only=True)
     my_role = serializers.SerializerMethodField()
+    next_actions = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
@@ -50,6 +51,7 @@ class ProjectAdminSerializer(serializers.ModelSerializer):
             "is_featured", "featured_order",
             "created_by",
             "created_at", "updated_at", "tools", "members", "my_role",
+            "next_actions",
         ]
         read_only_fields = ["created_by", "created_at", "updated_at"]
 
@@ -65,6 +67,11 @@ class ProjectAdminSerializer(serializers.ModelSerializer):
         if not request:
             return None
         return services.user_role_in_project(request.user, obj)
+
+    def get_next_actions(self, obj):
+        from .lifecycle import next_actions
+
+        return next_actions(obj.status)
 
 
 class MembershipSerializer(serializers.ModelSerializer):

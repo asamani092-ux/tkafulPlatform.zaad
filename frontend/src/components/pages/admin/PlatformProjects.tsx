@@ -9,7 +9,7 @@ import Badge from "../../ui/Badge";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
-import { TOOL_LABELS } from "../projects/types";
+import { TOOL_LABELS, STATUS_LABELS, LIFECYCLE_ACTION_LABELS } from "../projects/types";
 
 interface AdminTool { id: number; tool_key: string; config: Record<string, unknown>; is_enabled: boolean }
 interface AdminMember { id: number; user: number; username: string; email: string; role: string }
@@ -19,7 +19,15 @@ interface AdminProject {
   status: string; is_active: boolean; is_featured: boolean; featured_order: number;
   tools: AdminTool[]; members: AdminMember[];
   my_role: string | null;
+  next_actions: string[];
 }
+
+const STATUS_BADGE: Record<string, "success" | "warning" | "danger" | "primary"> = {
+  active: "success",
+  draft: "warning",
+  completed: "primary",
+  archived: "danger",
+};
 
 const ALL_TOOLS = Object.keys(TOOL_LABELS);
 const MEMBER_ROLES = [
@@ -109,6 +117,23 @@ export default function PlatformProjects() {
     }
   };
 
+  const runTransition = async (project: AdminProject, action: string) => {
+    if (!isSuperAdmin) return;
+    const label = LIFECYCLE_ACTION_LABELS[action] || action;
+    if (!window.confirm(`تأكيد ${label} المشروع «${project.name}»؟`)) return;
+    const res = await authFetch(`/api/platform/projects/${project.id}/${action}/`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    if (res.ok) {
+      toast.success({ title: `تم ${label} المشروع` });
+      void load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error({ title: data.detail || `تعذّر ${label} المشروع` });
+    }
+  };
+
   const toggleFeatured = async (project: AdminProject) => {
     if (!isSuperAdmin) return;
     const res = await authFetch(`/api/platform/projects/${project.id}/`, {
@@ -186,12 +211,29 @@ export default function PlatformProjects() {
               <div className="flex items-center gap-2">
                 <span style={{ width: 14, height: 14, borderRadius: 4, background: p.brand_color, display: "inline-block" }} />
                 <h3 className="text-lg font-bold text-primary">{p.name}</h3>
-                <Badge variant={p.status === "active" ? "success" : "warning"}>{p.status}</Badge>
+                <Badge variant={STATUS_BADGE[p.status] || "warning"}>{STATUS_LABELS[p.status] || p.status}</Badge>
                 {p.is_featured && <Badge variant="success">مميز في الرئيسية</Badge>}
                 {p.my_role && <Badge>{p.my_role === "super_admin" ? "مشرف عام" : p.my_role}</Badge>}
               </div>
               <Link to={`/projects/${p.slug}`} className="text-sm font-bold text-primary hover:underline">صفحة المشروع ←</Link>
             </div>
+
+            {isSuperAdmin && (
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-surface-border p-3">
+                <span className="text-xs font-bold text-brand-gray">الحالة: {STATUS_LABELS[p.status] || p.status} —</span>
+                {p.next_actions.length === 0 && <span className="text-xs text-brand-gray">لا إجراءات متاحة</span>}
+                {p.next_actions.map((action) => (
+                  <button
+                    key={action}
+                    type="button"
+                    className="rounded-full border border-surface-border bg-surface px-3 py-1 text-xs font-bold text-primary hover:bg-primary hover:text-white"
+                    onClick={() => void runTransition(p, action)}
+                  >
+                    {LIFECYCLE_ACTION_LABELS[action] || action}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {isSuperAdmin && (
               <div className="mb-3 flex flex-wrap items-end gap-3 rounded-lg border border-surface-border p-3">

@@ -90,6 +90,22 @@ export const TOOL_LABELS: Record<string, string> = {
   reports: "التقارير",
 };
 
+/** تسميات حالات المشروع (دورة الحياة). */
+export const STATUS_LABELS: Record<string, string> = {
+  draft: "مسودة",
+  active: "نشط",
+  completed: "مكتمل",
+  archived: "مؤرشف",
+};
+
+/** تسميات إجراءات الانتقال (تطابق أسماء أفعال الخادم). */
+export const LIFECYCLE_ACTION_LABELS: Record<string, string> = {
+  activate: "تفعيل",
+  complete: "إكمال",
+  archive: "أرشفة",
+  reopen: "إعادة فتح",
+};
+
 /** تسميات مفاتيح color_scheme المعروفة (وسيلة الإيضاح) — أي مفتاح آخر يُعرض كما هو. */
 export const COLOR_SCHEME_LABELS: Record<string, string> = {
   high: "أولوية عالية",

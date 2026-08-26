@@ -14,10 +14,16 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from core.permissions import IsSuperAdmin, is_super_admin
-from core.activity import ACTION_PROJECT_CREATE, ACTION_PROJECT_DELETE, log_activity
+from core.activity import (
+    ACTION_PROJECT_CREATE,
+    ACTION_PROJECT_DELETE,
+    ACTION_PROJECT_STATUS,
+    log_activity,
+)
 from notifications.services import notify, EVENT_PROJECT
 
 from . import services
+from . import lifecycle
 from .models import Project, ProjectMember, ProjectTool
 from .permissions import CanManageProjectObject, IsSuperAdminOrProjectMember
 from .serializers import (
@@ -167,6 +173,56 @@ class ProjectViewSet(viewsets.ModelViewSet):
             project=project, user_id=request.data.get("user_id")
         ).delete()
         return Response({"removed": deleted})
+
+    # ---- انتقالات دورة الحياة (المشرف العام فقط) ----
+    def _transition(self, request, action_name):
+        if not is_super_admin(request.user):
+            return Response(
+                {"detail": "تغيير حالة المشروع متاح للمشرف العام فقط"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        project = self.get_object()
+        old_status = project.status
+        if not lifecycle.can_transition(old_status, action_name):
+            label = lifecycle.ACTION_LABELS_AR.get(action_name, action_name)
+            return Response(
+                {"detail": f"لا يمكن {label} مشروع حالته «{old_status}»"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        new_status = lifecycle.target_status(action_name)
+        project.status = new_status
+        project.save(update_fields=["status", "updated_at"])
+        log_activity(
+            actor=request.user,
+            action=ACTION_PROJECT_STATUS,
+            target=project,
+            summary=f"حالة المشروع {project.name}: {old_status} → {new_status}",
+            request=request,
+        )
+        notify(
+            message=f"تغيّرت حالة المشروع «{project.name}» إلى {new_status}",
+            roles=["admin"],
+            notification_type="info",
+            link=f"/projects/{project.slug}",
+            event_type=EVENT_PROJECT,
+        )
+        return Response(ProjectAdminSerializer(project, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"])
+    def activate(self, request, pk=None):
+        return self._transition(request, "activate")
+
+    @action(detail=True, methods=["post"])
+    def complete(self, request, pk=None):
+        return self._transition(request, "complete")
+
+    @action(detail=True, methods=["post"])
+    def archive(self, request, pk=None):
+        return self._transition(request, "archive")
+
+    @action(detail=True, methods=["post"])
+    def reopen(self, request, pk=None):
+        return self._transition(request, "reopen")
 
     # ---- تفعيل/تعطيل الأدوات (provisioning للمشرف العام فقط) ----
     @action(detail=True, methods=["post"])
