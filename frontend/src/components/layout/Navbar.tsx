@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, User, LogOut } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
-import { useMemberships } from "../../hooks/useMemberships";
+import { useMembershipsContext } from "../../contexts/MembershipsContext";
 import { usePlatformSettings } from "../../contexts/PlatformSettingsContext";
 import { visiblePublicNav, displayPlatformName, displayLogoUrl } from "../../admin/publicNav";
+import { defaultAdminHome } from "../../admin/access";
 import NotificationBell from "./NotificationBell";
 
 /** شريط التنقّل العام — قائمة جانبية (drawer) على الشاشات الصغيرة. */
@@ -12,21 +13,17 @@ export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
-  const { memberships, isSuperAdmin } = useMemberships();
+  const { loading, access } = useMembershipsContext();
   const { settings } = usePlatformSettings();
   const [open, setOpen] = useState(false);
   const navLinks = visiblePublicNav(settings);
   const brandName = displayPlatformName(settings.platform_name);
   const logoSrc = displayLogoUrl(settings.logo_url);
 
-  const staffRoles = ["admin", "manager", "employee"];
-  const isStaff =
-    !!user && (staffRoles.includes(user.role) || isSuperAdmin || memberships.length > 0);
-  const dashboardPath = user?.role === "admin" || isSuperAdmin
-    ? "/Admin"
-    : memberships.length > 0 || (user && staffRoles.includes(user.role))
-      ? "/Admin/projects"
-      : "/user/main";
+  const dashboardPath = loading ? "/user/main" : defaultAdminHome(access);
+  const showAdminLink = loading
+    ? false
+    : access.isGlobalAdmin || access.hasMemberships || ["manager", "employee"].includes(access.userRole);
 
   useEffect(() => {
     setOpen(false);
@@ -88,7 +85,7 @@ export default function Navbar() {
             <>
               <NotificationBell />
               <Link to={dashboardPath} className="flex items-center gap-2 text-sm font-semibold text-primary">
-                <User size={16} /> {isStaff ? "لوحة الإدارة" : (user?.name || "حسابي")}
+                <User size={16} /> {showAdminLink ? "لوحة الإدارة" : (user?.name || "حسابي")}
               </Link>
               <button type="button" onClick={() => { void logout(); }} aria-label="خروج" className="text-brand-gray hover:text-primary">
                 <LogOut size={18} />
@@ -129,7 +126,7 @@ export default function Navbar() {
                   <>
                     <div className="px-1 py-2"><NotificationBell /></div>
                     <Link to={dashboardPath} onClick={close} className="zad-nav-link">
-                      <User size={16} /> {isStaff ? "لوحة الإدارة" : "حسابي"}
+                      <User size={16} /> {showAdminLink ? "لوحة الإدارة" : "حسابي"}
                     </Link>
                     <button
                       type="button"

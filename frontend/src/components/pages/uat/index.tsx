@@ -82,6 +82,7 @@ export default function UatPage() {
         <p className="mt-1 text-sm text-brand-gray">
           تجربة محلية: <a className="font-semibold text-primary" href={UAT_LOCAL_BASE} dir="ltr">{UAT_LOCAL_BASE}</a>
           {" "}· المرجع: <code dir="ltr">UAT.md</code> · إجابات المرحلة 1: <code dir="ltr">docs/UAT_PHASE1_ANSWERS.md</code>
+          {" "}· يُحفظ تلقائياً في المتصفح
         </p>
       </header>
 

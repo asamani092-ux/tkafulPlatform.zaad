@@ -3,6 +3,7 @@
  * التعقيد: applyDynamicFilters O(N·K) حيث N عدد العناصر وK عدد الفلاتر المفعّلة.
  */
 import type { MapFieldDef, MapFieldOption, PublicMapItem } from "./types";
+import { COLOR_SCHEME_LABELS } from "./types";
 
 export type DynamicFilterValue = string | boolean;
 export type DynamicFilters = Record<string, DynamicFilterValue | null>;
@@ -12,7 +13,20 @@ export function optionValue(option: MapFieldOption | string): string {
 }
 
 export function optionLabel(option: MapFieldOption | string): string {
-  return typeof option === "string" ? option : option.label;
+  if (typeof option === "string") return COLOR_SCHEME_LABELS[option] || option;
+  return option.label || COLOR_SCHEME_LABELS[option.value] || option.value;
+}
+
+/** عرض قيمة حقل عنصر خريطة بالعربية — O(خيارات الحقل). */
+export function displayFieldValue(field: MapFieldDef | undefined, value: unknown): string {
+  if (typeof value === "boolean") return value ? "نعم" : "لا";
+  if (value == null || value === "") return "—";
+  const str = String(value);
+  if (field?.options?.length) {
+    const match = field.options.find((o) => optionValue(o) === str);
+    if (match) return optionLabel(match);
+  }
+  return COLOR_SCHEME_LABELS[str] || str;
 }
 
 /** مفاتيح تُستبعد من شريط الفلاتر العامة فوق الخريطة. */

@@ -151,7 +151,7 @@ export const LEGACY_ADMIN_REDIRECTS: Array<{ from: string; to: string }> = [
   { from: "/executive", to: "/Admin/staff" },
   { from: "/executive/manage", to: "/Admin/staff/manage" },
   { from: "/admin/signin", to: "/signin" },
-  { from: "/saqya", to: "/projects/saqya/sponsorships" },
+  { from: "/saqya", to: "/projects/saqya" },
 ];
 
 /** مسارات التحويل المسجّلة في الراوتر */

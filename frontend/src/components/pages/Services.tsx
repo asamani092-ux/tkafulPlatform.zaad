@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { ClipboardList } from "lucide-react";
 import { API_BASE_URL } from "../../config";
 import Card from "../ui/Card";
 import Badge from "../ui/Badge";
@@ -29,6 +30,21 @@ export default function Services() {
     <div>
       <HeroBand title="الخدمات" subtitle="فرص تطوعية وخدمات يمكنك المشاركة فيها لصنع الأثر." />
       <main className="mx-auto max-w-page px-4 py-10">
+        <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <Card>
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="mb-2 text-xl font-bold text-primary">طلب خدمة</h3>
+                <p className="text-sm text-brand-gray">
+                  إرسال لمرة واحدة — يمكنك مسح الحقول قبل الإرسال؛ التعديل بعد الإرسال من لوحة الإدارة فقط.
+                </p>
+              </div>
+              <ClipboardList className="text-secondary" size={32} />
+            </div>
+            <Link to="/request-service"><Button variant="secondary">قدّم طلباً</Button></Link>
+          </Card>
+        </div>
+        <h2 className="mb-6 text-center text-2xl font-bold text-primary">فرص التطوّع</h2>
         {loading ? (
           <p className="text-center text-brand-gray">جاري التحميل…</p>
         ) : (

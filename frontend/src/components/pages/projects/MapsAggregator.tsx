@@ -1,26 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Card from "../../ui/Card";
-import Button from "../../ui/Button";
 import { LoadingState, EmptyState, ErrorState } from "../../feedback/PageStates";
 import { fetchPublicMapDetail, fetchPublicMapsIndex, fetchPublicMapSummary } from "./api";
 import {
   applyDynamicFilters,
   mergeFields,
   sumMasked,
+  displayFieldValue,
   type DynamicFilters,
 } from "./filters";
 import DynamicFilterBar from "./DynamicFilterBar";
 import GenericMapView from "./GenericMapView";
-import MapContributionModal from "./MapContributionModal";
 import Select from "../../ui/Select";
 import type { MapSummaryInfo, PublicMapDetail, PublicMapIndexEntry, PublicMapItem } from "./types";
 
 /**
  * الخريطة الموحّدة /map — كل الطبقات العامة لخرائط المشاريع النشطة:
- * KPI مجمّعة (مع الحفاظ على إخفاء <5) + فلترة بالمشروع + فلاتر ديناميكية موحّدة
- * من MapItemField + وسيلة إيضاح + مساهمة مباشرة من العنصر المحدد.
- * التعقيد: دمج O(M·N) على العناصر، فلاتر O(N·K)، دمج الحقول O(M·F).
+ * KPI مجمّعة + فلترة بالمشروع + فلاتر ديناميكية موحّدة.
  */
 export default function MapsAggregator() {
   const [index, setIndex] = useState<PublicMapIndexEntry[]>([]);
@@ -31,7 +28,6 @@ export default function MapsAggregator() {
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   const [filters, setFilters] = useState<DynamicFilters>({});
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -85,7 +81,6 @@ export default function MapsAggregator() {
     const fulfilled = sumMasked(visible.map((s) => s.contributions_fulfilled));
     return {
       items: visibleItems.length,
-      pending: visible.reduce((acc, s) => acc + s.contributions_pending, 0),
       fulfilledDisplay: fulfilled.masked
         ? (fulfilled.total > 0 ? `${fulfilled.total}+` : "<5")
         : fulfilled.total,
@@ -118,11 +113,10 @@ export default function MapsAggregator() {
       </header>
 
       {/* KPI مجمّعة — الأعداد الحسّاسة تبقى مقنّعة (<5) */}
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
         <Card><div className="text-center"><div className="text-lg font-extrabold text-primary sm:text-xl">{kpis.items}</div><div className="text-xs text-brand-gray">عنصر معروض</div></div></Card>
-        <Card><div className="text-center"><div className="text-lg font-extrabold text-primary sm:text-xl">{kpis.fulfilledDisplay}</div><div className="text-xs text-brand-gray">تعهد منفّذ</div></div></Card>
+        <Card><div className="text-center"><div className="text-lg font-extrabold text-primary sm:text-xl">{kpis.fulfilledDisplay}</div><div className="text-xs text-brand-gray">كمية منفّذة (مجمّع)</div></div></Card>
         <Card><div className="text-center"><div className="text-lg font-extrabold text-primary sm:text-xl">{kpis.quantity.toLocaleString("en-US")}</div><div className="text-xs text-brand-gray">كمية موزّعة</div></div></Card>
-        <Card><div className="text-center"><div className="text-lg font-extrabold text-primary sm:text-xl">{kpis.pending}</div><div className="text-xs text-brand-gray">تعهد قيد المراجعة</div></div></Card>
       </div>
 
       <DynamicFilterBar
@@ -159,26 +153,16 @@ export default function MapsAggregator() {
               return (
                 <div key={key}>
                   <span className="text-brand-gray">{field.label}:</span>{" "}
-                  <strong>{typeof value === "boolean" ? (value ? "نعم" : "لا") : String(value)}</strong>
+                  <strong>{displayFieldValue(field, value)}</strong>
                 </div>
               );
             })}
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={() => setModalOpen(true)}>ساهم هنا</Button>
-            <Link to={`/projects/${selectedEntry.detail.project.slug}/map?map=${selectedEntry.detail.id}`}
-              className="text-sm font-bold text-primary hover:underline">
-              فتح خريطة المشروع ←
-            </Link>
-          </div>
+          <Link to={`/projects/${selectedEntry.detail.project.slug}/map?map=${selectedEntry.detail.id}`}
+            className="text-sm font-bold text-primary hover:underline">
+            فتح خريطة المشروع ←
+          </Link>
         </Card>
-      )}
-
-      {selectedEntry && (
-        <MapContributionModal open={modalOpen} onClose={() => setModalOpen(false)}
-          mapId={selectedEntry.detail.id} item={selectedEntry.item} fields={selectedEntry.detail.fields}
-          donationUrl={selectedEntry.detail.project.donation_url}
-          donationLabel={selectedEntry.detail.project.donation_label} />
       )}
     </div>
   );

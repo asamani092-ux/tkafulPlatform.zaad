@@ -3,8 +3,9 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, ChevronDown, ChevronLeft, Menu, X } from "lucide-react";
 import NotificationBell from "./NotificationBell";
 import { useAuth } from "../../contexts/AuthContext";
-import { useMemberships } from "../../hooks/useMemberships";
-import { ADMIN_DOMAINS, domainForPath } from "../../admin/domains";
+import { domainForPath } from "../../admin/domains";
+import { visibleDomainsForUser } from "../../admin/access";
+import { useMembershipsContext } from "../../contexts/MembershipsContext";
 import { useEffect, useState } from "react";
 
 /** غلاف لوحة الإدارة — شريط جانبي ثابت على الشاشات الكبيرة، وdrawer على الصغيرة. */
@@ -12,16 +13,13 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const loc = useLocation();
   const nav = useNavigate();
   const { user, logout } = useAuth();
-  const { isSuperAdmin } = useMemberships();
-  const isAdmin = user?.role === "admin" || isSuperAdmin;
+  const { loading, access } = useMembershipsContext();
+  const { isGlobalAdmin } = access;
   const activeDomain = domainForPath(loc.pathname);
   const [openDomain, setOpenDomain] = useState<string>(activeDomain);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const visibleDomains = ADMIN_DOMAINS.filter((d) => {
-    if (!d.superAdminOnly) return true;
-    return isAdmin;
-  });
+  const visibleDomains = visibleDomainsForUser(access);
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -53,21 +51,27 @@ export default function AdminShell({ children }: { children: ReactNode }) {
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto">
-        <Link
-          to="/Admin"
-          className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold"
-          style={{
-            background: activeDomain === "overview" ? "var(--tmkeen-primary)" : "transparent",
-            color: activeDomain === "overview" ? "#fff" : "var(--tmkeen-brand-gray)",
-          }}
-        >
-          نظرة عامة
-        </Link>
+        {loading ? (
+          <p className="px-3 py-2 text-sm text-brand-gray">جاري تحميل الصلاحيات…</p>
+        ) : (
+          <>
+            {isGlobalAdmin && (
+              <Link
+                to="/Admin"
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold"
+                style={{
+                  background: activeDomain === "overview" ? "var(--tmkeen-primary)" : "transparent",
+                  color: activeDomain === "overview" ? "#fff" : "var(--tmkeen-brand-gray)",
+                }}
+              >
+                نظرة عامة
+              </Link>
+            )}
 
-        {visibleDomains.map((domain) => {
+            {visibleDomains.map((domain) => {
           const domainActive = activeDomain === domain.id;
           const expanded = openDomain === domain.id || domainActive;
-          const childLinks = domain.links.filter((l) => isAdmin || l.staffVisible);
+          const childLinks = domain.links.filter((l) => isGlobalAdmin || l.staffVisible);
           if (childLinks.length === 0) return null;
           return (
             <div key={domain.id} className="rounded-lg">
@@ -107,13 +111,15 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           );
         })}
 
-        <button
-          type="button"
-          onClick={() => { void logout().then(() => nav("/signin")); }}
-          className="mt-4 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-brand-gray"
-        >
-          <LogOut size={16} /> خروج
-        </button>
+            <button
+              type="button"
+              onClick={() => { void logout().then(() => nav("/signin")); }}
+              className="mt-4 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-brand-gray"
+            >
+              <LogOut size={16} /> خروج
+            </button>
+          </>
+        )}
       </nav>
     </>
   );

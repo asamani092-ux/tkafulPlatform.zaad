@@ -9,6 +9,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from core.throttles import AuthRateThrottle
+from .password_ar import password_errors_to_ar
 from .serializers import UserSerializer, RegisterSerializer
 
 logger = logging.getLogger(__name__)
@@ -157,7 +158,7 @@ def change_password(request):
     try:
         validate_password(new_password, user=request.user)
     except DjangoValidationError as exc:
-        return Response({"detail": list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": password_errors_to_ar(list(exc.messages))}, status=status.HTTP_400_BAD_REQUEST)
 
     request.user.set_password(new_password)
     request.user.save()
