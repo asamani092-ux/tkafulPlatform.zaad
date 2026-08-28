@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "r
 
 import { AuthProvider } from "./contexts/AuthContext";
 import { PlatformSettingsProvider } from "./contexts/PlatformSettingsContext";
+import { MembershipsProvider } from "./contexts/MembershipsContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { DashboardSettingsProvider } from "./contexts/DashboardSettingsContext";
 import ProtectedRoute from "./components/routing/ProtectedRoute";
@@ -168,13 +169,15 @@ export default function App() {
   return (
     <AuthProvider>
       <PlatformSettingsProvider>
-        <ToastProvider>
-          <DashboardSettingsProvider>
-            <Router>
-              <AppContent />
-            </Router>
-          </DashboardSettingsProvider>
-        </ToastProvider>
+        <MembershipsProvider>
+          <ToastProvider>
+            <DashboardSettingsProvider>
+              <Router>
+                <AppContent />
+              </Router>
+            </DashboardSettingsProvider>
+          </ToastProvider>
+        </MembershipsProvider>
       </PlatformSettingsProvider>
     </AuthProvider>
   );

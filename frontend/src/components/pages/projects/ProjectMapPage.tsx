@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import Card from "../../ui/Card";
-import Button from "../../ui/Button";
 import { LoadingState, EmptyState, ErrorState } from "../../feedback/PageStates";
 import { fetchPublicMapDetail, fetchPublicMapsIndex, fetchPublicMapSummary } from "./api";
-import { applyDynamicFilters, type DynamicFilters } from "./filters";
+import { applyDynamicFilters, displayFieldValue, type DynamicFilters } from "./filters";
 import DynamicFilterBar from "./DynamicFilterBar";
 import GenericMapView from "./GenericMapView";
-import MapContributionModal from "./MapContributionModal";
 import type { MapSummaryInfo, PublicMapDetail, PublicMapIndexEntry } from "./types";
 
-/** خريطة المشروع — عارض مبني على مخطط MapItemField (فلاتر ديناميكية + تعهد عام). */
+/** خريطة المشروع — عارض عام (فلاتر ديناميكية، بدون تعهد عام). */
 export default function ProjectMapPage() {
   const { slug = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -21,7 +19,6 @@ export default function ProjectMapPage() {
   const [error, setError] = useState(false);
   const [filters, setFilters] = useState<DynamicFilters>({});
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
 
   const requestedMapId = Number(searchParams.get("map")) || null;
 
@@ -92,11 +89,9 @@ export default function ProjectMapPage() {
       )}
 
       {summary && (
-        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-2 sm:gap-3">
           <Card><div className="text-center"><div className="text-lg font-extrabold text-primary">{summary.items_active}</div><div className="text-xs text-brand-gray">عنصر معروض</div></div></Card>
-          <Card><div className="text-center"><div className="text-lg font-extrabold text-primary">{summary.contributions_fulfilled}</div><div className="text-xs text-brand-gray">تعهد منفّذ</div></div></Card>
           <Card><div className="text-center"><div className="text-lg font-extrabold text-primary">{summary.quantity_fulfilled}</div><div className="text-xs text-brand-gray">كمية موزّعة</div></div></Card>
-          <Card><div className="text-center"><div className="text-lg font-extrabold text-primary">{summary.contributions_pending}</div><div className="text-xs text-brand-gray">تعهد قيد المراجعة</div></div></Card>
         </div>
       )}
 
@@ -106,25 +101,20 @@ export default function ProjectMapPage() {
       {selectedItem && (
         <Card className="mt-4">
           <h2 className="mb-2 text-lg font-bold text-primary">{selectedItem.name}</h2>
-          <div className="mb-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
             {Object.entries(selectedItem.data).map(([key, value]) => {
               const field = publicFieldByKey.get(key);
               if (!field || key === "boundary") return null;
               return (
                 <div key={key}>
                   <span className="text-brand-gray">{field.label}:</span>{" "}
-                  <strong>{typeof value === "boolean" ? (value ? "نعم" : "لا") : String(value)}</strong>
+                  <strong>{displayFieldValue(field, value)}</strong>
                 </div>
               );
             })}
           </div>
-          <Button onClick={() => setModalOpen(true)}>ساهم هنا</Button>
         </Card>
       )}
-
-      <MapContributionModal open={modalOpen} onClose={() => setModalOpen(false)} mapId={detail.id}
-        item={selectedItem} fields={detail.fields}
-        donationUrl={detail.project.donation_url} donationLabel={detail.project.donation_label} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useToast } from "../../contexts/ToastContext";
-import { API_BASE_URL } from "../../config";
+import { API_BASE_URL, WATER_SUPPLY_FORM_ENABLED } from "../../config";
 import Card from "../ui/Card";
 import Input from "../ui/Input";
 import Select from "../ui/Select";
@@ -86,6 +86,23 @@ export default function WaterSupplyRequestPage() {
     }
   };
 
+  if (!WATER_SUPPLY_FORM_ENABLED) {
+    return (
+      <div>
+        <HeroBand title="طلب سقيا الماء" subtitle="النموذج غير مفعّل حالياً في هذه البيئة." />
+        <main className="mx-auto max-w-2xl px-4 py-10">
+          <Card>
+            <p className="text-sm text-brand-gray">
+              تُستقبل الطلبات عبر القنوات الخارجية المعتمدة. لتفعيل النموذج محلياً:{" "}
+              <code dir="ltr">VITE_ENABLE_WATER_SUPPLY_FORM=true</code>
+            </p>
+            <Link to="/projects/saqya" className="mt-4 inline-block text-sm font-bold text-primary">← صفحة مشروع السقيا</Link>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div>
       <HeroBand
@@ -141,9 +158,13 @@ export default function WaterSupplyRequestPage() {
             </div>
           </Card>
 
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting ? "جاري الإرسال…" : "إرسال"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" className="flex-1" disabled={isSubmitting}>
+              {isSubmitting ? "جاري الإرسال…" : "إرسال"}
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => { setFormData(EMPTY); setErrors({}); }}>مسح الحقول</Button>
+          </div>
+          <p className="mt-3 text-center text-xs text-brand-gray">لا يُعدّل الطلب بعد الإرسال — يُراجع من /Admin/requests/water-supply.</p>
         </form>
       </main>
     </div>

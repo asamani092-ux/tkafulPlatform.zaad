@@ -4,6 +4,7 @@ from rest_framework.test import APITestCase
 
 
 class UatStatusGuardTests(APITestCase):
+    @override_settings(UAT_ENABLED=False)
     def test_default_settings_returns_404(self):
         res = self.client.get("/api/uat/")
         self.assertEqual(res.status_code, 404)

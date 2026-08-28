@@ -114,8 +114,8 @@ export default function SignUp() {
       // تسجيل دخول تلقائي إن رجع توكن، وإلا التوجيه لصفحة الدخول
       if (data.access && data.refresh) {
         login({ name: payload.name, email: payload.email, role: data.user?.profile?.role || "user" }, data.access, data.refresh);
-        success({ title: "تم إنشاء الحساب بنجاح", description: "مرحبًا بك في منصة تكافل." });
-        navigate("/");
+        success({ title: "تم إنشاء الحساب بنجاح", description: "حسابك كمتطوّع — يُراجع من المشرف في /Admin/volunteers/applications." });
+        navigate("/user/main");
       } else {
         success({ title: "تم إنشاء الحساب بنجاح", description: "سيتم توجيهك لتسجيل الدخول." });
         setTimeout(() => navigate("/signin"), 800);
