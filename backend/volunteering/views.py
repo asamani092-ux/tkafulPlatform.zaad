@@ -405,14 +405,29 @@ class TaskViewSet(viewsets.ModelViewSet):
 @permission_classes([IsAdmin])
 def list_volunteers(request):
     """
-    GET /api/admin/volunteers/
-    Returns detailed list of APPROVED volunteers for VolunteerManagement page
+    GET /api/volunteers/
+    قائمة المتطوّعين المعتمدين — بحث/فلترة اختيارية (?q=&is_active=).
     """
-    # ✅ UPDATED: Only show approved volunteers
+    from django.db.models import Q
+
     volunteers = User.objects.filter(
         profile__role='user',
         profile__is_approved=True
     ).select_related('profile').prefetch_related('assigned_tasks')
+
+    q = (request.query_params.get('q') or request.query_params.get('search') or "").strip()
+    if q:
+        volunteers = volunteers.filter(
+            Q(email__icontains=q)
+            | Q(profile__name__icontains=q)
+            | Q(profile__city__icontains=q)
+            | Q(profile__phone__icontains=q)
+        )
+    active = request.query_params.get('is_active')
+    if active in ("true", "1"):
+        volunteers = volunteers.filter(is_active=True)
+    elif active in ("false", "0"):
+        volunteers = volunteers.filter(is_active=False)
 
     # ترقيم اختياري للقوائم الكبيرة (لا يغيّر السلوك الافتراضي عند عدم تمرير page)
     if request.query_params.get('page'):

@@ -89,6 +89,10 @@ class AdminUserViewSet(viewsets.GenericViewSet):
             user.profile.name = data["name"]
             user.profile.save(update_fields=["name"])
 
+        if "city" in data:
+            user.profile.city = data["city"]
+            user.profile.save(update_fields=["city"])
+
         if "is_active" in data:
             if user.is_active and not data["is_active"] and would_remove_last_admin(user):
                 return Response({"detail": MSG_LAST_ADMIN_DISABLE}, status=status.HTTP_400_BAD_REQUEST)

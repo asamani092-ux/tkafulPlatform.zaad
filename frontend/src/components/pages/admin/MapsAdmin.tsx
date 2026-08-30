@@ -182,11 +182,12 @@ export default function MapsAdmin() {
             </Button>
           </div>
 
+          <p className="mb-2 text-xs text-brand-gray">الأساسي: طبقات ثم عناصر ثم نشر. المتقدّم: حقول مخصّصة وتعهدات.</p>
           <Tabs active={tab} onChange={setTab} tabs={[
-            { key: "layers", label: `الطبقات (${layers.length})` },
-            { key: "fields", label: `الحقول (${fields.length})` },
-            { key: "items", label: `العناصر (${items.length})` },
-            { key: "contributions", label: `التعهدات (${contributions.length})` },
+            { key: "layers", label: `١) الطبقات (${layers.length})` },
+            { key: "items", label: `٢) العناصر (${items.length})` },
+            { key: "fields", label: `متقدّم: الحقول (${fields.length})` },
+            { key: "contributions", label: `متقدّم: التعهدات (${contributions.length})` },
           ]} />
 
           {tab === "layers" && (
@@ -294,8 +295,8 @@ export default function MapsAdmin() {
                 </Select>
                 <Input label="الاسم" value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} required />
                 <div className="grid grid-cols-2 gap-2">
-                  <Input label="خط العرض (Lat)" value={itemForm.lat} onChange={(e) => setItemForm({ ...itemForm, lat: e.target.value })} dir="ltr" required />
-                  <Input label="خط الطول (Lng)" value={itemForm.lng} onChange={(e) => setItemForm({ ...itemForm, lng: e.target.value })} dir="ltr" required />
+                  <Input label="خط العرض" value={itemForm.lat} onChange={(e) => setItemForm({ ...itemForm, lat: e.target.value })} dir="ltr" required />
+                  <Input label="خط الطول" value={itemForm.lng} onChange={(e) => setItemForm({ ...itemForm, lng: e.target.value })} dir="ltr" required />
                 </div>
                 {fields.map((f) => {
                   const value = itemForm.data[f.key] ?? "";

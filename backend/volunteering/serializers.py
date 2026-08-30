@@ -199,6 +199,7 @@ class VolunteerDetailSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source='profile.name', read_only=True)
     phone = serializers.CharField(source='profile.phone', read_only=True)
     location = serializers.CharField(source='profile.city', read_only=True)
+    city = serializers.CharField(source='profile.city', read_only=True)
     skills = serializers.JSONField(source='profile.skills', read_only=True)
     available_days = serializers.JSONField(source='profile.available_days', read_only=True)
     qualification = serializers.CharField(source='profile.qualification', read_only=True)
@@ -224,6 +225,7 @@ class VolunteerDetailSerializer(serializers.ModelSerializer):
             'name',
             'phone',
             'location',
+            'city',
             'status',
             'skills',
             'available_days',

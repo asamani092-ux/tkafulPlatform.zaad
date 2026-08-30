@@ -246,7 +246,8 @@ export default function PlatformProjects() {
 
       {isSuperAdmin && (
         <Card className="mb-6">
-          <h2 className="mb-3 text-lg font-bold text-primary">إنشاء مشروع جديد (المشرف العام)</h2>
+          <h2 className="mb-1 text-lg font-bold text-primary">إنشاء مشروع جديد</h2>
+          <p className="mb-3 text-xs text-brand-gray">مسار الإنشاء الوحيد للمشرف العام — لا يوجد تبويب إنشاء منفصل.</p>
           <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={createProject}>
             <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             <Input label="المعرّف (slug)" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} dir="ltr" required />
@@ -258,6 +259,21 @@ export default function PlatformProjects() {
             </Select>
             <div className="sm:col-span-2"><Button type="submit">إنشاء</Button></div>
           </form>
+        </Card>
+      )}
+
+      {projects.some((p) => p.tools.some((t) => t.tool_key === "sponsorships" && t.is_enabled)) && (
+        <Card className="mb-6">
+          <h2 className="mb-2 text-lg font-bold text-primary">فهرس مشاريع الكفالات</h2>
+          <p className="mb-3 text-xs text-brand-gray">المشاريع التي فعّلت أداة الكفالات — الدورة التشغيلية داخل بوابة المشروع (لا نطاق إداري منفصل).</p>
+          <ul className="space-y-2 text-sm">
+            {projects.filter((p) => p.tools.some((t) => t.tool_key === "sponsorships" && t.is_enabled)).map((p) => (
+              <li key={`sp-${p.id}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border py-2 last:border-0">
+                <span className="font-semibold text-primary">{p.name}</span>
+                <Link to={`/projects/${p.slug}/sponsorships`} className="font-bold text-primary hover:underline">فتح بوابة الكفالات ←</Link>
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
 

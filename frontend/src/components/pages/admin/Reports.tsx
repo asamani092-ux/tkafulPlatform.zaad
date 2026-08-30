@@ -87,7 +87,10 @@ export default function Reports() {
   return (
     <AdminShell>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold text-primary">التقارير</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-primary">التقارير</h1>
+          <p className="text-xs text-brand-gray">النطاق الافتراضي للتقرير الشامل: المنصّة بالكامل (مشاريع + متطوعون + مهام). تبويبات الأداء/التقدّم نطاق حيّ مباشر.</p>
+        </div>
         {tab === "saved" && <Button onClick={generate} disabled={generating}>{generating ? "جاري الإنشاء…" : "إنشاء تقرير شامل للمنصّة"}</Button>}
       </div>
 

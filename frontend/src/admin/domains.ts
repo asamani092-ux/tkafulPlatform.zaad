@@ -46,7 +46,7 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     id: "users",
     label: "المستخدمون",
     to: "/Admin/users",
-    blurb: "عرض وإضافة وتعديل وحذف الحسابات والأدوار",
+    blurb: "حسابات المنصّة والأدوار (مستخدم/مشرف/متبرّع…) — ليست أقسام الكادر التشغيلية",
     superAdminOnly: true,
     links: [
       { to: "/Admin/users", label: "إدارة المستخدمين" },
@@ -56,7 +56,7 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     id: "volunteers",
     label: "المتطوعون",
     to: "/Admin/volunteers",
-    blurb: "المتطوعون وطلبات المشاريع وطلبات الانضمام في صفحة واحدة",
+    blurb: "إدارة المتطوعين وطلبات المشاريع وطلبات الانضمام",
     superAdminOnly: true,
     links: [
       { to: "/Admin/volunteers", label: "إدارة المتطوعين" },
@@ -78,7 +78,7 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     id: "maps",
     label: "الخرائط",
     to: "/Admin/maps",
-    blurb: "إدارة الخرائط والطبقات والعناصر",
+    blurb: "إنشاء خريطة ونشرها مع طبقات وعناصر",
     links: [
       { to: "/Admin/maps", label: "إدارة الخرائط", staffVisible: true },
     ],
@@ -87,7 +87,7 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     id: "reports",
     label: "التقارير",
     to: "/Admin/reports",
-    blurb: "تقارير المنصّة والمشاريع والمتطوعين وأداء الكادر",
+    blurb: "تقارير المنصّة + أداء الكادر التشغيلي (أقسام/موظفون/مهام) — منفصل عن «المستخدمون»",
     superAdminOnly: true,
     links: [
       { to: "/Admin/reports", label: "التقارير" },
