@@ -67,7 +67,9 @@ class NotificationCenterTests(APITestCase):
         self.assertTrue(self._admin_unread().filter(event_type=EVENT_WATER_SUPPLY).exists())
 
     def test_volunteer_application_notifies_admin(self):
-        p = Project.objects.create(name="تطوع", slug="vol-p")
+        from volunteering.models import VolunteeringProfile
+        p = Project.objects.create(name="تطوع", slug="vol-p", status="active", is_active=True)
+        VolunteeringProfile.objects.create(project=p, volunteer_status="ACTIVE", is_hidden=False)
         self.client.force_authenticate(self.vol)
         res = self.client.post(f"/api/user/opportunities/{p.id}/apply/", {"message": "أرغب"}, format="json")
         self.assertEqual(res.status_code, 200)

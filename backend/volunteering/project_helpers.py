@@ -15,6 +15,22 @@ def volunteering_profiles_qs():
     return VolunteeringProfile.objects.select_related("project", "manager_employee")
 
 
+def public_volunteering_profiles_qs():
+    """
+    مصدر عام موحّد لملفات التطوّع الظاهرة للجمهور/الفرص:
+    مشروع المنصّة نشط (D-43 PUBLIC_STATUSES) + غير مخفي + is_active.
+    يمنع تسريب draft/completed/archived عبر /api/public-projects/ ونظائره.
+    التعقيد: O(1) لبناء الاستعلام؛ التقييم عند التكرار.
+    """
+    from projects.lifecycle import PUBLIC_STATUSES
+
+    return volunteering_profiles_qs().filter(
+        is_hidden=False,
+        project__is_active=True,
+        project__status__in=PUBLIC_STATUSES,
+    )
+
+
 def profile_for_project_id(project_id):
     return volunteering_profiles_qs().filter(project_id=project_id).first()
 
@@ -56,9 +72,11 @@ def create_volunteering_project(title, desc="", status="ACTIVE", **profile_field
     return profile
 
 
-def aggregate_donations():
-    return volunteering_profiles_qs().aggregate(total=Sum("donation_amount"))["total"] or 0
+def aggregate_donations(*, public_only: bool = False):
+    qs = public_volunteering_profiles_qs() if public_only else volunteering_profiles_qs()
+    return qs.aggregate(total=Sum("donation_amount"))["total"] or 0
 
 
-def aggregate_beneficiaries():
-    return volunteering_profiles_qs().aggregate(total=Sum("beneficiaries"))["total"] or 0
+def aggregate_beneficiaries(*, public_only: bool = False):
+    qs = public_volunteering_profiles_qs() if public_only else volunteering_profiles_qs()
+    return qs.aggregate(total=Sum("beneficiaries"))["total"] or 0

@@ -618,14 +618,11 @@ def my_tasks(request):
 def public_projects(request):
     """
     GET /api/public-projects/
-    Public endpoint - returns all visible projects for public viewing
-    No authentication required
+    واجهة توافقية — نفس شكل VolunteeringProfile لكن بفلتر دورة الحياة العام
+    (active فقط) عبر public_volunteering_profiles_qs. المصدر الكانوني للمنصّة:
+    GET /api/platform/public/projects/ (projects.services.public_projects_queryset).
     """
-    # Get all visible projects (not hidden)
-    profiles = VolunteeringProfile.objects.filter(
-        is_hidden=False
-    ).select_related("project").order_by('-created_at')
-
+    profiles = project_helpers.public_volunteering_profiles_qs().order_by('-created_at')
     serializer = ProjectSerializer(profiles, many=True)
     return Response(serializer.data)
 
@@ -635,16 +632,9 @@ def public_projects(request):
 def available_opportunities(request):
     """
     GET /api/user/opportunities/
-    Returns available projects/opportunities that volunteers can apply to
-    Shows all projects that are NOT hidden (is_hidden=False)
-    Volunteers can apply and wait for admin approval
-    Requires authentication
+    فرص التطوّع للمصادقة — مشاريع المنصّة النشطة غير المخفية فقط (لا draft/archived).
     """
-    # Get all visible projects (regardless of status)
-    opportunities = VolunteeringProfile.objects.filter(
-        is_hidden=False
-    ).select_related("project").order_by('-created_at')
-
+    opportunities = project_helpers.public_volunteering_profiles_qs().order_by('-created_at')
     serializer = ProjectSerializer(opportunities, many=True)
     return Response({
         'results': serializer.data
@@ -661,6 +651,12 @@ def apply_to_opportunity(request, project_id):
     try:
         from projects.models import Project
         platform_project = Project.objects.get(id=project_id)
+        # لا قبول طلبات على مشاريع غير عامة (مسودة/مؤرشف/مخفي/موقوف)
+        if not project_helpers.public_volunteering_profiles_qs().filter(project_id=project_id).exists():
+            return Response(
+                {'error': 'المشروع غير متاح للتقديم'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         user = request.user
 
         existing_application = VolunteerApplication.objects.filter(
@@ -972,12 +968,10 @@ def public_home_stats(request):
     Returns aggregated statistics for home page (Hero section)
     No authentication required
     """
-    # Total beneficiaries from all projects
-    total_beneficiaries = project_helpers.aggregate_beneficiaries()
-
-    potential_projects = VolunteeringProfile.objects.exclude(volunteer_status='CANCELLED').count()
-
-    total_donations = project_helpers.aggregate_donations()
+    # إحصاءات عامة من المشاريع النشطة الظاهرة فقط — لا تُضخّم بمسودات/مؤرشفة.
+    total_beneficiaries = project_helpers.aggregate_beneficiaries(public_only=True)
+    potential_projects = project_helpers.public_volunteering_profiles_qs().count()
+    total_donations = project_helpers.aggregate_donations(public_only=True)
 
     return Response({
         'beneficiaries': total_beneficiaries,
