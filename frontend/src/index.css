@@ -543,3 +543,10 @@ body {
 .tab-bar button.active {
   color: var(--action-primary-text);
 }
+
+/* طباعة التقارير — إخفاء الأزرار وعناصر التنقّل وإبراز منطقة التقرير فقط */
+@media print {
+  .no-print { display: none !important; }
+  nav, header, aside, footer { display: none !important; }
+  .print-area { box-shadow: none !important; border: none !important; }
+}
