@@ -9,7 +9,6 @@ export type AdminDomainId =
   | "users"
   | "volunteers"
   | "requests"
-  | "sponsorships"
   | "maps"
   | "staff"
   | "reports"
@@ -79,15 +78,6 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     ],
   },
   {
-    id: "sponsorships",
-    label: "الكفالات",
-    to: "/Admin/sponsorships",
-    blurb: "بوابات الكفالات حسب المشروع",
-    links: [
-      { to: "/Admin/sponsorships", label: "مشاريع الكفالات", staffVisible: true },
-    ],
-  },
-  {
     id: "maps",
     label: "الخرائط",
     to: "/Admin/maps",
@@ -147,6 +137,8 @@ export const LEGACY_ADMIN_REDIRECTS: Array<{ from: string; to: string }> = [
   { from: "/Admin/management", to: "/Admin/volunteers" },
   { from: "/Admin/service-requests", to: "/Admin/requests" },
   { from: "/Admin/join-requests", to: "/Admin/volunteers/join-requests" },
+  // الكفالات صارت أداة داخل بطاقة المشروع — النطاق المنفصل يُحوّل توافقياً
+  { from: "/Admin/sponsorships", to: "/Admin/projects" },
   { from: "/Admin/executive", to: "/Admin/staff" },
   { from: "/Admin/executive/manage", to: "/Admin/staff/manage" },
   { from: "/executive", to: "/Admin/staff" },
@@ -166,7 +158,6 @@ export function domainForPath(pathname: string): AdminDomainId | "overview" {
   if (p.startsWith("/admin/users")) return "users";
   if (p.startsWith("/admin/volunteers")) return "volunteers";
   if (p.startsWith("/admin/requests")) return "requests";
-  if (p.startsWith("/admin/sponsorships")) return "sponsorships";
   if (p.startsWith("/admin/maps") || p === "/admin/map") return "maps";
   if (p.startsWith("/admin/staff") || p.startsWith("/admin/executive")) return "staff";
   if (p.startsWith("/admin/reports")) return "reports";

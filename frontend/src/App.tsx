@@ -41,7 +41,6 @@ const ProjectIdeas = lazy(() => import("./components/pages/admin/ProjectIdeas"))
 const Reports = lazy(() => import("./components/pages/admin/Reports"));
 const ServiceRequests = lazy(() => import("./components/pages/admin/ServiceRequests"));
 const WaterSupplyRequests = lazy(() => import("./components/pages/admin/WaterSupplyRequests"));
-const SponsorshipsHub = lazy(() => import("./components/pages/admin/SponsorshipsHub"));
 
 const ExecutiveDashboard = lazy(() => import("./components/pages/ExecutiveDashboard"));
 const ManageDashboard = lazy(() => import("./components/pages/ManageDashboard"));
@@ -122,10 +121,7 @@ function AppContent() {
           <Route path="/Admin/requests/water-supply" element={<Lazy><ProtectedRoute requiredRole="admin"><WaterSupplyRequests /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/requests/suggestions" element={<Lazy><ProtectedRoute requiredRole="admin"><ProjectIdeas /></ProtectedRoute></Lazy>} />
 
-          {/* 4. الكفالات */}
-          <Route path="/Admin/sponsorships" element={<Lazy><ProtectedRoute requiredRole="staff"><SponsorshipsHub /></ProtectedRoute></Lazy>} />
-
-          {/* 5. الخرائط */}
+          {/* 5. الخرائط — الكفالات صارت أداة داخل بطاقة المشروع (/Admin/sponsorships يُحوّل) */}
           <Route path="/Admin/maps" element={<Lazy><ProtectedRoute requiredRole="staff"><MapsAdmin /></ProtectedRoute></Lazy>} />
 
           {/* 6. الكادر */}

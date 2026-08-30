@@ -273,7 +273,12 @@ export default function PlatformProjects() {
                 {p.is_featured && <Badge variant="success">مميز في الرئيسية</Badge>}
                 {p.my_role && <Badge>{p.my_role === "super_admin" ? "مشرف عام" : p.my_role}</Badge>}
               </div>
-              <Link to={`/projects/${p.slug}`} className="text-sm font-bold text-primary hover:underline">صفحة المشروع ←</Link>
+              <div className="flex items-center gap-3">
+                {p.tools.some((t) => t.tool_key === "sponsorships" && t.is_enabled) && (
+                  <Link to={`/projects/${p.slug}/sponsorships`} className="text-sm font-bold text-primary hover:underline">بوابة الكفالات ←</Link>
+                )}
+                <Link to={`/projects/${p.slug}`} className="text-sm font-bold text-primary hover:underline">صفحة المشروع ←</Link>
+              </div>
             </div>
 
             {isSuperAdmin && (

@@ -23,7 +23,6 @@ export function visibleAdminDomains(
     if (d.id === "staff") return false;
     if (d.id === "projects") return true;
     if (d.id === "maps") return projectTools.has("map");
-    if (d.id === "sponsorships") return projectTools.has("sponsorships");
     return false;
   });
 }
