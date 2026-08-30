@@ -361,3 +361,8 @@
 - **المصدر الكانوني للمنصّة**: `projects.services.public_projects_queryset` عبر `/api/platform/public/projects/`؛ المسار التطوعي يبقى شكلاً توافقياً بنفس الفلتر.
 - **التعقيد**: بناء الاستعلام O(1)؛ الاختبارات تغطي المسودة/المؤرشف/المكتمل/الموقوف.
 
+## D-49 — هجرة فهرس الإشعارات + إزالة N+1 لتمويل الكفالات (UAT Fix Phase 2)
+- **الهجرة**: `notifications.0003_rename_notificationpreference_index` تجميلية وقابلة للعكس (`RenameIndex`).
+- **الكفالات**: `annotate_sponsorship_funding` عبر `Subquery(Sum completed)` على قائمة ViewSet؛ الخاصية `total_funded` تبقى للتفصيل.
+- **التعقيد**: قائمة N كفالات = استعلام ثابت O(1) بدل O(N).
+

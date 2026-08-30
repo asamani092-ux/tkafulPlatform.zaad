@@ -43,14 +43,20 @@ class SponsorshipSerializer(serializers.ModelSerializer):
         read_only_fields = ["donor", "status", "approved_at", "funded_at", "completed_at",
                             "admin_notes", "rejection_reason", "created_at", "updated_at"]
 
-    def get_total_funded(self, obj):
+    def _funded(self, obj):
+        annotated = getattr(obj, "_total_funded", None)
+        if annotated is not None:
+            return float(annotated)
         return float(obj.total_funded)
 
+    def get_total_funded(self, obj):
+        return self._funded(obj)
+
     def get_remaining(self, obj):
-        return float(obj.remaining)
+        return float(obj.amount) - self._funded(obj)
 
     def get_is_fully_funded(self, obj):
-        return obj.is_fully_funded
+        return self._funded(obj) >= float(obj.amount)
 
 
 class OrderSerializer(serializers.ModelSerializer):

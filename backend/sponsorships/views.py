@@ -13,6 +13,9 @@ from rest_framework.response import Response
 
 from core.throttles import PublicWriteRateThrottle
 from core.roles import CAP_CREATE_SPONSORSHIP, CAP_UPLOAD_DOCUMENTATION, has_capability
+from django.db.models import DecimalField, OuterRef, Subquery, Sum, Value
+from django.db.models.functions import Coalesce
+
 from .models import (
     SupplierProfile, RepresentativeProfile, Sponsorship, Order, Invoice, Payment, Documentation,
 )
@@ -44,6 +47,26 @@ def can_access_order(user, order):
     return order.supplier_id == user.id or order.representative_id == user.id
 
 
+def annotate_sponsorship_funding(qs):
+    """
+    يضيف _total_funded بمجموع دفعات completed عبر Subquery (آمن مع distinct).
+    الخاصية Sponsorship.total_funded تبقى للتفصيل/الكود القديم.
+    التعقيد: استعلام قائمة O(1) إضافي بدل N استعلامات.
+    """
+    funded_sq = (
+        Payment.objects.filter(sponsorship_id=OuterRef("pk"), status="completed")
+        .values("sponsorship_id")
+        .annotate(s=Sum("amount"))
+        .values("s")[:1]
+    )
+    return qs.annotate(
+        _total_funded=Coalesce(
+            Subquery(funded_sq, output_field=DecimalField(max_digits=14, decimal_places=2)),
+            Value(0, output_field=DecimalField(max_digits=14, decimal_places=2)),
+        )
+    )
+
+
 # ============ Sponsorships ============
 class SponsorshipViewSet(viewsets.ModelViewSet):
     serializer_class = SponsorshipSerializer
@@ -52,7 +75,9 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         u = self.request.user
         r = role(u)
-        qs = Sponsorship.objects.select_related("donor__profile")
+        qs = annotate_sponsorship_funding(
+            Sponsorship.objects.select_related("donor__profile")
+        )
         if r == "admin":
             return qs
         if r == "donor":
