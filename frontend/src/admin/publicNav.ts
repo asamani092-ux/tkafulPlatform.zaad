@@ -11,8 +11,9 @@ export const BASE_PUBLIC_NAV: PublicNavLink[] = [
   { to: "/projects", label: "المشاريع" },
   { to: "/services", label: "الخدمات", flag: "show_services" },
   { to: "/volunteers", label: "المتطوعون", flag: "show_volunteering" },
-  { to: "/map", label: "الخرائط", flag: "show_map" },
+  { to: "/map", label: "خارطة الأثر", flag: "show_map" },
   { to: "/about", label: "من نحن" },
+  { to: "/suggest", label: "اقترح مبادرة" },
 ];
 
 /** O(L) — يخفي روابط الأدوات العامة وفق أعلام الإعدادات. */

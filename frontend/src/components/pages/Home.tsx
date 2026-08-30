@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { HandHeart, Lightbulb, Droplets } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 import { API_BASE_URL } from "../../config";
 import { usePlatformSettings } from "../../contexts/PlatformSettingsContext";
 import { displayPlatformName } from "../../admin/publicNav";
@@ -14,11 +14,6 @@ interface Stats {
   beneficiaries: number;
   potential_projects: number;
   donations: number;
-}
-interface BeneficiaryService {
-  id: number;
-  title: string;
-  desc: string;
 }
 interface PlatformProjectCard {
   id: number;
@@ -45,18 +40,15 @@ export default function Home() {
   const { settings } = usePlatformSettings();
   const brandName = displayPlatformName(settings.platform_name);
   const [stats, setStats] = useState<Stats>({ beneficiaries: 0, potential_projects: 0, donations: 0 });
-  const [services, setServices] = useState<BeneficiaryService[]>([]);
   const [platformProjects, setPlatformProjects] = useState<PlatformProjectCard[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       fetch(`${API_BASE_URL}/api/public-home-stats/`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-      fetch(`${API_BASE_URL}/api/beneficiary-services/`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
       fetch(`${API_BASE_URL}/api/platform/public/projects/?home=1&limit=6`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-    ]).then(([st, sv, pr]) => {
+    ]).then(([st, pr]) => {
       if (st) setStats(st);
-      if (sv) setServices(sv.results || sv);
       if (pr) setPlatformProjects(Array.isArray(pr) ? pr : pr.results || []);
     }).finally(() => setLoading(false));
   }, []);
@@ -73,7 +65,7 @@ export default function Home() {
         <div className="mx-auto max-w-page">
           <h1 className="text-4xl font-extrabold text-primary md:text-5xl">{brandName}</h1>
           <p className="mt-3 text-lg text-brand-gray">
-            منصّة واحدة للعمل الخيري والتطوعي — مشاريع، كفالات، خرائط أثر، وخدمات مجتمعية.
+            منصّة واحدة للعمل الخيري والتطوعي — مشاريع، كفالات، خارطة أثر، وخدمات مجتمعية.
           </p>
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {display.map((s) => (
@@ -138,62 +130,24 @@ export default function Home() {
         )}
       </section>
 
-      {(settings.show_volunteering || settings.show_services) && (
-      <section className="mx-auto max-w-page px-4 py-8">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {settings.show_volunteering && (
-          <Card>
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <h3 className="mb-2 text-xl font-bold text-primary">تطوّع معنا</h3>
-                <p className="text-sm text-brand-gray">انضم للمتطوعين وساهم في تنفيذ المشاريع.</p>
-              </div>
-              <HandHeart className="text-secondary" size={32} />
-            </div>
-            <Link to="/volunteers"><Button>المتطوعون</Button></Link>
-          </Card>
-          )}
-          <Card>
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <h3 className="mb-2 text-xl font-bold text-primary">اقترح مبادرة</h3>
-                <p className="text-sm text-brand-gray">شاركنا فكرة تصل لنطاق الطلبات في لوحة الإدارة.</p>
-              </div>
-              <Lightbulb className="text-secondary" size={32} />
-            </div>
-            <Link to="/suggest"><Button variant="secondary">شارك اقتراحك</Button></Link>
-          </Card>
-          {settings.show_services && (
-          <Card>
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <h3 className="mb-2 text-xl font-bold text-primary">طلب سقيا الماء</h3>
-                <p className="text-sm text-brand-gray">نموذج مرتبط بمشروع السقيا ويظهر في نطاق الطلبات.</p>
-              </div>
-              <Droplets className="text-secondary" size={32} />
-            </div>
-            <Link to="/services/water-supply?project=saqya"><Button variant="secondary">قدّم طلباً</Button></Link>
-          </Card>
-          )}
-        </div>
-      </section>
-      )}
-
       {settings.show_services && (
-      <section className="bg-surface-muted py-12">
-        <div className="mx-auto max-w-page px-4">
-          <h2 className="mb-8 text-center text-3xl font-bold text-primary">الخدمات</h2>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {services.length > 0 ? services.map((s) => (
-              <Card key={s.id}>
-                <h3 className="mb-2 text-lg font-bold text-primary">{s.title}</h3>
-                <p className="mb-4 text-sm text-brand-gray">{s.desc}</p>
-                <Link to="/request-service"><Button variant="secondary">اطلب الخدمة</Button></Link>
+        <section className="bg-surface-muted py-12">
+          <div className="mx-auto max-w-page px-4">
+            <h2 className="mb-8 text-center text-3xl font-bold text-primary">الخدمات</h2>
+            <div className="mx-auto grid max-w-md grid-cols-1 gap-6">
+              <Card>
+                <div className="mb-4 flex items-start justify-between">
+                  <div>
+                    <h3 className="mb-2 text-xl font-bold text-primary">طلب خدمة</h3>
+                    <p className="text-sm text-brand-gray">قدّم طلباً للمستفيدين — يُراجع من الإدارة ويُتابع حتى الإنجاز.</p>
+                  </div>
+                  <ClipboardList className="text-secondary" size={32} />
+                </div>
+                <Link to="/request-service"><Button variant="secondary">قدّم طلباً</Button></Link>
               </Card>
-            )) : <p className="text-center text-brand-gray">لا توجد خدمات حالياً.</p>}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
       )}
     </div>
   );
