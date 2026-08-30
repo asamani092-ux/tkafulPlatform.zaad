@@ -82,3 +82,16 @@ Legend: ✅ allowed · 🚫 denied (401/403) · 🔎 scoped queryset · — n/a
 
 - Access: 1 day · Refresh: 7 days · `ROTATE_REFRESH_TOKENS` + `BLACKLIST_AFTER_ROTATION` enabled.
 - Logout blacklists the provided refresh token.
+
+## UAT Fix Phases 1–5 addendum
+
+| Endpoint | Anon | Auth | Project member | Admin | Notes |
+|----------|------|------|----------------|-------|-------|
+| `GET /api/public-projects/` | ✅ active-only | ✅ | — | ✅ | D-48؛ لا draft/archived |
+| `GET /api/user/opportunities/` | 🚫 | ✅ active-only | — | ✅ | نفس فلتر الحياة |
+| `GET/POST /api/admin/request-forms/` | 🚫 | 🚫 | 🚫 | ✅ | IsAdmin |
+| `GET/PATCH /api/admin/request-submissions/` | 🚫 | 🚫 | 🚫 | ✅ | IsAdmin؛ لا تسريب عام |
+| `GET /api/public-forms/`, `POST …/submit/` | ✅ | ✅ | — | ✅ | قائمة بلا PII |
+| `GET /api/volunteers/?q=` | 🚫 | 🚫 | 🚫 | ✅ | بحث متطوعين |
+| `POST/PATCH /api/accounts/users/` (+city) | 🚫 | 🚫 | 🚫 | ✅ | إنشاء متطوّع معتمد |
+| قائمة كفالات `total_funded` | 🚫 | 🔎 | — | ✅ | annotate Subquery D-49 |

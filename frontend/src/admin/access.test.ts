@@ -23,6 +23,14 @@ describe("admin access", () => {
   it("allows global admin everywhere", () => {
     const admin = buildAdminAccess("admin", true, []);
     expect(canAccessAdminPath("/Admin/volunteers", admin)).toBe(true);
+    expect(canAccessAdminPath("/Admin/reports", admin)).toBe(true);
+    expect(canAccessAdminPath("/Admin/settings", admin)).toBe(true);
     expect(defaultAdminHome(admin)).toBe("/Admin");
+  });
+
+  it("blocks PM from settings and reports (super-admin only domains)", () => {
+    expect(canAccessAdminPath("/Admin/settings", pm)).toBe(false);
+    expect(canAccessAdminPath("/Admin/reports", pm)).toBe(false);
+    expect(canAccessAdminPath("/Admin/users", pm)).toBe(false);
   });
 });
