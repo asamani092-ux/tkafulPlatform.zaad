@@ -37,7 +37,6 @@ const VolunteerRequests = lazy(() => import("./components/pages/admin/VolunteerR
 const VolunteerApplications = lazy(() => import("./components/pages/admin/VolunteerApplications"));
 const UsersAdmin = lazy(() => import("./components/pages/admin/UsersAdmin"));
 const VolunteerManagement = lazy(() => import("./components/pages/admin/VolunteerManagement"));
-const AddProjectPage = lazy(() => import("./components/pages/admin/AddProject"));
 const ProjectIdeas = lazy(() => import("./components/pages/admin/ProjectIdeas"));
 const Reports = lazy(() => import("./components/pages/admin/Reports"));
 const ServiceRequests = lazy(() => import("./components/pages/admin/ServiceRequests"));
@@ -107,9 +106,8 @@ function AppContent() {
           {/* —— لوحة الإدارة بنطاقات العمل —— */}
           <Route path="/Admin" element={<Lazy><ProtectedRoute requiredRole="admin"><AdminMain /></ProtectedRoute></Lazy>} />
 
-          {/* 1. المشاريع */}
+          {/* 1. المشاريع — الإنشاء داخل القائمة؛ /create يُحوّل توافقياً (domains.ts) */}
           <Route path="/Admin/projects" element={<Lazy><ProtectedRoute requiredRole="staff"><PlatformProjects /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/projects/create" element={<Lazy><ProtectedRoute requiredRole="admin"><AddProjectPage /></ProtectedRoute></Lazy>} />
 
           {/* 2. المستخدمون */}
           <Route path="/Admin/users" element={<Lazy><ProtectedRoute requiredRole="admin"><UsersAdmin /></ProtectedRoute></Lazy>} />

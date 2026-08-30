@@ -5,7 +5,7 @@ import { ACTIVE_LEGACY_REDIRECTS } from "../../admin/domains";
 
 const TARGETS: Record<string, string> = {
   "/Admin/maps": "maps-admin",
-  "/Admin/projects/create": "projects-create",
+  "/Admin/projects": "projects-list",
   "/Admin/requests/suggestions": "suggestions",
   "/Admin/volunteers/applications": "vol-apps",
   "/Admin/volunteers": "volunteers",
@@ -42,7 +42,8 @@ describe("legacy route redirects (Phase B)", () => {
     ["/executive/manage", "staff-manage"],
     ["/Admin/executive", "staff"],
     ["/Admin/executive/manage", "staff-manage"],
-    ["/Admin/tasks", "projects-create"],
+    ["/Admin/tasks", "projects-list"],
+    ["/Admin/projects/create", "projects-list"],
     ["/Admin/ideas", "suggestions"],
     ["/Admin/applications", "vol-apps"],
     ["/Admin/management", "volunteers"],

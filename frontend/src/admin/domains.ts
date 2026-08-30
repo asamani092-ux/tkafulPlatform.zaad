@@ -39,10 +39,9 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     id: "projects",
     label: "المشاريع",
     to: "/Admin/projects",
-    blurb: "قائمة المشاريع والأدوات وروابط التبرع",
+    blurb: "قائمة المشاريع والأدوات وروابط التبرع والإنشاء",
     links: [
       { to: "/Admin/projects", label: "كل المشاريع", staffVisible: true },
-      { to: "/Admin/projects/create", label: "إنشاء مشروع" },
     ],
   },
   {
@@ -140,7 +139,9 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
  */
 export const LEGACY_ADMIN_REDIRECTS: Array<{ from: string; to: string }> = [
   { from: "/Admin/map", to: "/Admin/maps" },
-  { from: "/Admin/tasks", to: "/Admin/projects/create" },
+  // إنشاء المشروع صار داخل /Admin/projects — الرابط القديم يُبقى توافقياً
+  { from: "/Admin/projects/create", to: "/Admin/projects" },
+  { from: "/Admin/tasks", to: "/Admin/projects" },
   { from: "/Admin/ideas", to: "/Admin/requests/suggestions" },
   { from: "/Admin/applications", to: "/Admin/volunteers/applications" },
   { from: "/Admin/management", to: "/Admin/volunteers" },
