@@ -7,6 +7,9 @@ from .models import (
     ServiceVolunteerApplication,
     Suggestion,
     WaterSupplyRequest,
+    RequestForm,
+    RequestSubmission,
+    FORM_FIELD_TYPES,
 )
 
 
@@ -101,3 +104,51 @@ class WaterSupplyRequestSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at', 'status', 'admin_notes',
             'project_slug', 'project_name',
         ]
+
+
+class RequestFormSerializer(serializers.ModelSerializer):
+    project_name = serializers.CharField(source='project.name', read_only=True, allow_null=True)
+    project_slug = serializers.CharField(source='project.slug', read_only=True, allow_null=True)
+    submissions_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RequestForm
+        fields = [
+            'id', 'project', 'project_name', 'project_slug', 'title', 'slug',
+            'description', 'fields_schema', 'is_active', 'submissions_count', 'created_at',
+        ]
+        read_only_fields = ['created_at', 'project_name', 'project_slug', 'submissions_count']
+
+    def get_submissions_count(self, obj):
+        return obj.submissions.count()
+
+    def validate_fields_schema(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("المخطط يجب أن يكون قائمة حقول")
+        keys = set()
+        for field in value:
+            if not isinstance(field, dict):
+                raise serializers.ValidationError("كل حقل يجب أن يكون كائناً")
+            key = field.get("key")
+            if not key:
+                raise serializers.ValidationError("كل حقل يجب أن يملك مفتاحاً (key)")
+            if key in keys:
+                raise serializers.ValidationError(f"مفتاح مكرّر: {key}")
+            keys.add(key)
+            ftype = field.get("type", "text")
+            if ftype not in FORM_FIELD_TYPES:
+                raise serializers.ValidationError(f"نوع حقل غير مدعوم: {ftype}")
+        return value
+
+
+class RequestSubmissionSerializer(serializers.ModelSerializer):
+    form_title = serializers.CharField(source='form.title', read_only=True)
+    project_name = serializers.CharField(source='form.project.name', read_only=True, allow_null=True)
+
+    class Meta:
+        model = RequestSubmission
+        fields = [
+            'id', 'form', 'form_title', 'project_name', 'data',
+            'status', 'admin_notes', 'created_at',
+        ]
+        read_only_fields = ['created_at', 'form_title', 'project_name']

@@ -39,6 +39,8 @@ const ProjectIdeas = lazy(() => import("./components/pages/admin/ProjectIdeas"))
 const Reports = lazy(() => import("./components/pages/admin/Reports"));
 const ServiceRequests = lazy(() => import("./components/pages/admin/ServiceRequests"));
 const WaterSupplyRequests = lazy(() => import("./components/pages/admin/WaterSupplyRequests"));
+const RequestFormsAdmin = lazy(() => import("./components/pages/admin/RequestFormsAdmin"));
+const DynamicFormPage = lazy(() => import("./components/pages/DynamicFormPage"));
 
 const ExecutiveDashboard = lazy(() => import("./components/pages/ExecutiveDashboard"));
 const ManageDashboard = lazy(() => import("./components/pages/ManageDashboard"));
@@ -118,6 +120,7 @@ function AppContent() {
           <Route path="/Admin/requests" element={<Lazy><ProtectedRoute requiredRole="admin"><ServiceRequests /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/requests/water-supply" element={<Lazy><ProtectedRoute requiredRole="admin"><WaterSupplyRequests /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/requests/suggestions" element={<Lazy><ProtectedRoute requiredRole="admin"><ProjectIdeas /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/requests/forms" element={<Lazy><ProtectedRoute requiredRole="admin"><RequestFormsAdmin /></ProtectedRoute></Lazy>} />
 
           {/* 5. الخرائط — الكفالات صارت أداة داخل بطاقة المشروع (/Admin/sponsorships يُحوّل) */}
           <Route path="/Admin/maps" element={<Lazy><ProtectedRoute requiredRole="staff"><MapsAdmin /></ProtectedRoute></Lazy>} />
@@ -146,6 +149,7 @@ function AppContent() {
           <Route path="/projects/:slug/map" element={<Lazy><ProjectMapPage /></Lazy>} />
           <Route path="/projects/:slug/sponsorships" element={<Lazy><SaqyaHome /></Lazy>} />
           <Route path="/map" element={<Lazy><MapsAggregator /></Lazy>} />
+          <Route path="/forms/:slug" element={<Lazy><DynamicFormPage /></Lazy>} />
 
           {UatPage ? <Route path="/uat" element={<Lazy><UatPage /></Lazy>} /> : null}
 

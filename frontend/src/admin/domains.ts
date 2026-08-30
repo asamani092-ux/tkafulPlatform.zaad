@@ -72,6 +72,7 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     blurb: "طلبات الخدمات وسقيا الماء والاقتراحات",
     superAdminOnly: true,
     links: [
+      { to: "/Admin/requests/forms", label: "النماذج المخصّصة" },
       { to: "/Admin/requests", label: "طلبات الخدمات" },
       { to: "/Admin/requests/water-supply", label: "طلبات سقيا الماء" },
       { to: "/Admin/requests/suggestions", label: "الاقتراحات" },

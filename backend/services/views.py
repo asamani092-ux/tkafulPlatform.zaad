@@ -9,13 +9,18 @@ from core.permissions import IsAdmin
 from core.throttles import PublicWriteRateThrottle
 from notifications.services import notify, EVENT_SERVICE_REQUEST, EVENT_WATER_SUPPLY
 
-from .models import Service, ServiceRequest, ServiceVolunteerApplication, Suggestion, WaterSupplyRequest
+from .models import (
+    Service, ServiceRequest, ServiceVolunteerApplication, Suggestion, WaterSupplyRequest,
+    RequestForm, RequestSubmission,
+)
 from .serializers import (
     ServiceSerializer,
     ServiceRequestSerializer,
     ServiceVolunteerApplicationSerializer,
     SuggestionSerializer,
     WaterSupplyRequestSerializer,
+    RequestFormSerializer,
+    RequestSubmissionSerializer,
 )
 
 
@@ -429,3 +434,104 @@ def public_water_supply_request(request):
         'success': False,
         'errors': serializer.errors
     }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ============================================================================
+# نماذج الطلبات الديناميكية (D-47)
+# ============================================================================
+
+class RequestFormViewSet(viewsets.ModelViewSet):
+    """إدارة نماذج الطلبات الديناميكية — إنشاء/تعديل/ربط بمشروع. O(n) للسرد."""
+    queryset = RequestForm.objects.select_related("project").all()
+    serializer_class = RequestFormSerializer
+    permission_classes = [IsAdmin]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        project = self.request.query_params.get("project")
+        if project:
+            if str(project).isdigit():
+                qs = qs.filter(project_id=int(project))
+            else:
+                qs = qs.filter(project__slug=project)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
+class RequestSubmissionViewSet(viewsets.ModelViewSet):
+    """طلبات النماذج الديناميكية — سرد للإدارة وتحديث الحالة/الملاحظات."""
+    queryset = RequestSubmission.objects.select_related("form", "form__project").all()
+    serializer_class = RequestSubmissionSerializer
+    permission_classes = [IsAdmin]
+    http_method_names = ["get", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        form_id = self.request.query_params.get("form")
+        status_param = self.request.query_params.get("status")
+        project = self.request.query_params.get("project")
+        if form_id:
+            qs = qs.filter(form_id=form_id)
+        if status_param:
+            qs = qs.filter(status=status_param)
+        if project:
+            if str(project).isdigit():
+                qs = qs.filter(form__project_id=int(project))
+            else:
+                qs = qs.filter(form__project__slug=project)
+        return qs
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def public_active_forms(request):
+    """GET /api/public-forms/?project=slug — النماذج المفعّلة للعرض العام. O(n)."""
+    qs = RequestForm.objects.filter(is_active=True).select_related("project")
+    project = request.query_params.get("project")
+    if project:
+        if str(project).isdigit():
+            qs = qs.filter(project_id=int(project))
+        else:
+            qs = qs.filter(project__slug=project)
+    return Response(RequestFormSerializer(qs, many=True).data)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def public_form_detail(request, slug):
+    """GET /api/public-forms/<slug>/ — مخطط نموذج مفعّل واحد."""
+    form = RequestForm.objects.filter(slug=slug, is_active=True).select_related("project").first()
+    if not form:
+        return Response({"detail": "النموذج غير موجود"}, status=status.HTTP_404_NOT_FOUND)
+    return Response(RequestFormSerializer(form).data)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@throttle_classes([PublicWriteRateThrottle])
+def public_submit_form(request, slug):
+    """POST /api/public-forms/<slug>/submit/ — تقديم طلب مع تحقق من المخطط. O(f)."""
+    form = RequestForm.objects.filter(slug=slug, is_active=True).first()
+    if not form:
+        return Response({"detail": "النموذج غير موجود"}, status=status.HTTP_404_NOT_FOUND)
+    payload = request.data.get("data", request.data)
+    try:
+        cleaned = form.validate_submission(payload if isinstance(payload, dict) else {})
+    except ValueError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    submission = RequestSubmission.objects.create(form=form, data=cleaned)
+    try:
+        notify(
+            message=f"طلب جديد عبر نموذج: {form.title}",
+            roles=["admin"],
+            notification_type="action",
+            link="/Admin/requests",
+        )
+    except Exception:
+        pass
+    return Response(
+        {"success": True, "message": "تم إرسال طلبك بنجاح", "id": submission.id},
+        status=status.HTTP_201_CREATED,
+    )
