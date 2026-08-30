@@ -12,6 +12,7 @@ describe("admin access", () => {
     expect(canAccessAdminPath("/Admin/sponsorships", pm)).toBe(false);
     expect(canAccessAdminPath("/Admin", pm)).toBe(false);
     expect(canAccessAdminPath("/Admin/volunteers", pm)).toBe(false);
+    expect(canAccessAdminPath("/Admin/requests/forms", pm)).toBe(false);
     expect(canAccessAdminPath("/Admin/staff", pm)).toBe(false);
   });
 
