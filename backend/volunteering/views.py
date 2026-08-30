@@ -852,13 +852,13 @@ def accept_volunteer_application(request, application_id):
 
         # Create a task for the volunteer
         task = Task.objects.create(
-            title=f"مهمة في {application.project.title}",
-            description=application.project.desc or "لا يوجد وصف",
+            title=f"مهمة في {application.project.name}",
+            description=application.project.description or "لا يوجد وصف",
             project=application.project,
             volunteer=application.volunteer,
             status='قيد التنفيذ',  # Accepted = In Progress
             priority='متوسطة',
-            hours=application.project.estimated_hours or 0
+            hours=getattr(application.project, "estimated_hours", 0) or 0
         )
 
         # Create default subtasks

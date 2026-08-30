@@ -57,11 +57,11 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     id: "volunteers",
     label: "المتطوعون",
     to: "/Admin/volunteers",
-    blurb: "المتطوعون والطلبات والتعيينات",
+    blurb: "المتطوعون وطلبات المشاريع وطلبات الانضمام في صفحة واحدة",
     superAdminOnly: true,
     links: [
       { to: "/Admin/volunteers", label: "إدارة المتطوعين" },
-      { to: "/Admin/volunteers/applications", label: "طلبات التطوع" },
+      { to: "/Admin/volunteers/applications", label: "طلبات المشاريع" },
       { to: "/Admin/volunteers/join-requests", label: "طلبات الانضمام" },
     ],
   },

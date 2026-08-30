@@ -33,10 +33,8 @@ const UserSettings = lazy(() => import("./components/pages/user/Setting"));
 const PersonalInfo = lazy(() => import("./components/pages/user/PersonalInfo"));
 
 const AdminMain = lazy(() => import("./components/pages/admin/main"));
-const VolunteerRequests = lazy(() => import("./components/pages/admin/VolunteerRequests"));
-const VolunteerApplications = lazy(() => import("./components/pages/admin/VolunteerApplications"));
 const UsersAdmin = lazy(() => import("./components/pages/admin/UsersAdmin"));
-const VolunteerManagement = lazy(() => import("./components/pages/admin/VolunteerManagement"));
+const VolunteersAdmin = lazy(() => import("./components/pages/admin/VolunteersAdmin"));
 const ProjectIdeas = lazy(() => import("./components/pages/admin/ProjectIdeas"));
 const Reports = lazy(() => import("./components/pages/admin/Reports"));
 const ServiceRequests = lazy(() => import("./components/pages/admin/ServiceRequests"));
@@ -111,10 +109,10 @@ function AppContent() {
           {/* 2. المستخدمون */}
           <Route path="/Admin/users" element={<Lazy><ProtectedRoute requiredRole="admin"><UsersAdmin /></ProtectedRoute></Lazy>} />
 
-          {/* 3. المتطوعون */}
-          <Route path="/Admin/volunteers" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerManagement /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/volunteers/applications" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerApplications /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/volunteers/join-requests" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteerRequests /></ProtectedRoute></Lazy>} />
+          {/* 3. المتطوعون — صفحة موحّدة بثلاثة أقسام (المسارات القديمة تفتح القسم المناسب) */}
+          <Route path="/Admin/volunteers" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteersAdmin defaultTab="volunteers" /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/volunteers/applications" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteersAdmin defaultTab="applications" /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/volunteers/join-requests" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteersAdmin defaultTab="joins" /></ProtectedRoute></Lazy>} />
 
           {/* 4. الطلبات */}
           <Route path="/Admin/requests" element={<Lazy><ProtectedRoute requiredRole="admin"><ServiceRequests /></ProtectedRoute></Lazy>} />
