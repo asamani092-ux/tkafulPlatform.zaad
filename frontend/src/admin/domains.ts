@@ -67,14 +67,11 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
   {
     id: "requests",
     label: "الطلبات",
-    to: "/Admin/requests",
-    blurb: "طلبات الخدمات وسقيا الماء والاقتراحات",
+    to: "/Admin/requests/forms",
+    blurb: "نماذج طلبات ديناميكية مرتبطة بمشروع وعرض الإرسالات",
     superAdminOnly: true,
     links: [
-      { to: "/Admin/requests/forms", label: "النماذج المخصّصة" },
-      { to: "/Admin/requests", label: "طلبات الخدمات" },
-      { to: "/Admin/requests/water-supply", label: "طلبات سقيا الماء" },
-      { to: "/Admin/requests/suggestions", label: "الاقتراحات" },
+      { to: "/Admin/requests/forms", label: "النماذج والإرسالات" },
     ],
   },
   {
@@ -115,19 +112,21 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
 ];
 
 /**
- * تحويلات المسارات القديمة → القانونية (Phase B).
- * ملاحظة: `/Admin/requests` أصبح نطاق الطلبات (خدمات) — طلبات الانضمام
- * كانت عليه سابقاً وانتقلت إلى `/Admin/volunteers/join-requests`.
+ * تحويلات المسارات القديمة → القانونية (Phase B + UAT P3).
+ * نطاق الطلبات موحّد على النماذج الديناميكية.
  */
 export const LEGACY_ADMIN_REDIRECTS: Array<{ from: string; to: string }> = [
   { from: "/Admin/map", to: "/Admin/maps" },
   // إنشاء المشروع صار داخل /Admin/projects — الرابط القديم يُبقى توافقياً
   { from: "/Admin/projects/create", to: "/Admin/projects" },
   { from: "/Admin/tasks", to: "/Admin/projects" },
-  { from: "/Admin/ideas", to: "/Admin/requests/suggestions" },
+  { from: "/Admin/ideas", to: "/Admin/requests/forms" },
   { from: "/Admin/applications", to: "/Admin/volunteers/applications" },
   { from: "/Admin/management", to: "/Admin/volunteers" },
-  { from: "/Admin/service-requests", to: "/Admin/requests" },
+  { from: "/Admin/service-requests", to: "/Admin/requests/forms" },
+  { from: "/Admin/requests", to: "/Admin/requests/forms" },
+  { from: "/Admin/requests/water-supply", to: "/Admin/requests/forms" },
+  { from: "/Admin/requests/suggestions", to: "/Admin/requests/forms" },
   { from: "/Admin/join-requests", to: "/Admin/volunteers/join-requests" },
   // الكفالات صارت أداة داخل بطاقة المشروع — النطاق المنفصل يُحوّل توافقياً
   { from: "/Admin/sponsorships", to: "/Admin/projects" },

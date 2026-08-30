@@ -158,7 +158,10 @@ def public_submit_suggestion(request):
     serializer = SuggestionSerializer(data=request.data)
 
     if serializer.is_valid():
-        serializer.save()
+        obj = serializer.save()
+        from .legacy_forms import ensure_system_forms, mirror_suggestion
+        ensure_system_forms()
+        mirror_suggestion(obj)
         return Response({
             'message': 'تم استلام اقتراحك بنجاح'
         }, status=status.HTTP_201_CREATED)
@@ -178,12 +181,15 @@ def public_submit_service_request(request):
     serializer = ServiceRequestSerializer(data=request.data)
 
     if serializer.is_valid():
-        serializer.save()
+        obj = serializer.save()
+        from .legacy_forms import ensure_system_forms, mirror_service_request
+        ensure_system_forms()
+        mirror_service_request(obj)
         notify(
             message="ورد طلب خدمة جديد",
             roles=["admin"],
             notification_type="action",
-            link="/Admin/requests",
+            link="/Admin/requests/forms",
             event_type=EVENT_SERVICE_REQUEST,
         )
         return Response({
@@ -417,12 +423,15 @@ def public_water_supply_request(request):
 
     serializer = WaterSupplyRequestSerializer(data=mapped_data)
     if serializer.is_valid():
-        serializer.save()
+        obj = serializer.save()
+        from .legacy_forms import ensure_system_forms, mirror_water_request
+        ensure_system_forms()
+        mirror_water_request(obj)
         notify(
             message="ورد طلب سقيا ماء جديد",
             roles=["admin"],
             notification_type="action",
-            link="/Admin/requests/water-supply",
+            link="/Admin/requests/forms",
             event_type=EVENT_WATER_SUPPLY,
         )
         return Response({

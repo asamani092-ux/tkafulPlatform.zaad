@@ -35,10 +35,7 @@ const PersonalInfo = lazy(() => import("./components/pages/user/PersonalInfo"));
 const AdminMain = lazy(() => import("./components/pages/admin/main"));
 const UsersAdmin = lazy(() => import("./components/pages/admin/UsersAdmin"));
 const VolunteersAdmin = lazy(() => import("./components/pages/admin/VolunteersAdmin"));
-const ProjectIdeas = lazy(() => import("./components/pages/admin/ProjectIdeas"));
 const Reports = lazy(() => import("./components/pages/admin/Reports"));
-const ServiceRequests = lazy(() => import("./components/pages/admin/ServiceRequests"));
-const WaterSupplyRequests = lazy(() => import("./components/pages/admin/WaterSupplyRequests"));
 const RequestFormsAdmin = lazy(() => import("./components/pages/admin/RequestFormsAdmin"));
 const DynamicFormPage = lazy(() => import("./components/pages/DynamicFormPage"));
 
@@ -116,11 +113,11 @@ function AppContent() {
           <Route path="/Admin/volunteers/applications" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteersAdmin defaultTab="applications" /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/volunteers/join-requests" element={<Lazy><ProtectedRoute requiredRole="admin"><VolunteersAdmin defaultTab="joins" /></ProtectedRoute></Lazy>} />
 
-          {/* 4. الطلبات */}
-          <Route path="/Admin/requests" element={<Lazy><ProtectedRoute requiredRole="admin"><ServiceRequests /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/requests/water-supply" element={<Lazy><ProtectedRoute requiredRole="admin"><WaterSupplyRequests /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/requests/suggestions" element={<Lazy><ProtectedRoute requiredRole="admin"><ProjectIdeas /></ProtectedRoute></Lazy>} />
+          {/* 4. الطلبات — نظام النماذج الديناميكية الموحّد؛ المسارات الثابتة تُحوَّل */}
           <Route path="/Admin/requests/forms" element={<Lazy><ProtectedRoute requiredRole="admin"><RequestFormsAdmin /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/requests" element={<Navigate to="/Admin/requests/forms" replace />} />
+          <Route path="/Admin/requests/water-supply" element={<Navigate to="/Admin/requests/forms" replace />} />
+          <Route path="/Admin/requests/suggestions" element={<Navigate to="/Admin/requests/forms" replace />} />
 
           {/* 5. الخرائط — الكفالات صارت أداة داخل بطاقة المشروع (/Admin/sponsorships يُحوّل) */}
           <Route path="/Admin/maps" element={<Lazy><ProtectedRoute requiredRole="staff"><MapsAdmin /></ProtectedRoute></Lazy>} />

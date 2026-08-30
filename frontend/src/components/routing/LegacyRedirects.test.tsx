@@ -6,10 +6,9 @@ import { ACTIVE_LEGACY_REDIRECTS } from "../../admin/domains";
 const TARGETS: Record<string, string> = {
   "/Admin/maps": "maps-admin",
   "/Admin/projects": "projects-list",
-  "/Admin/requests/suggestions": "suggestions",
+  "/Admin/requests/forms": "request-forms",
   "/Admin/volunteers/applications": "vol-apps",
   "/Admin/volunteers": "volunteers",
-  "/Admin/requests": "requests",
   "/Admin/volunteers/join-requests": "join-requests",
   "/Admin/staff": "staff",
   "/Admin/staff/manage": "staff-manage",
@@ -44,10 +43,13 @@ describe("legacy route redirects (Phase B)", () => {
     ["/Admin/executive/manage", "staff-manage"],
     ["/Admin/tasks", "projects-list"],
     ["/Admin/projects/create", "projects-list"],
-    ["/Admin/ideas", "suggestions"],
+    ["/Admin/ideas", "request-forms"],
     ["/Admin/applications", "vol-apps"],
     ["/Admin/management", "volunteers"],
-    ["/Admin/service-requests", "requests"],
+    ["/Admin/service-requests", "request-forms"],
+    ["/Admin/requests", "request-forms"],
+    ["/Admin/requests/water-supply", "request-forms"],
+    ["/Admin/requests/suggestions", "request-forms"],
   ])("redirects %s", (from, label) => {
     render(
       <MemoryRouter initialEntries={[from]}>

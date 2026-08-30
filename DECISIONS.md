@@ -366,3 +366,10 @@
 - **الكفالات**: `annotate_sponsorship_funding` عبر `Subquery(Sum completed)` على قائمة ViewSet؛ الخاصية `total_funded` تبقى للتفصيل.
 - **التعقيد**: قائمة N كفالات = استعلام ثابت O(1) بدل O(N).
 
+## D-50 — توحيد نظام الطلبات على النماذج الديناميكية (UAT Fix Phase 3)
+- **القرار**: النماذج الديناميكية (`RequestForm`/`RequestSubmission`) هي النظام الإداري الواحد لنطاق الطلبات. الكفالات ليست نموذجاً (تبقى دورة تشغيلية).
+- **البيانات القديمة**: تبقى جداول ServiceRequest / WaterSupplyRequest / Suggestion كما هي (إضافة تراكمية). هجرة `services.0004` تبذر 3 نماذج نظامية (`sys-service-request`, `sys-water-supply`, `sys-suggestion`) وتنسخ الصفوف إلى `RequestSubmission` مع `data.legacy_id`؛ العكس يحذف النماذج النظامية وإرسالاتها فقط.
+- **الكتابة العامة**: المسارات القديمة تكتب للجداول القديمة **وتُراكم** مرآة في الإرسالات عبر `legacy_forms.mirror_*`.
+- **الواجهة**: الشريط يوجّه إلى `/Admin/requests/forms` فقط؛ المسارات الثابتة تُحوَّل توافقياً.
+- **الخصوصية**: قائمة `/api/public-forms/` بلا بيانات إرسالات/PII.
+
