@@ -133,3 +133,95 @@ class WaterSupplyRequest(models.Model):
 
     def __str__(self):
         return f"{self.mosque_name} - {self.applicant_name}"
+
+
+# ============================================================================
+# نماذج الطلبات الديناميكية (D-47) — تُنشئها الإدارة وتربطها بمشروع
+# ============================================================================
+
+FORM_FIELD_TYPES = ("text", "textarea", "number", "select", "boolean", "date")
+
+
+class RequestForm(models.Model):
+    """نموذج طلب ديناميكي يعرّف حقوله عبر مخطط JSON ويُربط بمشروع اختيارياً."""
+
+    project = models.ForeignKey(
+        "projects.Project",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="request_forms",
+    )
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=120, unique=True, allow_unicode=True)
+    description = models.TextField(blank=True)
+    # مخطط الحقول: [{ key, label, type, required, options? }]
+    fields_schema = models.JSONField(default=list)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="created_request_forms",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.title
+
+    def validate_submission(self, data):
+        """يتحقق من المدخلات مقابل المخطط — O(f). يعيد dict نظيفاً أو يرفع ValueError."""
+        cleaned = {}
+        schema = self.fields_schema if isinstance(self.fields_schema, list) else []
+        for field in schema:
+            if not isinstance(field, dict):
+                continue
+            key = field.get("key")
+            if not key:
+                continue
+            ftype = field.get("type", "text")
+            required = bool(field.get("required"))
+            raw = data.get(key, "")
+            if raw in (None, "") or (isinstance(raw, str) and not raw.strip()):
+                if required:
+                    raise ValueError(f"الحقل «{field.get('label') or key}» مطلوب")
+                continue
+            if ftype == "number":
+                try:
+                    cleaned[key] = float(raw)
+                except (TypeError, ValueError):
+                    raise ValueError(f"الحقل «{field.get('label') or key}» يجب أن يكون رقماً")
+            elif ftype == "boolean":
+                cleaned[key] = raw in (True, "true", "1", 1, "نعم")
+            elif ftype == "select":
+                options = field.get("options") or []
+                if options and str(raw) not in [str(o) for o in options]:
+                    raise ValueError(f"قيمة غير صالحة للحقل «{field.get('label') or key}»")
+                cleaned[key] = raw
+            else:
+                cleaned[key] = raw
+        return cleaned
+
+
+class RequestSubmission(models.Model):
+    """طلب مُقدَّم على نموذج ديناميكي — بياناته مطابقة لمخطط النموذج."""
+
+    STATUS_CHOICES = [
+        ("PENDING", "قيد المراجعة"),
+        ("APPROVED", "مقبول"),
+        ("REJECTED", "مرفوض"),
+        ("DONE", "منجز"),
+    ]
+
+    form = models.ForeignKey(RequestForm, on_delete=models.CASCADE, related_name="submissions")
+    data = models.JSONField(default=dict)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDING")
+    admin_notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.form.title} #{self.pk}"

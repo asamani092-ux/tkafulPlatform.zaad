@@ -14,9 +14,7 @@ interface DomainCounts {
   users: number | null;
   volunteers: number | null;
   requests: number | null;
-  sponsorships: number | null;
   maps: number | null;
-  staff: number | null;
   reports: number | null;
   settings: number | null;
 }
@@ -53,25 +51,14 @@ export default function AdminMain() {
     let cancelled = false;
     (async () => {
       try {
-        const [projects, users, volunteers, requests, maps, staff, suggestions] = await Promise.all([
+        const [projects, users, volunteers, requests, maps, suggestions] = await Promise.all([
           countList("/api/platform/projects/", access),
           countList("/api/accounts/users/", access),
           countList("/api/volunteers/", access),
           countList("/api/service-requests/?status=PENDING", access),
           countList("/api/maps/", access),
-          countList("/api/dashboard/executive/", access),
           countList("/api/suggestions/", access),
         ]);
-        // كفالات: عدد المشاريع التي تفعّل أداة الكفالات
-        let sponsorships: number | null = null;
-        try {
-          const pr = await authFetch("/api/platform/projects/");
-          if (pr.ok) {
-            const list = await pr.json();
-            const arr = Array.isArray(list) ? list : list.results || [];
-            sponsorships = arr.filter((p: { tools?: string[] }) => (p.tools || []).includes("sponsorships")).length;
-          }
-        } catch { /* ignore */ }
 
         if (!cancelled) {
           setCounts({
@@ -81,9 +68,7 @@ export default function AdminMain() {
             requests: requests != null || suggestions != null
               ? (requests || 0) + (suggestions || 0)
               : null,
-            sponsorships,
             maps,
-            staff,
             reports: null,
             settings: null,
           });

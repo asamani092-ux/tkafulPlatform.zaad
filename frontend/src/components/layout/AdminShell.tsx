@@ -8,6 +8,8 @@ import { visibleDomainsForUser } from "../../admin/access";
 import { useMembershipsContext } from "../../contexts/MembershipsContext";
 import { useEffect, useState } from "react";
 
+const OPEN_DOMAIN_KEY = "takaful_admin_open_domain";
+
 /** غلاف لوحة الإدارة — شريط جانبي ثابت على الشاشات الكبيرة، وdrawer على الصغيرة. */
 export default function AdminShell({ children }: { children: ReactNode }) {
   const loc = useLocation();
@@ -16,14 +18,36 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const { loading, access } = useMembershipsContext();
   const { isGlobalAdmin } = access;
   const activeDomain = domainForPath(loc.pathname);
-  const [openDomain, setOpenDomain] = useState<string>(activeDomain);
+  // آخر نطاق مفتوح يُحفظ في المتصفح؛ النطاق النشط يُفتح تلقائياً. O(1) قراءة/كتابة.
+  const [openDomain, setOpenDomain] = useState<string>(() => {
+    try {
+      return localStorage.getItem(OPEN_DOMAIN_KEY) || activeDomain;
+    } catch {
+      return activeDomain;
+    }
+  });
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const visibleDomains = visibleDomainsForUser(access);
 
+  const selectDomain = (id: string) => {
+    setOpenDomain(id);
+    try {
+      localStorage.setItem(OPEN_DOMAIN_KEY, id);
+    } catch {
+      /* تجاهل — وضع خاص أو مساحة ممتلئة */
+    }
+  };
+
   useEffect(() => {
     setDrawerOpen(false);
   }, [loc.pathname]);
+
+  // فتح النطاق النشط تلقائياً عند التنقل إليه (إن لم يكن نظرة عامة).
+  useEffect(() => {
+    if (activeDomain && activeDomain !== "overview") selectDomain(activeDomain);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDomain]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -77,7 +101,8 @@ export default function AdminShell({ children }: { children: ReactNode }) {
             <div key={domain.id} className="rounded-lg">
               <button
                 type="button"
-                onClick={() => setOpenDomain(expanded && openDomain === domain.id ? "" : domain.id)}
+                onClick={() => selectDomain(openDomain === domain.id ? "" : domain.id)}
+                aria-expanded={expanded}
                 className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-bold"
                 style={{
                   background: domainActive ? "color-mix(in srgb, var(--tmkeen-primary) 12%, transparent)" : "transparent",

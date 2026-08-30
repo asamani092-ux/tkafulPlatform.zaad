@@ -30,6 +30,21 @@ interface AdminProjectOption { id: number; name: string }
 
 const FIELD_TYPES = ["text", "number", "select", "boolean", "date"] as const;
 
+// تعريب العرض فقط — قيم الـ API تبقى كما هي. O(1) لكل بحث.
+const FIELD_TYPE_LABELS: Record<string, string> = {
+  text: "نص", number: "رقم", select: "قائمة اختيار", boolean: "نعم/لا", date: "تاريخ",
+};
+const VISIBILITY_LABELS: Record<string, string> = {
+  public: "عامة", mixed: "مختلطة", private: "خاصة",
+};
+const ITEM_STATUS_LABELS: Record<string, string> = {
+  active: "نشط", inactive: "غير نشط", draft: "مسودة",
+};
+const CONTRIB_STATUS_LABELS: Record<string, string> = {
+  pending: "بانتظار الاعتماد", approved: "معتمد", fulfilled: "منفّذ", cancelled: "ملغى",
+};
+const arLabel = (map: Record<string, string>, key: string) => map[key] || key;
+
 /** إدارة نظام الخرائط المتعددة — نطاق حسب عضوية المشروع. */
 export default function MapsAdmin() {
   const toast = useToast();
@@ -126,7 +141,7 @@ export default function MapsAdmin() {
 
       {isSuperAdmin && (
         <Card className="mb-4">
-          <h2 className="mb-2 text-lg font-bold text-primary">إنشاء خريطة (provisioning — المشرف العام)</h2>
+          <h2 className="mb-2 text-lg font-bold text-primary">إنشاء خريطة (للمشرف العام)</h2>
           <form className="grid grid-cols-1 gap-3 sm:grid-cols-4" onSubmit={createMap}>
             <Select label="المشروع" value={mapForm.project} onChange={(e) => setMapForm({ ...mapForm, project: e.target.value })} required>
               <option value="">اختر…</option>
@@ -160,7 +175,7 @@ export default function MapsAdmin() {
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-primary">{selected.title}</h2>
               <Badge variant={selected.published_at ? "success" : "warning"}>{selected.published_at ? "منشورة" : "غير منشورة"}</Badge>
-              <Badge>{selected.visibility}</Badge>
+              <Badge>{arLabel(VISIBILITY_LABELS, selected.visibility)}</Badge>
             </div>
             <Button variant="secondary" onClick={() => togglePublish(selected)}>
               {selected.published_at ? "إلغاء النشر" : "نشر"}
@@ -206,7 +221,7 @@ export default function MapsAdmin() {
                 <div key={f.id} className="flex flex-wrap items-center gap-2 text-sm">
                   <strong>{f.label}</strong>
                   <code className="text-xs text-brand-gray" dir="ltr">{f.key}</code>
-                  <Badge>{f.type}</Badge>
+                  <Badge>{arLabel(FIELD_TYPE_LABELS, f.type)}</Badge>
                   {f.required && <Badge variant="warning">إلزامي</Badge>}
                   <Badge variant={f.is_public ? "success" : "danger"}>{f.is_public ? "عام" : "داخلي"}</Badge>
                 </div>
@@ -226,7 +241,7 @@ export default function MapsAdmin() {
                 <Input label="المفتاح (لاتيني)" value={fieldForm.key} onChange={(e) => setFieldForm({ ...fieldForm, key: e.target.value })} dir="ltr" required />
                 <Input label="التسمية" value={fieldForm.label} onChange={(e) => setFieldForm({ ...fieldForm, label: e.target.value })} required />
                 <Select label="النوع" value={fieldForm.type} onChange={(e) => setFieldForm({ ...fieldForm, type: e.target.value })}>
-                  {FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {FIELD_TYPES.map((t) => <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>)}
                 </Select>
                 {fieldForm.type === "select" && (
                   <Input label="الخيارات (مفصولة بفواصل)" value={fieldForm.options} onChange={(e) => setFieldForm({ ...fieldForm, options: e.target.value })} />
@@ -248,7 +263,7 @@ export default function MapsAdmin() {
                     <strong>{i.name}</strong>
                     <span className="text-xs text-brand-gray">({i.layer_name})</span>
                     <span className="text-xs text-brand-gray" dir="ltr">{i.lat.toFixed(4)}, {i.lng.toFixed(4)}</span>
-                    <Badge variant={i.status === "active" ? "success" : "warning"}>{i.status}</Badge>
+                    <Badge variant={i.status === "active" ? "success" : "warning"}>{arLabel(ITEM_STATUS_LABELS, i.status)}</Badge>
                   </div>
                 ))}
                 {items.length === 0 && <p className="text-brand-gray">لا عناصر بعد.</p>}
@@ -279,8 +294,8 @@ export default function MapsAdmin() {
                 </Select>
                 <Input label="الاسم" value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} required />
                 <div className="grid grid-cols-2 gap-2">
-                  <Input label="Lat" value={itemForm.lat} onChange={(e) => setItemForm({ ...itemForm, lat: e.target.value })} dir="ltr" required />
-                  <Input label="Lng" value={itemForm.lng} onChange={(e) => setItemForm({ ...itemForm, lng: e.target.value })} dir="ltr" required />
+                  <Input label="خط العرض (Lat)" value={itemForm.lat} onChange={(e) => setItemForm({ ...itemForm, lat: e.target.value })} dir="ltr" required />
+                  <Input label="خط الطول (Lng)" value={itemForm.lng} onChange={(e) => setItemForm({ ...itemForm, lng: e.target.value })} dir="ltr" required />
                 </div>
                 {fields.map((f) => {
                   const value = itemForm.data[f.key] ?? "";
@@ -322,7 +337,7 @@ export default function MapsAdmin() {
                   {c.item_name && <span className="text-xs text-brand-gray">{c.item_name}</span>}
                   {c.category && <Badge>{c.category}</Badge>}
                   <span>× {c.quantity}</span>
-                  <Badge variant={c.status === "fulfilled" ? "success" : c.status === "cancelled" ? "danger" : "warning"}>{c.status}</Badge>
+                  <Badge variant={c.status === "fulfilled" ? "success" : c.status === "cancelled" ? "danger" : "warning"}>{arLabel(CONTRIB_STATUS_LABELS, c.status)}</Badge>
                   {c.status === "pending" && (
                     <>
                       <button type="button" className="text-xs font-bold text-green-700 hover:underline"

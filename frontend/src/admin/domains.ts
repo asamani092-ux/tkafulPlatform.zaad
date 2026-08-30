@@ -9,9 +9,7 @@ export type AdminDomainId =
   | "users"
   | "volunteers"
   | "requests"
-  | "sponsorships"
   | "maps"
-  | "staff"
   | "reports"
   | "settings";
 
@@ -39,10 +37,9 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     id: "projects",
     label: "المشاريع",
     to: "/Admin/projects",
-    blurb: "قائمة المشاريع والأدوات وروابط التبرع",
+    blurb: "قائمة المشاريع والأدوات وروابط التبرع والإنشاء",
     links: [
       { to: "/Admin/projects", label: "كل المشاريع", staffVisible: true },
-      { to: "/Admin/projects/create", label: "إنشاء مشروع" },
     ],
   },
   {
@@ -59,11 +56,11 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     id: "volunteers",
     label: "المتطوعون",
     to: "/Admin/volunteers",
-    blurb: "المتطوعون والطلبات والتعيينات",
+    blurb: "المتطوعون وطلبات المشاريع وطلبات الانضمام في صفحة واحدة",
     superAdminOnly: true,
     links: [
       { to: "/Admin/volunteers", label: "إدارة المتطوعين" },
-      { to: "/Admin/volunteers/applications", label: "طلبات التطوع" },
+      { to: "/Admin/volunteers/applications", label: "طلبات المشاريع" },
       { to: "/Admin/volunteers/join-requests", label: "طلبات الانضمام" },
     ],
   },
@@ -74,18 +71,10 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     blurb: "طلبات الخدمات وسقيا الماء والاقتراحات",
     superAdminOnly: true,
     links: [
+      { to: "/Admin/requests/forms", label: "النماذج المخصّصة" },
       { to: "/Admin/requests", label: "طلبات الخدمات" },
       { to: "/Admin/requests/water-supply", label: "طلبات سقيا الماء" },
       { to: "/Admin/requests/suggestions", label: "الاقتراحات" },
-    ],
-  },
-  {
-    id: "sponsorships",
-    label: "الكفالات",
-    to: "/Admin/sponsorships",
-    blurb: "بوابات الكفالات حسب المشروع",
-    links: [
-      { to: "/Admin/sponsorships", label: "مشاريع الكفالات", staffVisible: true },
     ],
   },
   {
@@ -98,23 +87,15 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     ],
   },
   {
-    id: "staff",
-    label: "الكادر",
-    to: "/Admin/staff",
-    blurb: "الأقسام والموظفين ومهام الكادر ومؤشرات الأداء",
-    links: [
-      { to: "/Admin/staff", label: "لوحة الكادر", staffVisible: true },
-      { to: "/Admin/staff/manage", label: "تغذية اللوحة", staffVisible: true },
-    ],
-  },
-  {
     id: "reports",
     label: "التقارير",
     to: "/Admin/reports",
-    blurb: "التقارير والإحصاءات والأهداف الربعية",
+    blurb: "تقارير المنصّة والمشاريع والمتطوعين وأداء الكادر",
     superAdminOnly: true,
     links: [
       { to: "/Admin/reports", label: "التقارير" },
+      { to: "/Admin/staff", label: "أداء الكادر" },
+      { to: "/Admin/staff/manage", label: "تغذية الكادر" },
     ],
   },
   {
@@ -140,12 +121,16 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
  */
 export const LEGACY_ADMIN_REDIRECTS: Array<{ from: string; to: string }> = [
   { from: "/Admin/map", to: "/Admin/maps" },
-  { from: "/Admin/tasks", to: "/Admin/projects/create" },
+  // إنشاء المشروع صار داخل /Admin/projects — الرابط القديم يُبقى توافقياً
+  { from: "/Admin/projects/create", to: "/Admin/projects" },
+  { from: "/Admin/tasks", to: "/Admin/projects" },
   { from: "/Admin/ideas", to: "/Admin/requests/suggestions" },
   { from: "/Admin/applications", to: "/Admin/volunteers/applications" },
   { from: "/Admin/management", to: "/Admin/volunteers" },
   { from: "/Admin/service-requests", to: "/Admin/requests" },
   { from: "/Admin/join-requests", to: "/Admin/volunteers/join-requests" },
+  // الكفالات صارت أداة داخل بطاقة المشروع — النطاق المنفصل يُحوّل توافقياً
+  { from: "/Admin/sponsorships", to: "/Admin/projects" },
   { from: "/Admin/executive", to: "/Admin/staff" },
   { from: "/Admin/executive/manage", to: "/Admin/staff/manage" },
   { from: "/executive", to: "/Admin/staff" },
@@ -165,10 +150,9 @@ export function domainForPath(pathname: string): AdminDomainId | "overview" {
   if (p.startsWith("/admin/users")) return "users";
   if (p.startsWith("/admin/volunteers")) return "volunteers";
   if (p.startsWith("/admin/requests")) return "requests";
-  if (p.startsWith("/admin/sponsorships")) return "sponsorships";
   if (p.startsWith("/admin/maps") || p === "/admin/map") return "maps";
-  if (p.startsWith("/admin/staff") || p.startsWith("/admin/executive")) return "staff";
-  if (p.startsWith("/admin/reports")) return "reports";
+  // الكادر صار تحت نطاق التقارير (توحيد)
+  if (p.startsWith("/admin/staff") || p.startsWith("/admin/executive") || p.startsWith("/admin/reports")) return "reports";
   if (p.startsWith("/admin/settings")) return "settings";
   return "overview";
 }

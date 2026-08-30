@@ -83,7 +83,7 @@ class VolunteerSerializer(serializers.ModelSerializer):
 class ProjectAssignmentSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source='user.email', read_only=True)
     user_name = serializers.CharField(source='user.profile.name', read_only=True)
-    project_title = serializers.CharField(source='project.title', read_only=True)
+    project_title = serializers.CharField(source='project.name', read_only=True)
     
     class Meta:
         model = ProjectAssignment
@@ -118,7 +118,7 @@ class SubtaskSerializer(serializers.ModelSerializer):
 class TaskSerializer(serializers.ModelSerializer):
     volunteer_name = serializers.SerializerMethodField()
     volunteer_id = serializers.IntegerField(source='volunteer.id', read_only=True, allow_null=True)
-    project_name = serializers.CharField(source='project.title', read_only=True)
+    project_name = serializers.CharField(source='project.name', read_only=True)
     subtasks = SubtaskSerializer(many=True, required=False)
     
     class Meta:
@@ -236,15 +236,16 @@ class VolunteerDetailSerializer(serializers.ModelSerializer):
             'join_date',
             'volunteer_hours',
             'current_projects',
+            'is_active',
         ]
     
     def get_current_tasks(self, obj):
         return obj.assigned_tasks.exclude(status='مكتملة').count()
     
     def get_current_projects(self, obj):
-        # Get unique project titles from current task assignments
+        # Get unique project names from current task assignments
         tasks = obj.assigned_tasks.exclude(status='مكتملة')
-        return list(set([task.project.title for task in tasks]))
+        return list(set([task.project.name for task in tasks]))
     
     def get_status(self, obj):
         current_tasks_count = self.get_current_tasks(obj)
@@ -295,7 +296,7 @@ class VolunteerApplicationSerializer(serializers.ModelSerializer):
     """
     volunteer_name = serializers.CharField(source='volunteer.profile.name', read_only=True)
     volunteer_email = serializers.EmailField(source='volunteer.email', read_only=True)
-    project_title = serializers.CharField(source='project.title', read_only=True)
+    project_title = serializers.CharField(source='project.name', read_only=True)
     reviewed_by_name = serializers.SerializerMethodField()
 
     class Meta:
