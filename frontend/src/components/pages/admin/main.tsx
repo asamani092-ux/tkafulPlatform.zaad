@@ -15,7 +15,6 @@ interface DomainCounts {
   volunteers: number | null;
   requests: number | null;
   maps: number | null;
-  staff: number | null;
   reports: number | null;
   settings: number | null;
 }
@@ -52,13 +51,12 @@ export default function AdminMain() {
     let cancelled = false;
     (async () => {
       try {
-        const [projects, users, volunteers, requests, maps, staff, suggestions] = await Promise.all([
+        const [projects, users, volunteers, requests, maps, suggestions] = await Promise.all([
           countList("/api/platform/projects/", access),
           countList("/api/accounts/users/", access),
           countList("/api/volunteers/", access),
           countList("/api/service-requests/?status=PENDING", access),
           countList("/api/maps/", access),
-          countList("/api/dashboard/executive/", access),
           countList("/api/suggestions/", access),
         ]);
 
@@ -71,7 +69,6 @@ export default function AdminMain() {
               ? (requests || 0) + (suggestions || 0)
               : null,
             maps,
-            staff,
             reports: null,
             settings: null,
           });

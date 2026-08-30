@@ -10,7 +10,6 @@ export type AdminDomainId =
   | "volunteers"
   | "requests"
   | "maps"
-  | "staff"
   | "reports"
   | "settings";
 
@@ -88,23 +87,15 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     ],
   },
   {
-    id: "staff",
-    label: "الكادر",
-    to: "/Admin/staff",
-    blurb: "الأقسام والموظفين ومهام الكادر ومؤشرات الأداء",
-    links: [
-      { to: "/Admin/staff", label: "لوحة الكادر", staffVisible: true },
-      { to: "/Admin/staff/manage", label: "تغذية اللوحة", staffVisible: true },
-    ],
-  },
-  {
     id: "reports",
     label: "التقارير",
     to: "/Admin/reports",
-    blurb: "التقارير والإحصاءات والأهداف الربعية",
+    blurb: "تقارير المنصّة والمشاريع والمتطوعين وأداء الكادر",
     superAdminOnly: true,
     links: [
       { to: "/Admin/reports", label: "التقارير" },
+      { to: "/Admin/staff", label: "أداء الكادر" },
+      { to: "/Admin/staff/manage", label: "تغذية الكادر" },
     ],
   },
   {
@@ -160,8 +151,8 @@ export function domainForPath(pathname: string): AdminDomainId | "overview" {
   if (p.startsWith("/admin/volunteers")) return "volunteers";
   if (p.startsWith("/admin/requests")) return "requests";
   if (p.startsWith("/admin/maps") || p === "/admin/map") return "maps";
-  if (p.startsWith("/admin/staff") || p.startsWith("/admin/executive")) return "staff";
-  if (p.startsWith("/admin/reports")) return "reports";
+  // الكادر صار تحت نطاق التقارير (توحيد)
+  if (p.startsWith("/admin/staff") || p.startsWith("/admin/executive") || p.startsWith("/admin/reports")) return "reports";
   if (p.startsWith("/admin/settings")) return "settings";
   return "overview";
 }
