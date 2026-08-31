@@ -2,12 +2,11 @@ import { useEffect, useState } from "react";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Badge from "../../ui/Badge";
-import DataTable from "../../ui/DataTable";
-import type { Column } from "../../ui/DataTable";
 import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Button from "../../ui/Button";
 import Modal from "../../ui/Modal";
+import CompactListCard from "../../ui/CompactListCard";
 import { LoadingState, ErrorState, EmptyState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
@@ -65,39 +64,6 @@ export default function UsersAdmin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, role, status]);
 
-  const columns: Column<AdminUserRow>[] = [
-      { key: "name", header: "الاسم", render: (r) => r.name || "—" },
-      { key: "email", header: "البريد" },
-      {
-        key: "role",
-        header: "الدور",
-        render: (r) => <Badge>{labelAr(ROLE_AR, r.role)}</Badge>,
-      },
-      {
-        key: "is_active",
-        header: "الحالة",
-        render: (r) => (
-          <Badge variant={r.is_active ? "success" : "danger"}>{r.is_active ? "نشط" : "معطّل"}</Badge>
-        ),
-      },
-      {
-        key: "date_joined",
-        header: "تاريخ الانضمام",
-        render: (r) => (r.date_joined ? r.date_joined.slice(0, 10) : "—"),
-      },
-      {
-        key: "actions",
-        header: "إجراءات",
-        render: (r) => (
-          <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
-            <Button type="button" variant="secondary" onClick={() => { setEdit(r); setForm({ ...emptyForm, email: r.email, name: r.name, role: r.role, is_active: r.is_active }); }}>تعديل</Button>
-            <Button type="button" variant="secondary" onClick={() => void toggleActive(r)}>{r.is_active ? "تعطيل" : "تفعيل"}</Button>
-            <Button type="button" variant="secondary" onClick={() => setDel(r)}>حذف</Button>
-          </div>
-        ),
-      },
-    ];
-
   const apiError = async (res: Response) => extractErrorDetail(await res.json().catch(() => null));
 
   const toggleActive = async (row: AdminUserRow) => {
@@ -110,6 +76,7 @@ export default function UsersAdmin() {
       return;
     }
     toast.success({ title: row.is_active ? "تم تعطيل الحساب" : "تم تفعيل الحساب" });
+    if (edit?.id === row.id) setEdit({ ...row, is_active: !row.is_active });
     void load();
   };
 
@@ -170,10 +137,16 @@ export default function UsersAdmin() {
       }
       toast.success({ title: "تم حذف المستخدم" });
       setDel(null);
+      setEdit(null);
       void load();
     } finally {
       setBusy(false);
     }
+  };
+
+  const openDetails = (r: AdminUserRow) => {
+    setEdit(r);
+    setForm({ ...emptyForm, email: r.email, name: r.name, role: r.role, is_active: r.is_active });
   };
 
   const pages = Math.max(1, Math.ceil(count / 25));
@@ -185,7 +158,7 @@ export default function UsersAdmin() {
         <Button type="button" onClick={() => { setForm(emptyForm); setAddOpen(true); }}>إضافة مستخدم</Button>
       </div>
 
-      <Card>
+      <Card className="mb-4">
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Input
             label="بحث"
@@ -204,23 +177,35 @@ export default function UsersAdmin() {
             <option value="disabled">معطّل</option>
           </Select>
         </div>
-        <Button type="button" variant="secondary" className="mb-4" onClick={() => { setPage(1); void load(1); }}>تطبيق البحث</Button>
-
-        {loading && <LoadingState title="جاري تحميل المستخدمين…" />}
-        {error && <ErrorState title="تعذّر التحميل" message="تحقّق من الاتصال أو صلاحية المشرف." />}
-        {!loading && !error && rows.length === 0 && <EmptyState title="لا يوجد مستخدمون" />}
-        {!loading && !error && rows.length > 0 && <DataTable columns={columns} rows={rows} />}
-
-        {pages > 1 && (
-          <div className="mt-4 flex items-center justify-between text-sm text-brand-gray">
-            <span>الصفحة {page} من {pages} — {count} مستخدم</span>
-            <div className="flex gap-2">
-              <Button type="button" variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>السابق</Button>
-              <Button type="button" variant="secondary" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>التالي</Button>
-            </div>
-          </div>
-        )}
+        <Button type="button" variant="secondary" onClick={() => { setPage(1); void load(1); }}>تطبيق البحث</Button>
       </Card>
+
+      {loading && <LoadingState title="جاري تحميل المستخدمين…" />}
+      {error && <ErrorState title="تعذّر التحميل" message="تحقّق من الاتصال أو صلاحية المشرف." />}
+      {!loading && !error && rows.length === 0 && <EmptyState title="لا يوجد مستخدمون" />}
+      {!loading && !error && rows.length > 0 && (
+        <div className="space-y-3">
+          {rows.map((r) => (
+            <CompactListCard
+              key={r.id}
+              name={r.name || r.email}
+              active={r.is_active}
+              createdAt={r.date_joined}
+              onDetails={() => openDetails(r)}
+            />
+          ))}
+        </div>
+      )}
+
+      {pages > 1 && (
+        <div className="mt-4 flex items-center justify-between text-sm text-brand-gray">
+          <span>الصفحة {page} من {pages} — {count} مستخدم</span>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>السابق</Button>
+            <Button type="button" variant="secondary" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>التالي</Button>
+          </div>
+        </div>
+      )}
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="إضافة مستخدم">
         <div className="space-y-3">
@@ -234,19 +219,29 @@ export default function UsersAdmin() {
         </div>
       </Modal>
 
-      <Modal open={!!edit} onClose={() => setEdit(null)} title="تعديل مستخدم">
-        <div className="space-y-3">
-          <Input label="البريد" dir="ltr" value={form.email} disabled />
-          <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <Select label="الدور" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-            {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </Select>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
-            نشط
-          </label>
-          <Button type="button" disabled={busy} onClick={() => void saveEdit()}>{busy ? "جاري الحفظ…" : "حفظ"}</Button>
-        </div>
+      <Modal open={!!edit} onClose={() => setEdit(null)} title={edit?.name || "تفاصيل المستخدم"} wide>
+        {edit && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={form.is_active ? "success" : "danger"}>{form.is_active ? "نشط" : "غير نشط"}</Badge>
+              <Badge>{labelAr(ROLE_AR, form.role)}</Badge>
+            </div>
+            <Input label="البريد" dir="ltr" value={form.email} disabled />
+            <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Select label="الدور" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+              {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
+              نشط
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" disabled={busy} onClick={() => void saveEdit()}>{busy ? "جاري الحفظ…" : "حفظ"}</Button>
+              <Button type="button" variant="secondary" onClick={() => void toggleActive(edit)}>{edit.is_active ? "تعطيل" : "تفعيل"}</Button>
+              <Button type="button" variant="secondary" onClick={() => setDel(edit)}>حذف</Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <Modal open={!!del} onClose={() => setDel(null)} title="تأكيد الحذف">

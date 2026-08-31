@@ -8,7 +8,9 @@ from .validators import validate_https_donation_url
 class ProjectTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProjectType
-        fields = ["id", "name", "slug", "is_active", "order"]
+        fields = ["id", "name", "slug", "is_active", "order", "created_at"]
+        read_only_fields = ["created_at"]
+
 
 
 class ProjectToolSerializer(serializers.ModelSerializer):

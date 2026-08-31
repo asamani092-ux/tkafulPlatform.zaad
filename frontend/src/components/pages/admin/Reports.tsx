@@ -6,6 +6,8 @@ import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Tabs from "../../ui/Tabs";
+import Modal from "../../ui/Modal";
+import CompactListCard from "../../ui/CompactListCard";
 import { LoadingState } from "../../feedback/PageStates";
 
 interface Report { id: number; title: string; total_projects: number; total_volunteers: number; total_tasks: number; generated_at: string }
@@ -104,38 +106,22 @@ export default function Reports() {
 
       {tab === "saved" && (
         <>
-          <Card className="mb-4">
-            <div className="overflow-x-auto">
-              <table className="w-full text-right text-sm">
-                <thead>
-                  <tr className="border-b border-surface-border text-xs text-brand-gray">
-                    <th className="py-2">العنوان</th><th>المشاريع</th><th>المتطوعون</th><th>المهام</th><th>التاريخ</th><th>إجراءات</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {reports.length === 0 && <tr><td colSpan={6} className="py-4 text-center text-brand-gray">لا توجد تقارير بعد.</td></tr>}
-                  {reports.map((r) => (
-                    <tr key={r.id} className="border-b border-surface-border last:border-0">
-                      <td className="py-2 font-semibold">{r.title}</td>
-                      <td>{r.total_projects}</td><td>{r.total_volunteers}</td><td>{r.total_tasks}</td>
-                      <td className="text-xs text-brand-gray">{new Date(r.generated_at).toLocaleString("ar")}</td>
-                      <td>
-                        <div className="flex flex-wrap gap-2 text-xs font-bold">
-                          <button type="button" className="text-primary hover:underline" onClick={() => openDetail(r)}>عرض</button>
-                          <button type="button" className="text-red-600 hover:underline" onClick={() => remove(r.id)}>حذف</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          <div className="mb-4 space-y-3">
+            {reports.length === 0 && <Card><p className="text-center text-sm text-brand-gray">لا توجد تقارير بعد.</p></Card>}
+            {reports.map((r) => (
+              <CompactListCard
+                key={r.id}
+                name={r.title}
+                active
+                createdAt={r.generated_at}
+                onDetails={() => void openDetail(r)}
+              />
+            ))}
+          </div>
 
-          {detail && (
-            <Card className="print-area">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-lg font-bold text-primary">{detail.meta.title}</h2>
+          <Modal open={!!detail} onClose={() => setDetail(null)} title={detail?.meta.title || "تفاصيل التقرير"} wide>
+            {detail && (
+              <div className="print-area space-y-3">
                 <div className="flex flex-wrap gap-2 text-xs font-bold no-print">
                   <button type="button" className="text-primary hover:underline" onClick={() => window.print()}>طباعة / PDF</button>
                   {detail.data.volunteers?.list && detail.data.volunteers.list.length > 0 && (
@@ -144,36 +130,36 @@ export default function Reports() {
                   {detail.data.projects?.list && detail.data.projects.list.length > 0 && (
                     <button type="button" className="text-green-700 hover:underline" onClick={() => downloadCsv(`projects_${detail.meta.id}.csv`, detail.data.projects!.list!)}>تنزيل المشاريع (CSV)</button>
                   )}
-                  <button type="button" className="text-brand-gray hover:underline" onClick={() => setDetail(null)}>إغلاق</button>
+                  <button type="button" className="text-red-600 hover:underline" onClick={() => remove(detail.meta.id)}>حذف</button>
                 </div>
-              </div>
-              {detail.data.summary && (
-                <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                  {Object.entries(detail.data.summary).filter(([k]) => SUMMARY_LABELS[k]).map(([k, v]) => (
-                    <div key={k} className="rounded-lg border border-surface-border p-3 text-center">
-                      <div className="text-xl font-extrabold text-primary">{typeof v === "number" ? v.toLocaleString("en-US") : String(v)}</div>
-                      <div className="text-xs text-brand-gray">{SUMMARY_LABELS[k]}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {detail.data.tasks?.completion_rate != null && (
-                <p className="mb-3 text-sm text-brand-gray">نسبة إنجاز المهام: <strong className="text-primary">{detail.data.tasks.completion_rate}%</strong></p>
-              )}
-              {detail.data.projects?.list && detail.data.projects.list.length > 0 && (
-                <>
-                  <h3 className="mb-2 text-sm font-bold text-primary">المشاريع ({detail.data.projects.list.length})</h3>
-                  <div className="mb-4 max-h-56 overflow-y-auto text-sm">
-                    {detail.data.projects.list.map((p, i) => (
-                      <div key={i} className="flex flex-wrap gap-2 border-b border-surface-border py-1 last:border-0">
-                        {Object.entries(p).slice(0, 4).map(([k, v]) => <span key={k} className="text-xs"><span className="text-brand-gray">{k}:</span> {String(v)}</span>)}
+                {detail.data.summary && (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                    {Object.entries(detail.data.summary).filter(([k]) => SUMMARY_LABELS[k]).map(([k, v]) => (
+                      <div key={k} className="rounded-lg border border-surface-border p-3 text-center">
+                        <div className="text-xl font-extrabold text-primary">{typeof v === "number" ? v.toLocaleString("en-US") : String(v)}</div>
+                        <div className="text-xs text-brand-gray">{SUMMARY_LABELS[k]}</div>
                       </div>
                     ))}
                   </div>
-                </>
-              )}
-            </Card>
-          )}
+                )}
+                {detail.data.tasks?.completion_rate != null && (
+                  <p className="text-sm text-brand-gray">نسبة إنجاز المهام: <strong className="text-primary">{detail.data.tasks.completion_rate}%</strong></p>
+                )}
+                {detail.data.projects?.list && detail.data.projects.list.length > 0 && (
+                  <>
+                    <h3 className="text-sm font-bold text-primary">المشاريع ({detail.data.projects.list.length})</h3>
+                    <div className="max-h-56 overflow-y-auto text-sm">
+                      {detail.data.projects.list.map((p, i) => (
+                        <div key={i} className="flex flex-wrap gap-2 border-b border-surface-border py-1 last:border-0">
+                          {Object.entries(p).slice(0, 4).map(([k, v]) => <span key={k} className="text-xs"><span className="text-brand-gray">{k}:</span> {String(v)}</span>)}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </Modal>
         </>
       )}
 

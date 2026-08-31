@@ -4,6 +4,8 @@ import Card from "../../ui/Card";
 import Input from "../../ui/Input";
 import Button from "../../ui/Button";
 import Badge from "../../ui/Badge";
+import Modal from "../../ui/Modal";
+import CompactListCard from "../../ui/CompactListCard";
 import { LoadingState, ErrorState, EmptyState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
@@ -11,7 +13,7 @@ import type { ProjectType } from "../projects/types";
 
 const emptyForm = { name: "", slug: "", order: 0 };
 
-/** إدارة «أنواع المشاريع» — قابلة للتوسّع من الإعدادات (المشرف العام). */
+/** إدارة «أنواع المشاريع» — إضافة بنافذة عائمة + بطاقات مختصرة. */
 export default function ProjectTypesAdmin() {
   const toast = useToast();
   const [types, setTypes] = useState<ProjectType[]>([]);
@@ -19,6 +21,8 @@ export default function ProjectTypesAdmin() {
   const [error, setError] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [detail, setDetail] = useState<ProjectType | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -51,6 +55,7 @@ export default function ProjectTypesAdmin() {
       } else {
         toast.success({ title: "تمت إضافة النوع" });
         setForm(emptyForm);
+        setCreateOpen(false);
         void load();
       }
     } finally {
@@ -63,52 +68,83 @@ export default function ProjectTypesAdmin() {
       method: "PATCH",
       body: JSON.stringify({ is_active: !t.is_active }),
     });
-    if (res.ok) { toast.success({ title: "تم التحديث" }); void load(); }
-    else toast.error({ title: "تعذّر التحديث" });
+    if (res.ok) {
+      toast.success({ title: "تم التحديث" });
+      setDetail((d) => (d && d.id === t.id ? { ...d, is_active: !t.is_active } : d));
+      void load();
+    } else toast.error({ title: "تعذّر التحديث" });
   };
 
   const remove = async (t: ProjectType) => {
     if (!window.confirm(`حذف النوع «${t.name}»؟ ستُزال إشارته من المشاريع.`)) return;
     const res = await authFetch(`/api/platform/project-types/${t.id}/`, { method: "DELETE" });
-    if (res.ok) { toast.success({ title: "تم الحذف" }); void load(); }
-    else toast.error({ title: "تعذّر الحذف" });
+    if (res.ok) {
+      toast.success({ title: "تم الحذف" });
+      setDetail(null);
+      void load();
+    } else toast.error({ title: "تعذّر الحذف" });
   };
 
   return (
     <AdminShell>
-      <h1 className="mb-4 text-2xl font-bold text-primary">أنواع المشاريع</h1>
-      <Card className="mb-4">
-        <h2 className="mb-3 text-lg font-bold text-primary">إضافة نوع</h2>
-        <form className="grid gap-3 sm:grid-cols-3" onSubmit={(e) => void create(e)}>
-          <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-          <Input label="المعرّف (slug)" dir="ltr" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} required />
-          <Input label="الترتيب" type="number" min={0} dir="ltr" value={String(form.order)} onChange={(e) => setForm({ ...form, order: Number(e.target.value) || 0 })} />
-          <div className="sm:col-span-3"><Button type="submit" disabled={busy}>{busy ? "جاري الحفظ…" : "إضافة"}</Button></div>
-        </form>
-      </Card>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-bold text-primary">أنواع المشاريع</h1>
+        <Button type="button" onClick={() => { setForm(emptyForm); setCreateOpen(true); }}>إضافة نوع</Button>
+      </div>
 
       {loading && <LoadingState />}
       {error && <ErrorState message="تعذّر تحميل الأنواع" />}
       {!loading && !error && types.length === 0 && <EmptyState title="لا أنواع بعد" />}
       {!loading && !error && types.length > 0 && (
-        <Card>
-          <ul className="space-y-2">
-            {types.map((t) => (
-              <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-surface-border p-3">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-primary">{t.name}</span>
-                  <span className="text-xs text-brand-gray" dir="ltr">{t.slug}</span>
-                  <Badge variant={t.is_active ? "success" : "danger"}>{t.is_active ? "مفعّل" : "معطّل"}</Badge>
-                </div>
-                <div className="flex gap-2">
-                  <Button type="button" variant="secondary" onClick={() => void toggleActive(t)}>{t.is_active ? "تعطيل" : "تفعيل"}</Button>
-                  <Button type="button" variant="secondary" onClick={() => void remove(t)}>حذف</Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
+        <div className="space-y-3">
+          {types.map((t) => (
+            <CompactListCard
+              key={t.id}
+              name={t.name}
+              active={t.is_active}
+              createdAt={t.created_at}
+              onDetails={() => setDetail(t)}
+            />
+          ))}
+        </div>
       )}
+
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="إضافة نوع مشروع">
+        <form className="grid gap-3" onSubmit={(e) => void create(e)}>
+          <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+          <Input label="المعرّف (slug)" dir="ltr" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} required />
+          <Input label="الترتيب" type="number" min={0} dir="ltr" value={String(form.order)} onChange={(e) => setForm({ ...form, order: Number(e.target.value) || 0 })} />
+          <div className="flex gap-2">
+            <Button type="submit" disabled={busy}>{busy ? "جاري الحفظ…" : "إنشاء"}</Button>
+            <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>إلغاء</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={!!detail} onClose={() => setDetail(null)} title={detail?.name || "تفاصيل النوع"}>
+        {detail && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={detail.is_active ? "success" : "danger"}>{detail.is_active ? "نشط" : "غير نشط"}</Badge>
+              <span className="text-xs text-brand-gray" dir="ltr">{detail.slug}</span>
+              <span className="text-xs text-brand-gray">ترتيب: {detail.order}</span>
+            </div>
+            <Card>
+              <p className="text-sm text-brand-gray">
+                تاريخ الإنشاء:{" "}
+                {detail.created_at ? new Date(detail.created_at).toLocaleDateString("ar") : "—"}
+              </p>
+            </Card>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="secondary" onClick={() => void toggleActive(detail)}>
+                {detail.is_active ? "تعطيل" : "تفعيل"}
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => void remove(detail)}>حذف</Button>
+              <Button type="button" variant="secondary" onClick={() => setDetail(null)}>إغلاق</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </AdminShell>
   );
 }

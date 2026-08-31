@@ -7,6 +7,7 @@ import Select from "../../ui/Select";
 import Badge from "../../ui/Badge";
 import Tabs from "../../ui/Tabs";
 import Modal from "../../ui/Modal";
+import CompactListCard from "../../ui/CompactListCard";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
@@ -16,6 +17,7 @@ import type { MapFieldDef } from "../projects/types";
 interface AdminMap {
   id: number; project: number; project_slug: string; project_name: string;
   title: string; description: string; visibility: string; published_at: string | null;
+  created_at?: string;
 }
 interface AdminLayer { id: number; map: number; name: string; visibility: string; order: number }
 interface AdminField extends MapFieldDef { id: number; map: number; is_public: boolean }
@@ -146,16 +148,13 @@ export default function MapsAdmin() {
 
       <div className="mb-4 space-y-3">
         {maps.map((m) => (
-          <Card key={m.id}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                <h3 className="truncate text-base font-bold text-primary">{m.title}</h3>
-                <Badge variant={m.published_at ? "success" : "danger"}>{m.published_at ? "نشط" : "غير نشط"}</Badge>
-                <span className="text-xs text-brand-gray">{m.project_name}</span>
-              </div>
-              <Button type="button" variant="secondary" onClick={() => setSelectedId(m.id)}>التفاصيل</Button>
-            </div>
-          </Card>
+          <CompactListCard
+            key={m.id}
+            name={m.title}
+            active={!!m.published_at}
+            createdAt={m.created_at}
+            onDetails={() => setSelectedId(m.id)}
+          />
         ))}
         {maps.length === 0 && <p className="text-brand-gray">لا خرائط ضمن نطاقك.</p>}
       </div>

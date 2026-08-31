@@ -6,6 +6,7 @@ import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Badge from "../../ui/Badge";
 import Modal from "../../ui/Modal";
+import CompactListCard from "../../ui/CompactListCard";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
@@ -271,21 +272,14 @@ export default function PlatformProjects() {
 
       <div className="space-y-3">
         {projects.map((p) => (
-          <Card key={p.id}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                <span style={{ width: 12, height: 12, borderRadius: 3, background: p.brand_color, display: "inline-block" }} />
-                <h3 className="truncate text-base font-bold text-primary">{p.name}</h3>
-                <Badge variant={p.is_active && p.status === "active" ? "success" : "danger"}>
-                  {p.is_active && p.status === "active" ? "نشط" : "غير نشط"}
-                </Badge>
-                <span className="text-xs text-brand-gray">
-                  {p.created_at ? new Date(p.created_at).toLocaleDateString("ar") : "—"}
-                </span>
-              </div>
-              <Button type="button" variant="secondary" onClick={() => setDetailId(p.id)}>التفاصيل</Button>
-            </div>
-          </Card>
+          <CompactListCard
+            key={p.id}
+            name={p.name}
+            active={p.is_active && p.status === "active"}
+            createdAt={p.created_at}
+            onDetails={() => setDetailId(p.id)}
+            leading={<span style={{ width: 12, height: 12, borderRadius: 3, background: p.brand_color, display: "inline-block" }} />}
+          />
         ))}
         {projects.length === 0 && <p className="text-brand-gray">لا مشاريع ضمن نطاقك.</p>}
       </div>

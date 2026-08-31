@@ -23,6 +23,7 @@ export interface ProjectType {
   slug: string;
   is_active: boolean;
   order: number;
+  created_at?: string;
 }
 
 export interface PublicProjectDetail extends PlatformProject {

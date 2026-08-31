@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { FileText, Pencil, Ban, CheckCircle2, Trash2 } from "lucide-react";
+import { FileText, Ban, CheckCircle2, Trash2 } from "lucide-react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
@@ -11,6 +11,7 @@ import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Tabs from "../../ui/Tabs";
 import Modal from "../../ui/Modal";
+import CompactListCard from "../../ui/CompactListCard";
 import { LoadingState } from "../../feedback/PageStates";
 
 type TabKey = "volunteers" | "applications" | "joins";
@@ -201,50 +202,20 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
             </div>
           </Card>
 
-          <Card>
-            {loadingVols ? <LoadingState title="جاري تحميل المتطوعين…" /> : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-right text-sm">
-                  <thead>
-                    <tr className="border-b border-surface-border text-xs text-brand-gray">
-                      <th className="py-2">الاسم</th>
-                      <th>الحالة</th>
-                      <th>تاريخ الانضمام</th>
-                      <th>إجراءات</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {volunteers.length === 0 && (
-                      <tr><td colSpan={4} className="py-4 text-center text-brand-gray">لا يوجد متطوعون.</td></tr>
-                    )}
-                    {volunteers.map((v) => (
-                      <tr key={v.id} className="border-b border-surface-border last:border-0">
-                        <td className="py-2 font-semibold">{v.name || v.email || `#${v.id}`}</td>
-                        <td>
-                          {v.is_active === false
-                            ? <Badge variant="danger">غير نشط</Badge>
-                            : <Badge variant="success">نشط</Badge>}
-                        </td>
-                        <td className="text-xs text-brand-gray">
-                          {v.join_date ? new Date(v.join_date).toLocaleDateString("ar") : "—"}
-                        </td>
-                        <td>
-                          <div className="flex flex-wrap gap-2">
-                            <button type="button" title="تقرير" className="rounded p-1 text-primary hover:bg-surface-muted" onClick={() => openReport(v)}><FileText size={16} /></button>
-                            <button type="button" title="تعديل" className="rounded p-1 text-primary hover:bg-surface-muted" onClick={() => startEdit(v)}><Pencil size={16} /></button>
-                            <button type="button" title={v.is_active === false ? "تفعيل" : "تعليق"} className="rounded p-1 text-amber-700 hover:bg-surface-muted" onClick={() => toggleActive(v)}>
-                              {v.is_active === false ? <CheckCircle2 size={16} /> : <Ban size={16} />}
-                            </button>
-                            <button type="button" title="حذف" className="rounded p-1 text-red-600 hover:bg-surface-muted" onClick={() => removeVolunteer(v)}><Trash2 size={16} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
+          <div className="space-y-3">
+            {loadingVols ? <LoadingState title="جاري تحميل المتطوعين…" /> : volunteers.length === 0 ? (
+              <Card><p className="text-center text-sm text-brand-gray">لا يوجد متطوعون.</p></Card>
+            ) : volunteers.map((v) => (
+              <CompactListCard
+                key={v.id}
+                name={v.name || v.email || `#${v.id}`}
+                active={v.is_active !== false}
+                createdAt={v.join_date}
+                onDetails={() => startEdit(v)}
+                detailsLabel="فتح البطاقة"
+              />
+            ))}
+          </div>
         </>
       )}
 
@@ -288,7 +259,7 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
         </div>
       )}
 
-      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editId ? "تعديل متطوّع" : "إضافة متطوّع"} wide>
+      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editId ? "بطاقة المتطوّع" : "إضافة متطوّع"} wide>
         <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={saveVolunteer}>
           <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           {!editId && (
@@ -300,9 +271,22 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
           {!editId && (
             <Input label="كلمة المرور" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
           )}
-          <div className="flex gap-2 sm:col-span-2">
+          <div className="flex flex-wrap gap-2 sm:col-span-2">
             <Button type="submit">{editId ? "حفظ" : "إنشاء"}</Button>
             <Button type="button" variant="secondary" onClick={() => setFormOpen(false)}>إلغاء</Button>
+            {editId && (() => {
+              const v = volunteers.find((x) => x.id === editId);
+              if (!v) return null;
+              return (
+                <>
+                  <button type="button" title="تقرير" className="rounded p-2 text-primary hover:bg-surface-muted" onClick={() => openReport(v)}><FileText size={16} /></button>
+                  <button type="button" title={v.is_active === false ? "تفعيل" : "تعليق"} className="rounded p-2 text-amber-700 hover:bg-surface-muted" onClick={() => void toggleActive(v)}>
+                    {v.is_active === false ? <CheckCircle2 size={16} /> : <Ban size={16} />}
+                  </button>
+                  <button type="button" title="حذف" className="rounded p-2 text-red-600 hover:bg-surface-muted" onClick={() => void removeVolunteer(v)}><Trash2 size={16} /></button>
+                </>
+              );
+            })()}
           </div>
         </form>
       </Modal>
