@@ -111,7 +111,11 @@ export default function RequestFormsAdmin() {
 
   const toggleActive = async (f: RForm) => {
     const res = await authFetch(`/api/admin/request-forms/${f.id}/`, { method: "PATCH", body: JSON.stringify({ is_active: !f.is_active }) });
-    if (res.ok) { toast.success({ title: f.is_active ? "أُلغي التفعيل" : "تم التفعيل" }); void load(); }
+    if (res.ok) {
+      toast.success({ title: f.is_active ? "أُلغي التفعيل" : "تم التفعيل" });
+      if (selected?.id === f.id) setSelected({ ...f, is_active: !f.is_active });
+      void load();
+    }
   };
 
   const removeForm = async (f: RForm) => {
