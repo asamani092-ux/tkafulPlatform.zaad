@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { FileText, Pencil, Ban, CheckCircle2, Trash2 } from "lucide-react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
@@ -9,14 +10,16 @@ import Button from "../../ui/Button";
 import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Tabs from "../../ui/Tabs";
+import Modal from "../../ui/Modal";
 import { LoadingState } from "../../feedback/PageStates";
 
 type TabKey = "volunteers" | "applications" | "joins";
 
 interface VStats { total_volunteers: number; active_volunteers: number; total_hours: number; completed_tasks: number }
 interface Volunteer {
-  id: number; name: string; email: string; location: string; city?: string; status: string;
+  id: number; name: string; email: string; phone?: string; location: string; city?: string; status: string;
   volunteer_hours: number; completed_tasks: number; current_tasks: number; is_active: boolean;
+  join_date?: string;
 }
 interface Application { id: number; volunteer_name: string; volunteer_email: string; project_title: string; status: string; message: string }
 interface JoinReq { id: number; name: string; email: string; phone: string; location: string; qualification: string; skills: string[] }
@@ -28,14 +31,9 @@ const APP_TABS = [
   { key: "مرفوض", label: "مرفوضة" },
 ];
 
-const emptyForm = { email: "", name: "", city: "", password: "" };
+const emptyForm = { name: "", email: "", phone: "", national_id: "", city: "", password: "" };
 
-/**
- * نطاق المتطوّعين الموحّد (UAT P4 / D-51):
- * - المتطوّعون: قائمة باسم/مدينة + بحث + إضافة/تعديل/تعليق/حذف + تقرير إنجاز
- * - طلبات المشاريع: قبول/رفض التقديم على فرصة
- * - طلبات الانضمام: اعتماد الحسابات غير المعتمدة
- */
+/** نطاق المتطوّعين — بطاقات/جدول مختصر + نماذج إضافة في نافذة عائمة. */
 export default function VolunteersAdmin({ defaultTab = "volunteers" }: { defaultTab?: TabKey }) {
   const { access } = useAuth();
   const { success, error } = useToast();
@@ -50,7 +48,7 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
   const [reportTasks, setReportTasks] = useState<VTask[] | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState<number | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
 
   const loadVolunteers = useCallback(() => {
     setLoadingVols(true);
@@ -104,45 +102,49 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
     setReportFor(v); setReportTasks(null);
     const res = await authFetch(`/api/reports/volunteer-tasks/?volunteer_id=${v.id}`);
     const d = res.ok ? await res.json().catch(() => null) : null;
-    setReportTasks((d?.results || d || []) as VTask[]);
+    // الـ API يعيد { tasks: [...] } — ليس مصفوفة مباشرة
+    const list = Array.isArray(d) ? d : (d?.tasks || d?.results || []);
+    setReportTasks(list as VTask[]);
   };
 
-  const startAdd = () => {
-    setEditId(null); setForm(emptyForm); setShowForm(true);
-  };
+  const startAdd = () => { setEditId(null); setForm(emptyForm); setFormOpen(true); };
   const startEdit = (v: Volunteer) => {
     setEditId(v.id);
-    setForm({ email: v.email, name: v.name || "", city: v.city || v.location || "", password: "" });
-    setShowForm(true);
+    setForm({
+      email: v.email, name: v.name || "", city: v.city || v.location || "",
+      phone: v.phone || "", national_id: "", password: "",
+    });
+    setFormOpen(true);
   };
 
   const saveVolunteer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editId) {
       const res = await authFetch(`/api/accounts/users/${editId}/`, {
-        method: "PATCH", body: JSON.stringify({ name: form.name, city: form.city }),
+        method: "PATCH",
+        body: JSON.stringify({ name: form.name, city: form.city, phone: form.phone, national_id: form.national_id }),
       });
-      if (res.ok) { success({ title: "تم تحديث المتطوّع" }); setShowForm(false); loadVolunteers(); }
+      if (res.ok) { success({ title: "تم تحديث المتطوّع" }); setFormOpen(false); loadVolunteers(); }
       else { const d = await res.json().catch(() => ({})); error({ title: d.detail || d.name?.[0] || "تعذّر التحديث" }); }
       return;
     }
     const res = await authFetch(`/api/accounts/users/`, {
       method: "POST",
       body: JSON.stringify({
-        email: form.email, name: form.name, city: form.city,
-        role: "user", password: form.password || "Hello12345!",
+        name: form.name, email: form.email, phone: form.phone, national_id: form.national_id,
+        city: form.city, role: "user", password: form.password || "Hello12345!",
       }),
     });
-    if (res.ok) { success({ title: "تم إضافة المتطوّع" }); setShowForm(false); loadVolunteers(); }
+    if (res.ok) { success({ title: "تم إضافة المتطوّع" }); setFormOpen(false); loadVolunteers(); }
     else {
       const d = await res.json().catch(() => ({}));
-      error({ title: d.email?.[0] || d.password?.[0] || d.detail || "تعذّر الإضافة" });
+      error({ title: d.email?.[0] || d.password?.[0] || d.phone?.[0] || d.detail || "تعذّر الإضافة" });
     }
   };
 
   const actApp = async (id: number, action: "accept" | "reject") => {
     const res = await authFetch(`/api/admin/applications/${id}/${action}/`, { method: "POST", body: JSON.stringify({}) });
-    if (res.ok) { success({ title: action === "accept" ? "تم القبول وإنشاء مهمة" : "تم الرفض" }); loadApps(appStatus); }
+    if (res.ok) { success({ title: action === "accept" ? "تم القبول" : "تم الرفض" }); loadApps(appStatus); }
     else error({ title: "تعذّر تنفيذ العملية" });
   };
 
@@ -199,26 +201,6 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
             </div>
           </Card>
 
-          {showForm && (
-            <Card className="mb-4">
-              <h2 className="mb-3 text-lg font-bold text-primary">{editId ? "تعديل متطوّع" : "إضافة متطوّع"}</h2>
-              <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={saveVolunteer}>
-                {!editId && (
-                  <>
-                    <Input label="البريد" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required dir="ltr" />
-                    <Input label="كلمة المرور" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
-                  </>
-                )}
-                <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-                <Input label="المدينة" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
-                <div className="flex gap-2 sm:col-span-2">
-                  <Button type="submit">{editId ? "حفظ" : "إنشاء"}</Button>
-                  <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>إلغاء</Button>
-                </div>
-              </form>
-            </Card>
-          )}
-
           <Card>
             {loadingVols ? <LoadingState title="جاري تحميل المتطوعين…" /> : (
               <div className="overflow-x-auto">
@@ -226,36 +208,34 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
                   <thead>
                     <tr className="border-b border-surface-border text-xs text-brand-gray">
                       <th className="py-2">الاسم</th>
-                      <th>المدينة</th>
                       <th>الحالة</th>
-                      <th>الساعات</th>
-                      <th>منجزة</th>
-                      <th>حالية</th>
+                      <th>تاريخ الانضمام</th>
                       <th>إجراءات</th>
                     </tr>
                   </thead>
                   <tbody>
                     {volunteers.length === 0 && (
-                      <tr><td colSpan={7} className="py-4 text-center text-brand-gray">لا يوجد متطوعون.</td></tr>
+                      <tr><td colSpan={4} className="py-4 text-center text-brand-gray">لا يوجد متطوعون.</td></tr>
                     )}
                     {volunteers.map((v) => (
                       <tr key={v.id} className="border-b border-surface-border last:border-0">
                         <td className="py-2 font-semibold">{v.name || v.email || `#${v.id}`}</td>
-                        <td>{v.city || v.location || "—"}</td>
                         <td>
                           {v.is_active === false
-                            ? <Badge variant="danger">معلّق</Badge>
-                            : <Badge variant={v.status === "نشط" ? "success" : v.status === "مشغول" ? "warning" : "primary"}>{v.status}</Badge>}
+                            ? <Badge variant="danger">غير نشط</Badge>
+                            : <Badge variant="success">نشط</Badge>}
                         </td>
-                        <td>{v.volunteer_hours}</td>
-                        <td>{v.completed_tasks}</td>
-                        <td>{v.current_tasks}</td>
+                        <td className="text-xs text-brand-gray">
+                          {v.join_date ? new Date(v.join_date).toLocaleDateString("ar") : "—"}
+                        </td>
                         <td>
-                          <div className="flex flex-wrap gap-2 text-xs font-bold">
-                            <button type="button" className="text-primary hover:underline" onClick={() => openReport(v)}>تقرير</button>
-                            <button type="button" className="text-primary hover:underline" onClick={() => startEdit(v)}>تعديل</button>
-                            <button type="button" className="text-amber-700 hover:underline" onClick={() => toggleActive(v)}>{v.is_active === false ? "تفعيل" : "تعليق"}</button>
-                            <button type="button" className="text-red-600 hover:underline" onClick={() => removeVolunteer(v)}>حذف</button>
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" title="تقرير" className="rounded p-1 text-primary hover:bg-surface-muted" onClick={() => openReport(v)}><FileText size={16} /></button>
+                            <button type="button" title="تعديل" className="rounded p-1 text-primary hover:bg-surface-muted" onClick={() => startEdit(v)}><Pencil size={16} /></button>
+                            <button type="button" title={v.is_active === false ? "تفعيل" : "تعليق"} className="rounded p-1 text-amber-700 hover:bg-surface-muted" onClick={() => toggleActive(v)}>
+                              {v.is_active === false ? <CheckCircle2 size={16} /> : <Ban size={16} />}
+                            </button>
+                            <button type="button" title="حذف" className="rounded p-1 text-red-600 hover:bg-surface-muted" onClick={() => removeVolunteer(v)}><Trash2 size={16} /></button>
                           </div>
                         </td>
                       </tr>
@@ -265,40 +245,11 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
               </div>
             )}
           </Card>
-
-          {reportFor && (
-            <Card className="mt-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-primary">تقرير إنجاز: {reportFor.name || reportFor.email}</h2>
-                <button type="button" className="text-xs font-bold text-brand-gray hover:underline" onClick={() => { setReportFor(null); setReportTasks(null); }}>إغلاق</button>
-              </div>
-              <div className="mb-3 grid grid-cols-3 gap-3 text-center text-sm">
-                <div><div className="text-xl font-extrabold text-primary">{reportFor.completed_tasks}</div><div className="text-xs text-brand-gray">مهام منجزة</div></div>
-                <div><div className="text-xl font-extrabold text-primary">{reportFor.current_tasks}</div><div className="text-xs text-brand-gray">مهام حالية</div></div>
-                <div><div className="text-xl font-extrabold text-primary">{reportFor.volunteer_hours}</div><div className="text-xs text-brand-gray">ساعات</div></div>
-              </div>
-              {reportTasks === null ? <LoadingState title="جاري تحميل المهام…" /> : reportTasks.length === 0 ? (
-                <p className="text-sm text-brand-gray">لا مهام مسجّلة لهذا المتطوّع.</p>
-              ) : (
-                <ul className="space-y-1 text-sm">
-                  {reportTasks.map((t) => (
-                    <li key={t.id} className="flex flex-wrap items-center gap-2 border-b border-surface-border py-1 last:border-0">
-                      <strong>{t.title}</strong>
-                      <span className="text-xs text-brand-gray">{t.project_name}</span>
-                      <Badge variant={t.status === "مكتملة" ? "success" : "warning"}>{t.status}</Badge>
-                      <span className="text-xs text-brand-gray">{t.progress}%</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          )}
         </>
       )}
 
       {tab === "applications" && (
         <>
-          <p className="mb-3 text-sm text-brand-gray">طلبات التقديم على فرص مشاريع التطوّع (مختلفة عن طلبات الانضمام للحساب).</p>
           <div className="mb-4"><Tabs tabs={APP_TABS} active={appStatus} onChange={setAppStatus} /></div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {apps.length === 0 ? <Card><p className="text-center text-sm text-brand-gray">لا توجد طلبات.</p></Card> :
@@ -308,7 +259,6 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
                     <h3 className="font-bold text-primary">{a.volunteer_name}</h3>
                     <Badge variant={a.status === "مقبول" ? "success" : a.status === "مرفوض" ? "danger" : "warning"}>{a.status}</Badge>
                   </div>
-                  <p className="mb-1 text-xs text-brand-gray">{a.volunteer_email}</p>
                   <p className="mb-3 text-sm text-brand-gray">المشروع: {a.project_title || "—"}</p>
                   {a.status === "قيد المراجعة" && (
                     <div className="flex gap-2">
@@ -323,28 +273,64 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
       )}
 
       {tab === "joins" && (
-        <>
-          <p className="mb-3 text-sm text-brand-gray">طلبات انضمام حسابات جديدة بانتظار اعتماد الإدارة.</p>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {joins.length === 0 ? <Card><p className="text-center text-sm text-brand-gray">لا توجد طلبات معلّقة.</p></Card> :
-              joins.map((r) => (
-                <Card key={r.id}>
-                  <div className="mb-2 flex items-center justify-between">
-                    <h3 className="font-bold text-primary">{r.name || r.email}</h3>
-                    <Badge variant="warning">بانتظار الموافقة</Badge>
-                  </div>
-                  <p className="text-xs text-brand-gray">{r.email} · {r.phone}</p>
-                  <p className="mb-1 text-xs text-brand-gray">{r.location} · {r.qualification}</p>
-                  {r.skills?.length > 0 && <div className="mb-3 mt-2 flex flex-wrap gap-1">{r.skills.map((s) => <Badge key={s} variant="primary">{s}</Badge>)}</div>}
-                  <div className="flex gap-2">
-                    <Button onClick={() => actJoin(r.id, "accept")}>قبول</Button>
-                    <Button variant="secondary" onClick={() => actJoin(r.id, "reject")}>رفض</Button>
-                  </div>
-                </Card>
-              ))}
-          </div>
-        </>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {joins.length === 0 ? <Card><p className="text-center text-sm text-brand-gray">لا توجد طلبات معلّقة.</p></Card> :
+            joins.map((r) => (
+              <Card key={r.id}>
+                <h3 className="mb-2 font-bold text-primary">{r.name || r.email}</h3>
+                <p className="mb-3 text-xs text-brand-gray">{r.email} · {r.location}</p>
+                <div className="flex gap-2">
+                  <Button onClick={() => actJoin(r.id, "accept")}>قبول</Button>
+                  <Button variant="secondary" onClick={() => actJoin(r.id, "reject")}>رفض</Button>
+                </div>
+              </Card>
+            ))}
+        </div>
       )}
+
+      <Modal open={formOpen} onClose={() => setFormOpen(false)} title={editId ? "تعديل متطوّع" : "إضافة متطوّع"} wide>
+        <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={saveVolunteer}>
+          <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+          {!editId && (
+            <Input label="البريد" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required dir="ltr" />
+          )}
+          <Input label="رقم الجوال" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} dir="ltr" />
+          <Input label="الهوية" value={form.national_id} onChange={(e) => setForm({ ...form, national_id: e.target.value })} dir="ltr" />
+          <Input label="المدينة" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+          {!editId && (
+            <Input label="كلمة المرور" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+          )}
+          <div className="flex gap-2 sm:col-span-2">
+            <Button type="submit">{editId ? "حفظ" : "إنشاء"}</Button>
+            <Button type="button" variant="secondary" onClick={() => setFormOpen(false)}>إلغاء</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={!!reportFor} onClose={() => { setReportFor(null); setReportTasks(null); }} title={`تقرير إنجاز: ${reportFor?.name || reportFor?.email || ""}`} wide>
+        {reportFor && (
+          <div>
+            <div className="mb-3 grid grid-cols-3 gap-3 text-center text-sm">
+              <div><div className="text-xl font-extrabold text-primary">{reportFor.completed_tasks}</div><div className="text-xs text-brand-gray">مهام منجزة</div></div>
+              <div><div className="text-xl font-extrabold text-primary">{reportFor.current_tasks}</div><div className="text-xs text-brand-gray">مهام حالية</div></div>
+              <div><div className="text-xl font-extrabold text-primary">{reportFor.volunteer_hours}</div><div className="text-xs text-brand-gray">ساعات</div></div>
+            </div>
+            {reportTasks === null ? <LoadingState title="جاري تحميل المهام…" /> : reportTasks.length === 0 ? (
+              <p className="text-sm text-brand-gray">لا مهام مسجّلة لهذا المتطوّع.</p>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {reportTasks.map((t) => (
+                  <li key={t.id} className="flex flex-wrap items-center gap-2 border-b border-surface-border py-1 last:border-0">
+                    <strong>{t.title}</strong>
+                    <span className="text-xs text-brand-gray">{t.project_name}</span>
+                    <Badge variant={t.status === "مكتملة" ? "success" : "warning"}>{t.status}</Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </Modal>
     </AdminShell>
   );
 }

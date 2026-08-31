@@ -59,9 +59,8 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     blurb: "إدارة المتطوعين وطلبات المشاريع وطلبات الانضمام",
     superAdminOnly: true,
     links: [
-      { to: "/Admin/volunteers", label: "إدارة المتطوعين" },
-      { to: "/Admin/volunteers/applications", label: "طلبات المشاريع" },
-      { to: "/Admin/volunteers/join-requests", label: "طلبات الانضمام" },
+      // تبويبات الصفحة الداخلية تغني عن روابط فرعية مكررة في الشريط
+      { to: "/Admin/volunteers", label: "المتطوعون" },
     ],
   },
   {

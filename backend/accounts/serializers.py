@@ -172,6 +172,8 @@ class AdminUserCreateSerializer(serializers.Serializer):
     role = serializers.CharField(required=True)
     password = serializers.CharField(write_only=True, required=True, style={"input_type": "password"})
     city = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    phone = serializers.CharField(required=False, allow_blank=True, max_length=30)
+    national_id = serializers.CharField(required=False, allow_blank=True, max_length=20)
 
     def validate_email(self, value):
         email = value.lower()
@@ -202,10 +204,12 @@ class AdminUserCreateSerializer(serializers.Serializer):
         profile.name = validated_data["name"]
         profile.role = validated_data["role"]
         profile.city = validated_data.get("city") or ""
+        profile.phone = validated_data.get("phone") or ""
+        profile.national_id = validated_data.get("national_id") or ""
         # متطوّع يُنشأ من الإدارة يكون معتمداً فوراً ليظهر في نطاق المتطوعين
         if profile.role == "user":
             profile.is_approved = True
-        profile.save(update_fields=["name", "role", "city", "is_approved"])
+        profile.save(update_fields=["name", "role", "city", "phone", "national_id", "is_approved"])
         return user
 
 
@@ -214,6 +218,8 @@ class AdminUserUpdateSerializer(serializers.Serializer):
     role = serializers.CharField(required=False)
     is_active = serializers.BooleanField(required=False)
     city = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    phone = serializers.CharField(required=False, allow_blank=True, max_length=30)
+    national_id = serializers.CharField(required=False, allow_blank=True, max_length=20)
 
     def validate_role(self, value):
         if value not in ROLE_VALUES:

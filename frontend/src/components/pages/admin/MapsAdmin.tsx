@@ -6,6 +6,7 @@ import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Badge from "../../ui/Badge";
 import Tabs from "../../ui/Tabs";
+import Modal from "../../ui/Modal";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
@@ -62,6 +63,7 @@ export default function MapsAdmin() {
   const [contributions, setContributions] = useState<AdminContribution[]>([]);
 
   const [mapForm, setMapForm] = useState({ project: "", title: "", visibility: "public" });
+  const [createOpen, setCreateOpen] = useState(false);
   const [layerForm, setLayerForm] = useState({ name: "", visibility: "public" });
   const [fieldForm, setFieldForm] = useState({ key: "", label: "", type: "text", required: false, is_public: true, options: "" });
   const [itemForm, setItemForm] = useState<{ layer: string; name: string; lat: string; lng: string; data: Record<string, string> }>({ layer: "", name: "", lat: "", lng: "", data: {} });
@@ -124,7 +126,7 @@ export default function MapsAdmin() {
   const createMap = async (e: React.FormEvent) => {
     e.preventDefault();
     const ok = await post("/api/maps/admin/maps/", { project: Number(mapForm.project), title: mapForm.title, visibility: mapForm.visibility }, "تم إنشاء الخريطة");
-    if (ok) { setMapForm({ project: "", title: "", visibility: "public" }); void loadMaps(); }
+    if (ok) { setMapForm({ project: "", title: "", visibility: "public" }); setCreateOpen(false); void loadMaps(); }
   };
 
   const togglePublish = async (m: AdminMap) => {
@@ -137,37 +139,45 @@ export default function MapsAdmin() {
 
   return (
     <AdminShell>
-      <h1 className="mb-4 text-2xl font-extrabold text-primary">الخرائط</h1>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-extrabold text-primary">الخرائط</h1>
+        {isSuperAdmin && <Button type="button" onClick={() => setCreateOpen(true)}>إضافة خريطة</Button>}
+      </div>
 
-      {isSuperAdmin && (
-        <Card className="mb-4">
-          <h2 className="mb-2 text-lg font-bold text-primary">إنشاء خريطة (للمشرف العام)</h2>
-          <form className="grid grid-cols-1 gap-3 sm:grid-cols-4" onSubmit={createMap}>
-            <Select label="المشروع" value={mapForm.project} onChange={(e) => setMapForm({ ...mapForm, project: e.target.value })} required>
-              <option value="">اختر…</option>
-              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </Select>
-            <Input label="العنوان" value={mapForm.title} onChange={(e) => setMapForm({ ...mapForm, title: e.target.value })} required />
-            <Select label="الظهور" value={mapForm.visibility} onChange={(e) => setMapForm({ ...mapForm, visibility: e.target.value })}>
-              <option value="public">عامة</option>
-              <option value="mixed">مختلطة</option>
-              <option value="private">خاصة</option>
-            </Select>
-            <div className="flex items-end"><Button type="submit">إنشاء</Button></div>
-          </form>
-        </Card>
-      )}
-
-      <div className="mb-3 flex flex-wrap gap-2">
+      <div className="mb-4 space-y-3">
         {maps.map((m) => (
-          <button key={m.id} type="button"
-            className={`rounded-full px-3 py-1 text-xs font-bold${m.id === selectedId ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
-            onClick={() => setSelectedId(m.id)}>
-            {m.title} — {m.project_name}
-          </button>
+          <Card key={m.id}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <h3 className="truncate text-base font-bold text-primary">{m.title}</h3>
+                <Badge variant={m.published_at ? "success" : "danger"}>{m.published_at ? "نشط" : "غير نشط"}</Badge>
+                <span className="text-xs text-brand-gray">{m.project_name}</span>
+              </div>
+              <Button type="button" variant="secondary" onClick={() => setSelectedId(m.id)}>التفاصيل</Button>
+            </div>
+          </Card>
         ))}
         {maps.length === 0 && <p className="text-brand-gray">لا خرائط ضمن نطاقك.</p>}
       </div>
+
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="إنشاء خريطة">
+        <form className="grid grid-cols-1 gap-3" onSubmit={createMap}>
+          <Select label="المشروع" value={mapForm.project} onChange={(e) => setMapForm({ ...mapForm, project: e.target.value })} required>
+            <option value="">اختر…</option>
+            {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </Select>
+          <Input label="العنوان" value={mapForm.title} onChange={(e) => setMapForm({ ...mapForm, title: e.target.value })} required />
+          <Select label="الظهور" value={mapForm.visibility} onChange={(e) => setMapForm({ ...mapForm, visibility: e.target.value })}>
+            <option value="public">عامة</option>
+            <option value="mixed">مختلطة</option>
+            <option value="private">خاصة</option>
+          </Select>
+          <div className="flex gap-2">
+            <Button type="submit">إنشاء</Button>
+            <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>إلغاء</Button>
+          </div>
+        </form>
+      </Modal>
 
       {selected && (
         <Card>
@@ -177,9 +187,12 @@ export default function MapsAdmin() {
               <Badge variant={selected.published_at ? "success" : "warning"}>{selected.published_at ? "منشورة" : "غير منشورة"}</Badge>
               <Badge>{arLabel(VISIBILITY_LABELS, selected.visibility)}</Badge>
             </div>
-            <Button variant="secondary" onClick={() => togglePublish(selected)}>
-              {selected.published_at ? "إلغاء النشر" : "نشر"}
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => togglePublish(selected)}>
+                {selected.published_at ? "إلغاء النشر" : "نشر"}
+              </Button>
+              <Button variant="secondary" onClick={() => setSelectedId(null)}>إغلاق</Button>
+            </div>
           </div>
 
           <p className="mb-2 text-xs text-brand-gray">الأساسي: طبقات ثم عناصر ثم نشر. المتقدّم: حقول مخصّصة وتعهدات.</p>
@@ -239,8 +252,12 @@ export default function MapsAdmin() {
                   }, "أُضيف الحقل");
                   if (ok) setFieldForm({ key: "", label: "", type: "text", required: false, is_public: true, options: "" });
                 }}>
-                <Input label="المفتاح (لاتيني)" value={fieldForm.key} onChange={(e) => setFieldForm({ ...fieldForm, key: e.target.value })} dir="ltr" required />
-                <Input label="التسمية" value={fieldForm.label} onChange={(e) => setFieldForm({ ...fieldForm, label: e.target.value })} required />
+                <Input label="التسمية" value={fieldForm.label} onChange={(e) => setFieldForm({
+                  ...fieldForm,
+                  label: e.target.value,
+                  key: fieldForm.key && fieldForm.key !== fieldForm.label.replace(/\s+/g, "_") ? fieldForm.key : e.target.value.trim().replace(/\s+/g, "_").replace(/[^\w\u0600-\u06FF_]/g, "").toLowerCase(),
+                })} required />
+                <Input label="المفتاح (تلقائي)" value={fieldForm.key} onChange={(e) => setFieldForm({ ...fieldForm, key: e.target.value })} dir="ltr" required />
                 <Select label="النوع" value={fieldForm.type} onChange={(e) => setFieldForm({ ...fieldForm, type: e.target.value })}>
                   {FIELD_TYPES.map((t) => <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>)}
                 </Select>

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Badge from "../../ui/Badge";
+import Modal from "../../ui/Modal";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
@@ -21,6 +21,7 @@ interface AdminProject {
   my_role: string | null;
   next_actions: string[];
   type: number | null; type_name: string | null; type_slug: string | null;
+  created_at?: string;
 }
 
 const STATUS_BADGE: Record<string, "success" | "warning" | "danger" | "primary"> = {
@@ -55,6 +56,8 @@ export default function PlatformProjects() {
   const [form, setForm] = useState({ name: "", slug: "", description: "", brand_color: "#8b1538", type: "" });
   const [types, setTypes] = useState<ProjectType[]>([]);
   const [memberForm, setMemberForm] = useState({ projectId: 0, userId: "", role: "project_viewer" });
+  const [createOpen, setCreateOpen] = useState(false);
+  const [detailId, setDetailId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,6 +97,7 @@ export default function PlatformProjects() {
     if (res.ok) {
       toast.success({ title: "تم إنشاء المشروع" });
       setForm({ name: "", slug: "", description: "", brand_color: "#8b1538", type: "" });
+      setCreateOpen(false);
       void load();
     } else {
       const data = await res.json().catch(() => ({}));
@@ -240,74 +244,90 @@ export default function PlatformProjects() {
   if (loading) return <AdminShell><LoadingState title="جاري تحميل المشاريع…" /></AdminShell>;
   if (error) return <AdminShell><ErrorState title="تعذّر التحميل" message="تحقّق من الاتصال." /></AdminShell>;
 
+  const detail = projects.find((p) => p.id === detailId) || null;
+
   return (
     <AdminShell>
-      <h1 className="mb-4 text-2xl font-extrabold text-primary">المشاريع</h1>
-
-      {isSuperAdmin && (
-        <Card className="mb-6">
-          <h2 className="mb-1 text-lg font-bold text-primary">إنشاء مشروع جديد</h2>
-          <p className="mb-3 text-xs text-brand-gray">مسار الإنشاء الوحيد للمشرف العام — لا يوجد تبويب إنشاء منفصل.</p>
-          <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={createProject}>
-            <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-            <Input label="المعرّف (slug)" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} dir="ltr" required />
-            <Input label="الوصف" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            <Input label="لون الهوية" type="color" value={form.brand_color} onChange={(e) => setForm({ ...form, brand_color: e.target.value })} />
-            <Select label="النوع (اختياري)" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-              <option value="">— بدون نوع —</option>
-              {types.filter((t) => t.is_active).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </Select>
-            <div className="sm:col-span-2"><Button type="submit">إنشاء</Button></div>
-          </form>
-        </Card>
-      )}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-extrabold text-primary">المشاريع</h1>
+        {isSuperAdmin && (
+          <Button type="button" onClick={() => setCreateOpen(true)}>إضافة مشروع</Button>
+        )}
+      </div>
 
       {projects.some((p) => p.tools.some((t) => t.tool_key === "sponsorships" && t.is_enabled)) && (
         <Card className="mb-6">
           <h2 className="mb-2 text-lg font-bold text-primary">فهرس مشاريع الكفالات</h2>
-          <p className="mb-3 text-xs text-brand-gray">المشاريع التي فعّلت أداة الكفالات — الدورة التشغيلية داخل بوابة المشروع (لا نطاق إداري منفصل).</p>
           <ul className="space-y-2 text-sm">
             {projects.filter((p) => p.tools.some((t) => t.tool_key === "sponsorships" && t.is_enabled)).map((p) => (
               <li key={`sp-${p.id}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border py-2 last:border-0">
                 <span className="font-semibold text-primary">{p.name}</span>
-                <Link to={`/projects/${p.slug}/sponsorships`} className="font-bold text-primary hover:underline">فتح بوابة الكفالات ←</Link>
+                <a href={`/projects/${p.slug}/sponsorships`} target="_blank" rel="noreferrer" className="font-bold text-primary hover:underline">فتح بوابة الكفالات ↗</a>
               </li>
             ))}
           </ul>
         </Card>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {projects.map((p) => (
           <Card key={p.id}>
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span style={{ width: 14, height: 14, borderRadius: 4, background: p.brand_color, display: "inline-block" }} />
-                <h3 className="text-lg font-bold text-primary">{p.name}</h3>
-                <Badge variant={STATUS_BADGE[p.status] || "warning"}>{STATUS_LABELS[p.status] || p.status}</Badge>
-                {p.type_name && <Badge>{p.type_name}</Badge>}
-                {p.is_featured && <Badge variant="success">مميز في الرئيسية</Badge>}
-                {p.my_role && <Badge>{p.my_role === "super_admin" ? "مشرف عام" : p.my_role}</Badge>}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <span style={{ width: 12, height: 12, borderRadius: 3, background: p.brand_color, display: "inline-block" }} />
+                <h3 className="truncate text-base font-bold text-primary">{p.name}</h3>
+                <Badge variant={p.is_active && p.status === "active" ? "success" : "danger"}>
+                  {p.is_active && p.status === "active" ? "نشط" : "غير نشط"}
+                </Badge>
+                <span className="text-xs text-brand-gray">
+                  {p.created_at ? new Date(p.created_at).toLocaleDateString("ar") : "—"}
+                </span>
               </div>
-              <div className="flex items-center gap-3">
-                {p.tools.some((t) => t.tool_key === "sponsorships" && t.is_enabled) && (
-                  <Link to={`/projects/${p.slug}/sponsorships`} className="text-sm font-bold text-primary hover:underline">بوابة الكفالات ←</Link>
-                )}
-                <Link to={`/projects/${p.slug}`} className="text-sm font-bold text-primary hover:underline">صفحة المشروع ←</Link>
-              </div>
+              <Button type="button" variant="secondary" onClick={() => setDetailId(p.id)}>التفاصيل</Button>
+            </div>
+          </Card>
+        ))}
+        {projects.length === 0 && <p className="text-brand-gray">لا مشاريع ضمن نطاقك.</p>}
+      </div>
+
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="إنشاء مشروع جديد" wide>
+        <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={createProject}>
+          <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+          <Input label="رابط مختصر (slug)" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} dir="ltr" required />
+          <Input label="الوصف" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <Input label="لون الهوية" type="color" value={form.brand_color} onChange={(e) => setForm({ ...form, brand_color: e.target.value })} />
+          <Select label="النوع (اختياري)" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+            <option value="">— بدون نوع —</option>
+            {types.filter((t) => t.is_active).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </Select>
+          <div className="flex gap-2 sm:col-span-2">
+            <Button type="submit">إنشاء</Button>
+            <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>إلغاء</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={!!detail} onClose={() => setDetailId(null)} title={detail?.name || "تفاصيل المشروع"} wide>
+        {detail && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={STATUS_BADGE[detail.status] || "warning"}>{STATUS_LABELS[detail.status] || detail.status}</Badge>
+              {detail.type_name && <Badge>{detail.type_name}</Badge>}
+              {detail.is_featured && <Badge variant="success">مميز</Badge>}
+              <a href={`/projects/${detail.slug}`} target="_blank" rel="noreferrer" className="text-sm font-bold text-primary hover:underline">صفحة المشروع ↗</a>
+              {detail.tools.some((t) => t.tool_key === "sponsorships" && t.is_enabled) && (
+                <a href={`/projects/${detail.slug}/sponsorships`} target="_blank" rel="noreferrer" className="text-sm font-bold text-primary hover:underline">بوابة الكفالات ↗</a>
+              )}
             </div>
 
             {isSuperAdmin && (
-              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-surface-border p-3">
-                <span className="text-xs font-bold text-brand-gray">الحالة: {STATUS_LABELS[p.status] || p.status} —</span>
-                {p.next_actions.length === 0 && <span className="text-xs text-brand-gray">لا إجراءات متاحة</span>}
-                {p.next_actions.map((action) => (
-                  <button
-                    key={action}
-                    type="button"
-                    className="rounded-full border border-surface-border bg-surface px-3 py-1 text-xs font-bold text-primary hover:bg-primary hover:text-white"
-                    onClick={() => void runTransition(p, action)}
-                  >
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-surface-border p-3">
+                <span className="text-xs font-bold text-brand-gray">دورة الحياة —</span>
+                {detail.next_actions.length === 0 && <span className="text-xs text-brand-gray">لا إجراءات</span>}
+                {detail.next_actions.map((action) => (
+                  <button key={action} type="button"
+                    className="rounded-full border border-surface-border bg-surface px-3 py-1 text-xs font-bold text-primary"
+                    onClick={() => void runTransition(detail, action)}>
                     {LIFECYCLE_ACTION_LABELS[action] || action}
                   </button>
                 ))}
@@ -315,101 +335,78 @@ export default function PlatformProjects() {
             )}
 
             {isSuperAdmin && (
-              <div className="mb-3 flex flex-wrap items-end gap-3 rounded-lg border border-surface-border p-3">
+              <div className="flex flex-wrap items-end gap-3 rounded-lg border border-surface-border p-3">
                 <div className="w-48">
-                  <Select label="النوع" value={p.type ? String(p.type) : ""} onChange={(e) => void changeType(p, e.target.value)}>
+                  <Select label="النوع" value={detail.type ? String(detail.type) : ""} onChange={(e) => void changeType(detail, e.target.value)}>
                     <option value="">— بدون نوع —</option>
-                    {types.filter((t) => t.is_active || t.id === p.type).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    {types.filter((t) => t.is_active || t.id === detail.type).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </Select>
                 </div>
-                <button
-                  type="button"
-                  className={`rounded-full px-3 py-1 text-xs font-bold${p.is_featured ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
-                  onClick={() => void toggleFeatured(p)}
-                >
-                  {p.is_featured ? "مميز في الرئيسية ✓" : "تمييز للرئيسية"}
+                <button type="button"
+                  className={`rounded-full px-3 py-1 text-xs font-bold${detail.is_featured ? " bg-primary text-white" : " border border-surface-border bg-surface"}`}
+                  onClick={() => void toggleFeatured(detail)}>
+                  {detail.is_featured ? "مميز ✓" : "تمييز للرئيسية"}
                 </button>
-                {p.is_featured && (
-                  <div className="w-28">
-                    <Input
-                      label="ترتيب العرض"
-                      type="number"
-                      min={0}
-                      dir="ltr"
-                      defaultValue={String(p.featured_order ?? 0)}
-                      key={`order-${p.id}-${p.featured_order}`}
-                      onBlur={(e) => {
-                        const next = Number(e.target.value);
-                        if (!Number.isNaN(next) && next !== p.featured_order) {
-                          void saveFeaturedOrder(p, Math.max(0, next));
-                        }
-                      }}
-                    />
-                  </div>
-                )}
               </div>
             )}
 
-            <div className="mb-3 rounded-lg border border-surface-border p-3">
-              <span className="text-xs font-bold text-brand-gray">رابط التبرع (HTTPS):</span>
-              {(isSuperAdmin || p.my_role === "project_admin") ? (
+            <div className="rounded-lg border border-surface-border p-3">
+              <span className="text-xs font-bold text-brand-gray">رابط التبرع:</span>
+              {(isSuperAdmin || detail.my_role === "project_admin") ? (
                 <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(e) => {
                   e.preventDefault();
-                  const donation_url = editDonation.projectId === p.id ? editDonation.donation_url : (p.donation_url || "");
-                  const donation_label = editDonation.projectId === p.id ? editDonation.donation_label : (p.donation_label || "تبرع الآن");
-                  void saveDonation(p, { donation_url, donation_label });
+                  const donation_url = editDonation.projectId === detail.id ? editDonation.donation_url : (detail.donation_url || "");
+                  const donation_label = editDonation.projectId === detail.id ? editDonation.donation_label : (detail.donation_label || "تبرع الآن");
+                  void saveDonation(detail, { donation_url, donation_label });
                 }}
                   onFocus={() => {
-                    if (editDonation.projectId !== p.id) {
-                      setEditDonation({ projectId: p.id, donation_url: p.donation_url || "", donation_label: p.donation_label || "تبرع الآن" });
+                    if (editDonation.projectId !== detail.id) {
+                      setEditDonation({ projectId: detail.id, donation_url: detail.donation_url || "", donation_label: detail.donation_label || "تبرع الآن" });
                     }
                   }}>
                   <div className="min-w-[200px] flex-1">
-                    <Input label="رابط التبرع" dir="ltr" value={editDonation.projectId === p.id ? editDonation.donation_url : (p.donation_url || "")}
-                      onChange={(e) => setEditDonation({ projectId: p.id, donation_url: e.target.value, donation_label: editDonation.projectId === p.id ? editDonation.donation_label : (p.donation_label || "تبرع الآن") })} />
+                    <Input label="رابط التبرع" dir="ltr" value={editDonation.projectId === detail.id ? editDonation.donation_url : (detail.donation_url || "")}
+                      onChange={(e) => setEditDonation({ projectId: detail.id, donation_url: e.target.value, donation_label: editDonation.projectId === detail.id ? editDonation.donation_label : (detail.donation_label || "تبرع الآن") })} />
                   </div>
                   <div className="w-36">
-                    <Input label="نص الزر" value={editDonation.projectId === p.id ? editDonation.donation_label : (p.donation_label || "تبرع الآن")}
-                      onChange={(e) => setEditDonation({ projectId: p.id, donation_url: editDonation.projectId === p.id ? editDonation.donation_url : (p.donation_url || ""), donation_label: e.target.value })} />
+                    <Input label="نص الزر" value={editDonation.projectId === detail.id ? editDonation.donation_label : (detail.donation_label || "تبرع الآن")}
+                      onChange={(e) => setEditDonation({ projectId: detail.id, donation_url: editDonation.projectId === detail.id ? editDonation.donation_url : (detail.donation_url || ""), donation_label: e.target.value })} />
                   </div>
                   <Button type="submit" variant="secondary">حفظ</Button>
                 </form>
               ) : (
-                <p className="mt-1 text-sm text-brand-gray">{p.donation_url || "— غير مُعرَّف —"}</p>
+                <p className="mt-1 text-sm text-brand-gray">{detail.donation_url || "—"}</p>
               )}
             </div>
 
-            <div className="mb-3">
+            <div>
               <span className="text-xs font-bold text-brand-gray">الأدوات: </span>
               {ALL_TOOLS.map((toolKey) => {
-                const tool = p.tools.find((t) => t.tool_key === toolKey);
+                const tool = detail.tools.find((t) => t.tool_key === toolKey);
                 const enabled = !!tool?.is_enabled;
                 return (
                   <span key={toolKey} className="m-1 inline-flex items-center gap-1">
                     <button type="button" disabled={!isSuperAdmin}
-                      className={`rounded-full px-3 py-1 text-xs font-bold${enabled ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
-                      onClick={() => isSuperAdmin && setTool(p, toolKey, !enabled)}>
+                      className={`rounded-full px-3 py-1 text-xs font-bold${enabled ? " bg-primary text-white" : " border border-surface-border bg-surface"}`}
+                      onClick={() => isSuperAdmin && setTool(detail, toolKey, !enabled)}>
                       {TOOL_LABELS[toolKey]}
                     </button>
                     {isSuperAdmin && enabled && TOOL_CONFIG_KEYS[toolKey] && (
                       <button type="button" className="text-[11px] text-primary underline"
-                        onClick={() => setCfgEdit({ projectId: p.id, toolKey, text: JSON.stringify(tool?.config ?? {}, null, 2) })}>
+                        onClick={() => setCfgEdit({ projectId: detail.id, toolKey, text: JSON.stringify(tool?.config ?? {}, null, 2) })}>
                         إعدادات
                       </button>
                     )}
                   </span>
                 );
               })}
-              {cfgEdit && cfgEdit.projectId === p.id && (
+              {cfgEdit && cfgEdit.projectId === detail.id && (
                 <div className="mt-2 rounded-lg border border-surface-border p-3">
-                  <p className="mb-1 text-xs font-bold text-primary">
-                    إعدادات «{TOOL_LABELS[cfgEdit.toolKey]}» — المفاتيح: {TOOL_CONFIG_KEYS[cfgEdit.toolKey]}
-                  </p>
                   <textarea dir="ltr" className="input-field min-h-[6rem] font-mono text-xs"
                     value={cfgEdit.text}
                     onChange={(e) => setCfgEdit({ ...cfgEdit, text: e.target.value })} />
                   <div className="mt-2 flex gap-2">
-                    <Button type="button" onClick={() => void saveToolConfig(p, cfgEdit.toolKey, cfgEdit.text)}>حفظ الإعدادات</Button>
+                    <Button type="button" onClick={() => void saveToolConfig(detail, cfgEdit.toolKey, cfgEdit.text)}>حفظ</Button>
                     <Button type="button" variant="secondary" onClick={() => setCfgEdit(null)}>إلغاء</Button>
                   </div>
                 </div>
@@ -419,24 +416,24 @@ export default function PlatformProjects() {
             <div>
               <span className="text-xs font-bold text-brand-gray">الأعضاء:</span>
               <ul className="mt-1 space-y-1 text-sm">
-                {p.members.map((m) => (
+                {detail.members.map((m) => (
                   <li key={m.id} className="flex items-center gap-2">
-                    <span>{m.username} ({m.email || "بلا بريد"}) — {MEMBER_ROLES.find((r) => r.value === m.role)?.label || m.role}</span>
-                    {(isSuperAdmin || p.my_role === "project_admin" || p.my_role === "super_admin") && (
-                      <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => removeMember(p, m.user)}>إزالة</button>
+                    <span>{m.username} — {MEMBER_ROLES.find((r) => r.value === m.role)?.label || m.role}</span>
+                    {(isSuperAdmin || detail.my_role === "project_admin" || detail.my_role === "super_admin") && (
+                      <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => removeMember(detail, m.user)}>إزالة</button>
                     )}
                   </li>
                 ))}
-                {p.members.length === 0 && <li className="text-brand-gray">لا أعضاء بعد.</li>}
+                {detail.members.length === 0 && <li className="text-brand-gray">لا أعضاء.</li>}
               </ul>
-              {(isSuperAdmin || p.my_role === "project_admin" || p.my_role === "super_admin") && (
-                <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(e) => { setMemberForm((f) => ({ ...f, projectId: p.id })); addMember(e); }}
-                  onFocus={() => setMemberForm((f) => ({ ...f, projectId: p.id }))}>
-                  <div className="w-32"><Input label="معرّف المستخدم" value={memberForm.projectId === p.id ? memberForm.userId : ""}
-                    onChange={(e) => setMemberForm({ ...memberForm, projectId: p.id, userId: e.target.value })} dir="ltr" /></div>
+              {(isSuperAdmin || detail.my_role === "project_admin" || detail.my_role === "super_admin") && (
+                <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(e) => { setMemberForm((f) => ({ ...f, projectId: detail.id })); addMember(e); }}
+                  onFocus={() => setMemberForm((f) => ({ ...f, projectId: detail.id }))}>
+                  <div className="w-32"><Input label="معرّف المستخدم" value={memberForm.projectId === detail.id ? memberForm.userId : ""}
+                    onChange={(e) => setMemberForm({ ...memberForm, projectId: detail.id, userId: e.target.value })} dir="ltr" /></div>
                   <div className="w-36">
-                    <Select label="الدور" value={memberForm.projectId === p.id ? memberForm.role : "project_viewer"}
-                      onChange={(e) => setMemberForm({ ...memberForm, projectId: p.id, role: e.target.value })}>
+                    <Select label="الدور" value={memberForm.projectId === detail.id ? memberForm.role : "project_viewer"}
+                      onChange={(e) => setMemberForm({ ...memberForm, projectId: detail.id, role: e.target.value })}>
                       {MEMBER_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </Select>
                   </div>
@@ -444,10 +441,9 @@ export default function PlatformProjects() {
                 </form>
               )}
             </div>
-          </Card>
-        ))}
-        {projects.length === 0 && <p className="text-brand-gray">لا مشاريع ضمن نطاقك.</p>}
-      </div>
+          </div>
+        )}
+      </Modal>
     </AdminShell>
   );
 }
