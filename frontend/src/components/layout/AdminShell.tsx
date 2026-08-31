@@ -97,6 +97,24 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           const expanded = openDomain === domain.id || domainActive;
           const childLinks = domain.links.filter((l) => isGlobalAdmin || l.staffVisible);
           if (childLinks.length === 0) return null;
+          // رابط فرعي واحد يطابق جذر النطاق = تكرار للشريط؛ يُعرض كرابط مباشر بلا تبويب داخلي
+          const sole = childLinks.length === 1 ? childLinks[0] : null;
+          const flatOnly = !!sole && sole.to.toLowerCase() === domain.to.toLowerCase();
+          if (flatOnly && sole) {
+            return (
+              <Link
+                key={domain.id}
+                to={sole.to}
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold"
+                style={{
+                  background: domainActive ? "var(--tmkeen-primary)" : "transparent",
+                  color: domainActive ? "#fff" : "var(--tmkeen-primary)",
+                }}
+              >
+                {domain.label}
+              </Link>
+            );
+          }
           return (
             <div key={domain.id} className="rounded-lg">
               <button

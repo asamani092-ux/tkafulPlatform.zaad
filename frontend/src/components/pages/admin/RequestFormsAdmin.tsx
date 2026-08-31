@@ -7,6 +7,7 @@ import Select from "../../ui/Select";
 import Badge from "../../ui/Badge";
 import Tabs from "../../ui/Tabs";
 import Modal from "../../ui/Modal";
+import CompactListCard from "../../ui/CompactListCard";
 import { LoadingState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
@@ -110,7 +111,11 @@ export default function RequestFormsAdmin() {
 
   const toggleActive = async (f: RForm) => {
     const res = await authFetch(`/api/admin/request-forms/${f.id}/`, { method: "PATCH", body: JSON.stringify({ is_active: !f.is_active }) });
-    if (res.ok) { toast.success({ title: f.is_active ? "أُلغي التفعيل" : "تم التفعيل" }); void load(); }
+    if (res.ok) {
+      toast.success({ title: f.is_active ? "أُلغي التفعيل" : "تم التفعيل" });
+      if (selected?.id === f.id) setSelected({ ...f, is_active: !f.is_active });
+      void load();
+    }
   };
 
   const removeForm = async (f: RForm) => {
@@ -147,22 +152,14 @@ export default function RequestFormsAdmin() {
         loading ? <LoadingState title="جاري التحميل…" /> : (
           <div className="space-y-3">
             {forms.map((f) => (
-              <Card key={f.id}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                    <h3 className="truncate text-base font-bold text-primary">{f.title}</h3>
-                    <Badge variant={f.is_active ? "success" : "danger"}>{f.is_active ? "نشط" : "غير نشط"}</Badge>
-                    <span className="text-xs text-brand-gray">
-                      {f.created_at ? new Date(f.created_at).toLocaleDateString("ar") : "—"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-2 text-xs font-bold">
-                    <Button type="button" variant="secondary" onClick={() => openSubmissions(f)}>التفاصيل ({f.submissions_count})</Button>
-                    <button type="button" className="text-amber-700 hover:underline" onClick={() => toggleActive(f)}>{f.is_active ? "تعطيل" : "تفعيل"}</button>
-                    <button type="button" className="text-red-600 hover:underline" onClick={() => removeForm(f)}>حذف</button>
-                  </div>
-                </div>
-              </Card>
+              <CompactListCard
+                key={f.id}
+                name={f.title}
+                active={f.is_active}
+                createdAt={f.created_at}
+                onDetails={() => openSubmissions(f)}
+                detailsLabel={`التفاصيل (${f.submissions_count})`}
+              />
             ))}
             {forms.length === 0 && <p className="text-brand-gray">لا نماذج بعد — اضغط «إضافة نموذج».</p>}
           </div>
@@ -173,10 +170,16 @@ export default function RequestFormsAdmin() {
         <div className="space-y-3">
           {!selected && <p className="text-brand-gray">اختر نموذجاً من تبويب «النماذج» لعرض طلباته.</p>}
           {selected && (
-            <p className="text-sm text-brand-gray">
-              مراجعة الطلبات: قبول / رفض / إنجاز تغيّر حالة الطلب للمتابعة الإدارية.
-              الرابط العام: <code dir="ltr">/forms/{selected.slug}</code>
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-brand-gray">
+                مراجعة الطلبات: قبول / رفض / إنجاز تغيّر حالة الطلب للمتابعة الإدارية.
+                الرابط العام: <code dir="ltr">/forms/{selected.slug}</code>
+              </p>
+              <div className="flex flex-wrap gap-2 text-xs font-bold">
+                <button type="button" className="text-amber-700 hover:underline" onClick={() => toggleActive(selected)}>{selected.is_active ? "تعطيل" : "تفعيل"}</button>
+                <button type="button" className="text-red-600 hover:underline" onClick={() => removeForm(selected)}>حذف</button>
+              </div>
+            </div>
           )}
           {selected && subs.length === 0 && <p className="text-brand-gray">لا طلبات على هذا النموذج بعد.</p>}
           {subs.map((s) => (

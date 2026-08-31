@@ -39,6 +39,7 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     to: "/Admin/projects",
     blurb: "قائمة المشاريع والأدوات وروابط التبرع والإنشاء",
     links: [
+      // رابط واحد = جذر النطاق؛ الشريط يعرض النطاق مباشرة بلا فرع مكرر
       { to: "/Admin/projects", label: "كل المشاريع", staffVisible: true },
     ],
   },
