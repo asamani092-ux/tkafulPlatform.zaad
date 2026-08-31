@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { passwordErrorsToAr } from "/workspace/frontend/src/utils/passwordErrors";
+import { passwordErrorsToAr } from "./passwordErrors";
 describe("pw", () => {
   it("ar", () => {
     expect(passwordErrorsToAr(["This password is too common."])).toContain("شائعة");
