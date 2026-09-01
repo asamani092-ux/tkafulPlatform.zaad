@@ -5,6 +5,7 @@ import Button from "../../ui/Button";
 import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Badge from "../../ui/Badge";
+import Textarea from "../../ui/Textarea";
 import Modal from "../../ui/Modal";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
@@ -402,9 +403,15 @@ export default function PlatformProjects() {
               })}
               {cfgEdit && cfgEdit.projectId === detail.id && (
                 <div className="mt-2 rounded-lg border border-surface-border p-3">
-                  <textarea dir="ltr" className="input-field min-h-[6rem] font-mono text-xs"
+                  <Textarea
+                    label={`إعداد الأداة (JSON) — ${TOOL_LABELS[cfgEdit.toolKey] || cfgEdit.toolKey}`}
+                    hint={TOOL_CONFIG_KEYS[cfgEdit.toolKey]}
+                    dir="ltr"
+                    rows={5}
+                    className="font-mono text-xs"
                     value={cfgEdit.text}
-                    onChange={(e) => setCfgEdit({ ...cfgEdit, text: e.target.value })} />
+                    onChange={(e) => setCfgEdit({ ...cfgEdit, text: e.target.value })}
+                  />
                   <div className="mt-2 flex gap-2">
                     <Button type="button" onClick={() => void saveToolConfig(detail, cfgEdit.toolKey, cfgEdit.text)}>حفظ</Button>
                     <Button type="button" variant="secondary" onClick={() => setCfgEdit(null)}>إلغاء</Button>

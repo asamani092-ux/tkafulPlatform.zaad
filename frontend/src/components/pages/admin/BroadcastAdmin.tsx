@@ -1,6 +1,8 @@
 import { useState } from "react";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
+import Input from "../../ui/Input";
+import Textarea from "../../ui/Textarea";
 import Select from "../../ui/Select";
 import Button from "../../ui/Button";
 import { useToast } from "../../../contexts/ToastContext";
@@ -58,16 +60,13 @@ export default function BroadcastAdmin() {
       <h1 className="mb-4 text-2xl font-bold text-primary">بث إشعار</h1>
       <Card>
         <form onSubmit={(e) => void submit(e)} className="max-w-lg space-y-4">
-          <div>
-            <label className="label-field" htmlFor="broadcast-msg">الرسالة</label>
-            <textarea
-              id="broadcast-msg"
-              className="input-field min-h-[6rem]"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              required
-            />
-          </div>
+          <Textarea
+            label="الرسالة"
+            rows={4}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            required
+          />
           <Select label="المستلمون" value={role} onChange={(e) => setRole(e.target.value)}>
             <option value="">الجميع</option>
             {ROLE_OPTIONS.map((o) => (
@@ -79,10 +78,7 @@ export default function BroadcastAdmin() {
               <option key={t} value={t}>{notificationTypeLabel(t)}</option>
             ))}
           </Select>
-          <div>
-            <label className="label-field" htmlFor="broadcast-link">رابط اختياري</label>
-            <input id="broadcast-link" className="input-field" value={link} onChange={(e) => setLink(e.target.value)} placeholder="/Admin/requests" />
-          </div>
+          <Input label="رابط اختياري" dir="ltr" value={link} onChange={(e) => setLink(e.target.value)} placeholder="/Admin/requests" />
           <Button type="submit" disabled={busy}>{busy ? "جاري الإرسال…" : "إرسال"}</Button>
         </form>
       </Card>

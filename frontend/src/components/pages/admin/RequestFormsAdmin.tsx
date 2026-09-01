@@ -5,6 +5,7 @@ import Button from "../../ui/Button";
 import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Badge from "../../ui/Badge";
+import Checkbox from "../../ui/Checkbox";
 import Tabs from "../../ui/Tabs";
 import Modal from "../../ui/Modal";
 import { LoadingState } from "../../feedback/PageStates";
@@ -156,10 +157,10 @@ export default function RequestFormsAdmin() {
                       {f.created_at ? new Date(f.created_at).toLocaleDateString("ar") : "—"}
                     </span>
                   </div>
-                  <div className="flex flex-wrap gap-2 text-xs font-bold">
-                    <Button type="button" variant="secondary" onClick={() => openSubmissions(f)}>التفاصيل ({f.submissions_count})</Button>
-                    <button type="button" className="text-amber-700 hover:underline" onClick={() => toggleActive(f)}>{f.is_active ? "تعطيل" : "تفعيل"}</button>
-                    <button type="button" className="text-red-600 hover:underline" onClick={() => removeForm(f)}>حذف</button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="secondary" size="sm" onClick={() => openSubmissions(f)}>التفاصيل ({f.submissions_count})</Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => toggleActive(f)}>{f.is_active ? "تعطيل" : "تفعيل"}</Button>
+                    <Button type="button" variant="danger" size="sm" onClick={() => removeForm(f)}>حذف</Button>
                   </div>
                 </div>
               </Card>
@@ -195,10 +196,10 @@ export default function RequestFormsAdmin() {
                   </div>
                 ))}
               </dl>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
-                <button type="button" className="text-green-700 hover:underline" onClick={() => setSubStatus(s, "APPROVED")}>قبول</button>
-                <button type="button" className="text-red-600 hover:underline" onClick={() => setSubStatus(s, "REJECTED")}>رفض</button>
-                <button type="button" className="text-primary hover:underline" onClick={() => setSubStatus(s, "DONE")}>إنجاز</button>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button type="button" variant="secondary" size="sm" onClick={() => setSubStatus(s, "APPROVED")}>قبول</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setSubStatus(s, "REJECTED")}>رفض</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setSubStatus(s, "DONE")}>إنجاز</Button>
               </div>
             </Card>
           ))}
@@ -243,7 +244,7 @@ export default function RequestFormsAdmin() {
                   <strong>{f.label}</strong>
                   <Badge>{FIELD_TYPE_LABELS[f.type]}</Badge>
                   {f.required && <Badge variant="warning">إلزامي</Badge>}
-                  <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => setFields(fields.filter((_, j) => j !== i))}>إزالة</button>
+                  <Button type="button" variant="danger" size="sm" onClick={() => setFields(fields.filter((_, j) => j !== i))}>إزالة</Button>
                 </div>
               ))}
             </div>
@@ -255,7 +256,7 @@ export default function RequestFormsAdmin() {
               {fieldDraft.type === "select" && (
                 <Input label="الخيارات (بفواصل)" value={optionsText} onChange={(e) => setOptionsText(e.target.value)} />
               )}
-              <label className="flex items-end gap-1 text-sm"><input type="checkbox" checked={fieldDraft.required} onChange={(e) => setFieldDraft({ ...fieldDraft, required: e.target.checked })} /> إلزامي</label>
+              <div className="flex items-end"><Checkbox label="إلزامي" checked={fieldDraft.required} onChange={(e) => setFieldDraft({ ...fieldDraft, required: e.target.checked })} /></div>
               <div className="flex items-end"><Button type="button" variant="secondary" onClick={addField}>إضافة حقل</Button></div>
             </div>
           </div>

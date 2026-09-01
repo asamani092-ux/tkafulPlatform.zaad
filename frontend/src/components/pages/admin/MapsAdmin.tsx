@@ -5,6 +5,7 @@ import Button from "../../ui/Button";
 import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Badge from "../../ui/Badge";
+import Checkbox from "../../ui/Checkbox";
 import Tabs from "../../ui/Tabs";
 import Modal from "../../ui/Modal";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
@@ -264,9 +265,9 @@ export default function MapsAdmin() {
                 {fieldForm.type === "select" && (
                   <Input label="الخيارات (مفصولة بفواصل)" value={fieldForm.options} onChange={(e) => setFieldForm({ ...fieldForm, options: e.target.value })} />
                 )}
-                <div className="flex items-end gap-3 text-sm">
-                  <label className="flex items-center gap-1"><input type="checkbox" checked={fieldForm.required} onChange={(e) => setFieldForm({ ...fieldForm, required: e.target.checked })} /> إلزامي</label>
-                  <label className="flex items-center gap-1"><input type="checkbox" checked={fieldForm.is_public} onChange={(e) => setFieldForm({ ...fieldForm, is_public: e.target.checked })} /> عام</label>
+                <div className="flex flex-wrap items-end gap-3 text-sm">
+                  <Checkbox label="إلزامي" checked={fieldForm.required} onChange={(e) => setFieldForm({ ...fieldForm, required: e.target.checked })} />
+                  <Checkbox label="عام" checked={fieldForm.is_public} onChange={(e) => setFieldForm({ ...fieldForm, is_public: e.target.checked })} />
                 </div>
                 <div className="flex items-end"><Button type="submit" variant="secondary">إضافة حقل</Button></div>
               </form>
@@ -358,15 +359,15 @@ export default function MapsAdmin() {
                   <Badge variant={c.status === "fulfilled" ? "success" : c.status === "cancelled" ? "danger" : "warning"}>{arLabel(CONTRIB_STATUS_LABELS, c.status)}</Badge>
                   {c.status === "pending" && (
                     <>
-                      <button type="button" className="text-xs font-bold text-green-700 hover:underline"
-                        onClick={() => post(`/api/maps/admin/contributions/${c.id}/approve/`, {}, "تم الاعتماد")}>اعتماد</button>
-                      <button type="button" className="text-xs font-bold text-red-600 hover:underline"
-                        onClick={() => post(`/api/maps/admin/contributions/${c.id}/cancel/`, {}, "تم الإلغاء")}>إلغاء</button>
+                      <Button type="button" variant="secondary" size="sm"
+                        onClick={() => post(`/api/maps/admin/contributions/${c.id}/approve/`, {}, "تم الاعتماد")}>اعتماد</Button>
+                      <Button type="button" variant="danger" size="sm"
+                        onClick={() => post(`/api/maps/admin/contributions/${c.id}/cancel/`, {}, "تم الإلغاء")}>إلغاء</Button>
                     </>
                   )}
                   {c.status === "approved" && (
-                    <button type="button" className="text-xs font-bold text-primary hover:underline"
-                      onClick={() => post(`/api/maps/admin/contributions/${c.id}/fulfill/`, {}, "تم التنفيذ")}>تنفيذ</button>
+                    <Button type="button" variant="ghost" size="sm"
+                      onClick={() => post(`/api/maps/admin/contributions/${c.id}/fulfill/`, {}, "تم التنفيذ")}>تنفيذ</Button>
                   )}
                 </div>
               ))}

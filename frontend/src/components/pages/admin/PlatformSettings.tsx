@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
+import Textarea from "../../ui/Textarea";
+import Checkbox from "../../ui/Checkbox";
+import Switch from "../../ui/Switch";
 import Button from "../../ui/Button";
 import Tabs from "../../ui/Tabs";
 import { LoadingState, ErrorState, EmptyState } from "../../feedback/PageStates";
@@ -18,15 +21,6 @@ interface StaticPageRow {
   title: string;
   body: string;
   is_published: boolean;
-}
-
-function ToggleRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-surface-border p-3">
-      <span className="font-bold text-primary">{label}</span>
-      <input type="checkbox" className="h-5 w-5 accent-[var(--tmkeen-primary)]" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-    </label>
-  );
 }
 
 export default function PlatformSettingsPage() {
@@ -148,7 +142,7 @@ export default function PlatformSettingsPage() {
                 ["show_services", "إظهار الخدمات"],
                 ["show_volunteering", "إظهار التطوّع"],
               ] as [FlagKey, string][]).map(([k, label]) => (
-                <ToggleRow key={k} label={label} checked={form[k]} onChange={(v) => setForm({ ...form, [k]: v })} />
+                <Switch key={k} label={label} checked={form[k]} onChange={(v) => setForm({ ...form, [k]: v })} />
               ))}
             </div>
           </Card>
@@ -165,12 +159,8 @@ export default function PlatformSettingsPage() {
                 {edit?.slug === p.slug ? (
                   <div className="space-y-2">
                     <Input label="العنوان" value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} />
-                    <label className="label-field">النص</label>
-                    <textarea className="input-field min-h-[8rem]" value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })} />
-                    <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={edit.is_published} onChange={(e) => setEdit({ ...edit, is_published: e.target.checked })} />
-                      منشورة
-                    </label>
+                    <Textarea label="النص" rows={6} value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })} />
+                    <Checkbox label="منشورة" checked={edit.is_published} onChange={(e) => setEdit({ ...edit, is_published: e.target.checked })} />
                     <div className="flex gap-2">
                       <Button type="button" onClick={() => void savePage()}>حفظ</Button>
                       <Button type="button" variant="secondary" onClick={() => setEdit(null)}>إلغاء</Button>

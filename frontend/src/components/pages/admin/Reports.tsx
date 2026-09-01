@@ -120,9 +120,9 @@ export default function Reports() {
                       <td>{r.total_projects}</td><td>{r.total_volunteers}</td><td>{r.total_tasks}</td>
                       <td className="text-xs text-brand-gray">{new Date(r.generated_at).toLocaleString("ar")}</td>
                       <td>
-                        <div className="flex flex-wrap gap-2 text-xs font-bold">
-                          <button type="button" className="text-primary hover:underline" onClick={() => openDetail(r)}>عرض</button>
-                          <button type="button" className="text-red-600 hover:underline" onClick={() => remove(r.id)}>حذف</button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" variant="secondary" size="sm" onClick={() => openDetail(r)}>عرض</Button>
+                          <Button type="button" variant="danger" size="sm" onClick={() => remove(r.id)}>حذف</Button>
                         </div>
                       </td>
                     </tr>
@@ -136,15 +136,15 @@ export default function Reports() {
             <Card className="print-area">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-lg font-bold text-primary">{detail.meta.title}</h2>
-                <div className="flex flex-wrap gap-2 text-xs font-bold no-print">
-                  <button type="button" className="text-primary hover:underline" onClick={() => window.print()}>طباعة / PDF</button>
+                <div className="flex flex-wrap gap-2 no-print">
+                  <Button type="button" variant="secondary" size="sm" onClick={() => window.print()}>طباعة / PDF</Button>
                   {detail.data.volunteers?.list && detail.data.volunteers.list.length > 0 && (
-                    <button type="button" className="text-green-700 hover:underline" onClick={() => downloadCsv(`volunteers_${detail.meta.id}.csv`, detail.data.volunteers!.list!)}>تنزيل المتطوعين (CSV)</button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => downloadCsv(`volunteers_${detail.meta.id}.csv`, detail.data.volunteers!.list!)}>تنزيل المتطوعين (CSV)</Button>
                   )}
                   {detail.data.projects?.list && detail.data.projects.list.length > 0 && (
-                    <button type="button" className="text-green-700 hover:underline" onClick={() => downloadCsv(`projects_${detail.meta.id}.csv`, detail.data.projects!.list!)}>تنزيل المشاريع (CSV)</button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => downloadCsv(`projects_${detail.meta.id}.csv`, detail.data.projects!.list!)}>تنزيل المشاريع (CSV)</Button>
                   )}
-                  <button type="button" className="text-brand-gray hover:underline" onClick={() => setDetail(null)}>إغلاق</button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setDetail(null)}>إغلاق</Button>
                 </div>
               </div>
               {detail.data.summary && (
@@ -181,7 +181,7 @@ export default function Reports() {
         <Card>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-bold text-primary">أداء المتطوعين</h2>
-            {perf && perf.length > 0 && <button type="button" className="text-xs font-bold text-green-700 hover:underline" onClick={() => downloadCsv("volunteers_performance.csv", perf as unknown as Array<Record<string, unknown>>)}>تنزيل CSV</button>}
+            {perf && perf.length > 0 && <Button type="button" variant="ghost" size="sm" onClick={() => downloadCsv("volunteers_performance.csv", perf as unknown as Array<Record<string, unknown>>)}>تنزيل CSV</Button>}
           </div>
           {perf === null ? <LoadingState title="جاري التحميل…" /> : (
             <div className="overflow-x-auto">
@@ -205,7 +205,7 @@ export default function Reports() {
         <Card>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-bold text-primary">تقدّم المشاريع</h2>
-            {progress && progress.length > 0 && <button type="button" className="text-xs font-bold text-green-700 hover:underline" onClick={() => downloadCsv("projects_progress.csv", progress as unknown as Array<Record<string, unknown>>)}>تنزيل CSV</button>}
+            {progress && progress.length > 0 && <Button type="button" variant="ghost" size="sm" onClick={() => downloadCsv("projects_progress.csv", progress as unknown as Array<Record<string, unknown>>)}>تنزيل CSV</Button>}
           </div>
           {progress === null ? <LoadingState title="جاري التحميل…" /> : (
             <div className="space-y-2">

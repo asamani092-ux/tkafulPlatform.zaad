@@ -230,12 +230,12 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
                         </td>
                         <td>
                           <div className="flex flex-wrap gap-2">
-                            <button type="button" title="تقرير" className="rounded p-1 text-primary hover:bg-surface-muted" onClick={() => openReport(v)}><FileText size={16} /></button>
-                            <button type="button" title="تعديل" className="rounded p-1 text-primary hover:bg-surface-muted" onClick={() => startEdit(v)}><Pencil size={16} /></button>
-                            <button type="button" title={v.is_active === false ? "تفعيل" : "تعليق"} className="rounded p-1 text-amber-700 hover:bg-surface-muted" onClick={() => toggleActive(v)}>
+                            <button type="button" aria-label="تقرير الإنجاز" title="تقرير" className="rounded p-1 text-primary hover:bg-surface-muted" onClick={() => openReport(v)}><FileText size={16} /></button>
+                            <button type="button" aria-label="تعديل المتطوّع" title="تعديل" className="rounded p-1 text-primary hover:bg-surface-muted" onClick={() => startEdit(v)}><Pencil size={16} /></button>
+                            <button type="button" aria-label={v.is_active === false ? "تفعيل المتطوّع" : "تعليق المتطوّع"} title={v.is_active === false ? "تفعيل" : "تعليق"} className="rounded p-1 text-amber-700 hover:bg-surface-muted" onClick={() => toggleActive(v)}>
                               {v.is_active === false ? <CheckCircle2 size={16} /> : <Ban size={16} />}
                             </button>
-                            <button type="button" title="حذف" className="rounded p-1 text-red-600 hover:bg-surface-muted" onClick={() => removeVolunteer(v)}><Trash2 size={16} /></button>
+                            <button type="button" aria-label="حذف المتطوّع" title="حذف" className="rounded p-1 text-red-600 hover:bg-surface-muted" onClick={() => removeVolunteer(v)}><Trash2 size={16} /></button>
                           </div>
                         </td>
                       </tr>
