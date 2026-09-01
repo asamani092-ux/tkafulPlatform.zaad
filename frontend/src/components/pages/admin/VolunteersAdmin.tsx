@@ -24,6 +24,7 @@ interface Volunteer {
 interface Application { id: number; volunteer_name: string; volunteer_email: string; project_title: string; status: string; message: string }
 interface JoinReq { id: number; name: string; email: string; phone: string; location: string; qualification: string; skills: string[] }
 interface VTask { id: number; title: string; status: string; project_name: string; progress: number; due_date: string | null }
+interface ReportMetrics { volunteer_hours: number; projects_participated: number; completed_tasks: number; total_tasks: number }
 
 const APP_TABS = [
   { key: "قيد المراجعة", label: "قيد المراجعة" },
@@ -46,6 +47,7 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
   const [activeFilter, setActiveFilter] = useState("");
   const [reportFor, setReportFor] = useState<Volunteer | null>(null);
   const [reportTasks, setReportTasks] = useState<VTask[] | null>(null);
+  const [reportMetrics, setReportMetrics] = useState<ReportMetrics | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState<number | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -99,12 +101,13 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
   };
 
   const openReport = async (v: Volunteer) => {
-    setReportFor(v); setReportTasks(null);
+    setReportFor(v); setReportTasks(null); setReportMetrics(null);
     const res = await authFetch(`/api/reports/volunteer-tasks/?volunteer_id=${v.id}`);
     const d = res.ok ? await res.json().catch(() => null) : null;
-    // الـ API يعيد { tasks: [...] } — ليس مصفوفة مباشرة
+    // الـ API يعيد { tasks: [...], metrics: {...} } — ليس مصفوفة مباشرة
     const list = Array.isArray(d) ? d : (d?.tasks || d?.results || []);
     setReportTasks(list as VTask[]);
+    if (d?.metrics) setReportMetrics(d.metrics as ReportMetrics);
   };
 
   const startAdd = () => { setEditId(null); setForm(emptyForm); setFormOpen(true); };
@@ -307,13 +310,14 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
         </form>
       </Modal>
 
-      <Modal open={!!reportFor} onClose={() => { setReportFor(null); setReportTasks(null); }} title={`تقرير إنجاز: ${reportFor?.name || reportFor?.email || ""}`} wide>
+      <Modal open={!!reportFor} onClose={() => { setReportFor(null); setReportTasks(null); setReportMetrics(null); }} title={`تقرير إنجاز: ${reportFor?.name || reportFor?.email || ""}`} wide>
         {reportFor && (
           <div>
-            <div className="mb-3 grid grid-cols-3 gap-3 text-center text-sm">
-              <div><div className="text-xl font-extrabold text-primary">{reportFor.completed_tasks}</div><div className="text-xs text-brand-gray">مهام منجزة</div></div>
+            <div className="mb-3 grid grid-cols-2 gap-3 text-center text-sm sm:grid-cols-4">
+              <div><div className="text-xl font-extrabold text-primary">{reportMetrics?.volunteer_hours ?? reportFor.volunteer_hours}</div><div className="text-xs text-brand-gray">ساعات التطوّع</div></div>
+              <div><div className="text-xl font-extrabold text-primary">{reportMetrics?.projects_participated ?? "—"}</div><div className="text-xs text-brand-gray">المشاريع المشارَك بها</div></div>
+              <div><div className="text-xl font-extrabold text-primary">{reportMetrics?.completed_tasks ?? reportFor.completed_tasks}</div><div className="text-xs text-brand-gray">مهام منجزة</div></div>
               <div><div className="text-xl font-extrabold text-primary">{reportFor.current_tasks}</div><div className="text-xs text-brand-gray">مهام حالية</div></div>
-              <div><div className="text-xl font-extrabold text-primary">{reportFor.volunteer_hours}</div><div className="text-xs text-brand-gray">ساعات</div></div>
             </div>
             {reportTasks === null ? <LoadingState title="جاري تحميل المهام…" /> : reportTasks.length === 0 ? (
               <p className="text-sm text-brand-gray">لا مهام مسجّلة لهذا المتطوّع.</p>

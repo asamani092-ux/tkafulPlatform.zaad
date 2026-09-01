@@ -207,6 +207,122 @@ class MapItemViewSet(_MapChildViewSet):
         self._require_edit(serializer.validated_data["map"])
         serializer.save(created_by=self.request.user)
 
+    @action(detail=False, methods=["get"])
+    def template(self, request):
+        """
+        GET /api/maps/admin/items/template/?map=<id>
+        قالب CSV جاهز للتعبئة (الأعمدة + الحقول المخصّصة للخريطة إن وُجدت).
+        """
+        import csv
+        import io
+
+        map_id = request.GET.get("map")
+        headers = ["name", "coordinates", "layer"]
+        if map_id:
+            field_keys = list(
+                MapItemField.objects.filter(map_id=map_id).order_by("order").values_list("key", flat=True)
+            )
+            headers += field_keys
+        from django.http import HttpResponse
+
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(headers)
+        # صف مثال إرشادي
+        example = ["مركز التوزيع", "https://maps.google.com/?q=24.7136,46.6753", "الطبقة الأولى"]
+        example += [""] * (len(headers) - 3)
+        writer.writerow(example)
+        resp = HttpResponse("\ufeff" + buf.getvalue(), content_type="text/csv; charset=utf-8")
+        resp["Content-Disposition"] = 'attachment; filename="map_items_template.csv"'
+        return resp
+
+    @action(detail=False, methods=["post"])
+    def bulk_upload(self, request):
+        """
+        POST /api/maps/admin/items/bulk_upload/
+        رفع مواقع بالجملة. متساهل في صيغة الإحداثيات (روابط/خام) وصارم في التطبيع.
+
+        الحمولة: multipart `file` (CSV) و`map` (id)، أو JSON:
+          { "map": <id>, "rows": [ { "name", "coordinates" | "lat"+"lng", "layer"?, <field>... } ] }
+        الاستجابة: { created, errors: [ { row, reason } ] }.
+        O(R·F) — R صفوف، F حقول مخصّصة.
+        """
+        import csv
+        import io
+
+        from .coordinates import parse_coordinates
+
+        map_id = request.data.get("map") or request.GET.get("map")
+        if not map_id:
+            return Response({"detail": "معرّف الخريطة (map) مطلوب"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            map_obj = Map.objects.select_related("project").get(pk=map_id)
+        except Map.DoesNotExist:
+            return Response({"detail": "الخريطة غير موجودة"}, status=status.HTTP_404_NOT_FOUND)
+        self._require_edit(map_obj)
+
+        rows = []
+        upload = request.FILES.get("file")
+        if upload is not None:
+            try:
+                text = upload.read().decode("utf-8-sig")
+            except UnicodeDecodeError:
+                return Response({"detail": "الملف يجب أن يكون CSV بترميز UTF-8"}, status=status.HTTP_400_BAD_REQUEST)
+            rows = list(csv.DictReader(io.StringIO(text)))
+        else:
+            body_rows = request.data.get("rows")
+            if isinstance(body_rows, list):
+                rows = body_rows
+        if not rows:
+            return Response({"detail": "لا صفوف للمعالجة"}, status=status.HTTP_400_BAD_REQUEST)
+
+        layers = {l.name.strip(): l for l in MapLayer.objects.filter(map=map_obj)}
+        layers_by_id = {str(l.id): l for l in layers.values()}
+        default_layer = next(iter(layers.values()), None)
+        field_defs = list(MapItemField.objects.filter(map=map_obj))
+        field_keys = {f.key for f in field_defs}
+
+        created, errors = 0, []
+        for idx, row in enumerate(rows, start=1):
+            if not isinstance(row, dict):
+                errors.append({"row": idx, "reason": "صف غير صالح"})
+                continue
+            row = {(k or "").strip(): v for k, v in row.items()}
+            name = (row.get("name") or row.get("الاسم") or "").strip()
+            if not name:
+                errors.append({"row": idx, "reason": "الاسم مطلوب"})
+                continue
+            # الإحداثيات: عمود موحّد أو lat+lng منفصلان
+            coord_raw = row.get("coordinates") or row.get("location") or row.get("link") or row.get("url") or row.get("الإحداثيات")
+            if not coord_raw and (row.get("lat") or row.get("lng")):
+                coord_raw = f"{row.get('lat')},{row.get('lng')}"
+            coords = parse_coordinates(coord_raw)
+            if coords is None:
+                errors.append({"row": idx, "reason": f"إحداثيات غير مقروءة: {coord_raw or '—'}"})
+                continue
+            lat, lng = coords
+            # الطبقة: بالاسم أو المعرّف، وإلا الافتراضية
+            layer_raw = (str(row.get("layer") or row.get("الطبقة") or "")).strip()
+            layer = layers.get(layer_raw) or layers_by_id.get(layer_raw) or default_layer
+            if layer is None:
+                errors.append({"row": idx, "reason": "لا توجد طبقة — أنشئ طبقة أولاً"})
+                continue
+            # الحقول المخصّصة المطابقة للمخطط فقط (نطاق دقيق)
+            data = {}
+            for k, v in row.items():
+                if k in field_keys and v not in (None, ""):
+                    data[k] = v
+            try:
+                item = MapItem(map=map_obj, layer=layer, name=name, lat=lat, lng=lng, data=data)
+                item.full_clean(exclude=["created_by"])
+                item.created_by = request.user
+                item.save()
+                created += 1
+            except Exception as exc:  # noqa: BLE001 — نجمع الأخطاء لكل صف
+                errors.append({"row": idx, "reason": str(exc)[:200]})
+
+        return Response({"created": created, "errors": errors}, status=status.HTTP_200_OK)
+
 
 class MapContributionViewSet(_MapChildViewSet):
     serializer_class = MapContributionAdminSerializer

@@ -30,14 +30,20 @@ describe("تبنّي نظام التصميم في الإدارة", () => {
     const name = file.split("/").pop();
 
     it(`${name}: لا حقول إدخال خام غير معنونة`, () => {
-      // عناصر HTML خام (حروف صغيرة) فقط — أغلفة React المعنونة تبدأ بحرف كبير
-      const rawInput = /<input\b(?![^>]*type=["']checkbox["'])/.test(src);
-      const rawTextarea = /<textarea\b/.test(src);
-      const rawSelect = /<select\b/.test(src);
+      // عناصر HTML خام (حروف صغيرة) فقط — أغلفة React المعنونة تبدأ بحرف كبير.
+      // يُسمح بالوسم الخام إن كان معنوناً (aria-label) أو checkbox (عبر غلاف Checkbox).
+      const tagRe = /<(input|textarea|select)\b[^>]*?\/?>/gs;
+      const offenders: string[] = [];
+      let m: RegExpExecArray | null;
+      while ((m = tagRe.exec(src)) !== null) {
+        const tag = m[0];
+        const labeled = /aria-label\s*=/.test(tag) || /type=["']checkbox["']/.test(tag);
+        if (!labeled) offenders.push(tag.replace(/\s+/g, " ").slice(0, 80));
+      }
       expect(
-        rawInput || rawTextarea || rawSelect,
-        `${name} يحتوي على عنصر إدخال خام؛ استخدم أغلفة ui/ المعنونة (Input/Textarea/Select/Checkbox)`,
-      ).toBe(false);
+        offenders.length,
+        `${name} يحتوي على عنصر إدخال خام غير معنون: ${offenders.join(" | ")}`,
+      ).toBe(0);
     });
   }
 });

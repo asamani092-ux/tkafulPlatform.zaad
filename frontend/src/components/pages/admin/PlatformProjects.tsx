@@ -6,6 +6,8 @@ import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Badge from "../../ui/Badge";
 import Textarea from "../../ui/Textarea";
+import MultiSelect from "../../ui/MultiSelect";
+import Alert from "../../ui/Alert";
 import Modal from "../../ui/Modal";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
@@ -56,9 +58,12 @@ export default function PlatformProjects() {
   const [error, setError] = useState(false);
   const [form, setForm] = useState({ name: "", slug: "", description: "", brand_color: "#8b1538", type: "" });
   const [types, setTypes] = useState<ProjectType[]>([]);
-  const [memberForm, setMemberForm] = useState({ projectId: 0, userId: "", role: "project_viewer" });
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
+  // مُنتقي الأعضاء: كل المستخدمين (بلا قيد دور) قابل للبحث — قرار العميل.
+  const [allUsers, setAllUsers] = useState<Array<{ id: number; name: string; email: string }>>([]);
+  const [memberPick, setMemberPick] = useState<string[]>([]);
+  const [memberRole, setMemberRole] = useState("project_viewer");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -220,17 +225,31 @@ export default function PlatformProjects() {
     }
   };
 
-  const addMember = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const res = await authFetch(`/api/platform/projects/${memberForm.projectId}/add_member/`, {
-      method: "POST",
-      body: JSON.stringify({ user_id: Number(memberForm.userId), role: memberForm.role }),
-    });
-    if (res.ok) { toast.success({ title: "تمت إضافة العضو" }); setMemberForm({ ...memberForm, userId: "" }); void load(); }
-    else {
-      const data = await res.json().catch(() => ({}));
-      toast.error({ title: data.detail || "تعذّرت إضافة العضو" });
+  // تحميل كل المستخدمين مرّة عند فتح أي بطاقة مشروع (بحث محلي O(n)).
+  const loadAllUsers = useCallback(async () => {
+    if (allUsers.length > 0) return;
+    const res = await authFetch("/api/accounts/users/?page_size=100");
+    if (!res.ok) return;
+    const data = await res.json().catch(() => null);
+    const rows = data?.results || data || [];
+    setAllUsers(rows.map((u: { id: number; name?: string; email: string }) => ({ id: u.id, name: u.name || u.email, email: u.email })));
+  }, [allUsers.length]);
+
+  useEffect(() => { if (detailId) void loadAllUsers(); }, [detailId, loadAllUsers]);
+
+  // إضافة كل المستخدمين المختارين بالدور المحدّد (أي مستخدم، قابل للتعديل لاحقاً).
+  const addSelectedMembers = async (projectId: number) => {
+    if (memberPick.length === 0) return;
+    let ok = 0;
+    for (const uid of memberPick) {
+      const res = await authFetch(`/api/platform/projects/${projectId}/add_member/`, {
+        method: "POST",
+        body: JSON.stringify({ user_id: Number(uid), role: memberRole }),
+      });
+      if (res.ok) ok += 1;
     }
+    if (ok > 0) { toast.success({ title: `أُضيف ${ok} عضواً` }); setMemberPick([]); void load(); }
+    else toast.error({ title: "تعذّرت إضافة الأعضاء" });
   };
 
   const removeMember = async (project: AdminProject, userId: number) => {
@@ -382,6 +401,14 @@ export default function PlatformProjects() {
 
             <div>
               <span className="text-xs font-bold text-brand-gray">الأدوات: </span>
+              <div className="my-2">
+                <Alert tone="info">
+                  <span className="text-xs">
+                    اضغط اسم الأداة لتفعيلها/تعطيلها للمشروع. بعد التفعيل يظهر زر «إعدادات»
+                    لضبط خيارات الأداة (JSON) — مثل مركز الخريطة أو مبلغ الكفالة المستهدف.
+                  </span>
+                </Alert>
+              </div>
               {ALL_TOOLS.map((toolKey) => {
                 const tool = detail.tools.find((t) => t.tool_key === toolKey);
                 const enabled = !!tool?.is_enabled;
@@ -434,18 +461,30 @@ export default function PlatformProjects() {
                 {detail.members.length === 0 && <li className="text-brand-gray">لا أعضاء.</li>}
               </ul>
               {(isSuperAdmin || detail.my_role === "project_admin" || detail.my_role === "super_admin") && (
-                <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(e) => { setMemberForm((f) => ({ ...f, projectId: detail.id })); addMember(e); }}
-                  onFocus={() => setMemberForm((f) => ({ ...f, projectId: detail.id }))}>
-                  <div className="w-32"><Input label="معرّف المستخدم" value={memberForm.projectId === detail.id ? memberForm.userId : ""}
-                    onChange={(e) => setMemberForm({ ...memberForm, projectId: detail.id, userId: e.target.value })} dir="ltr" /></div>
-                  <div className="w-36">
-                    <Select label="الدور" value={memberForm.projectId === detail.id ? memberForm.role : "project_viewer"}
-                      onChange={(e) => setMemberForm({ ...memberForm, projectId: detail.id, role: e.target.value })}>
+                <div className="mt-3 rounded-lg border border-surface-border p-3">
+                  <p className="mb-2 text-xs text-brand-gray">أضف أي مستخدم من المنصّة كعضو (بحث بالاسم أو البريد) — الدور قابل للتعديل لاحقاً.</p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="sm:col-span-2">
+                      <MultiSelect
+                        label="الأعضاء"
+                        placeholder="ابحث بالاسم أو البريد…"
+                        options={allUsers
+                          .filter((u) => !detail.members.some((m) => m.user === u.id))
+                          .map((u) => ({ value: String(u.id), label: u.name, hint: u.email }))}
+                        value={memberPick}
+                        onChange={setMemberPick}
+                      />
+                    </div>
+                    <Select label="الدور" value={memberRole} onChange={(e) => setMemberRole(e.target.value)}>
                       {MEMBER_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </Select>
                   </div>
-                  <Button type="submit" variant="secondary">إضافة عضو</Button>
-                </form>
+                  <div className="mt-2">
+                    <Button type="button" variant="secondary" disabled={memberPick.length === 0} onClick={() => void addSelectedMembers(detail.id)}>
+                      إضافة {memberPick.length > 0 ? `(${memberPick.length})` : ""} عضو
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

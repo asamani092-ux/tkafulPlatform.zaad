@@ -14,7 +14,7 @@ import { authFetch } from "../../../lib/api";
 import { autoFieldKeyFromLabel, autoSlugFromLabel } from "../../../utils/autoSlug";
 
 type FieldType = "text" | "textarea" | "number" | "select" | "boolean" | "date";
-interface SchemaField { key: string; label: string; type: FieldType; required: boolean; options?: string[] }
+interface SchemaField { key: string; label: string; type: FieldType; required: boolean; options?: string[]; placeholder?: string }
 interface RForm {
   id: number; project: number | null; project_name: string | null; title: string; slug: string;
   description: string; fields_schema: SchemaField[]; is_active: boolean; submissions_count: number;
@@ -39,7 +39,7 @@ export default function RequestFormsAdmin() {
 
   const [meta, setMeta] = useState({ title: "", slug: "", project: "", description: "" });
   const [fields, setFields] = useState<SchemaField[]>([]);
-  const [fieldDraft, setFieldDraft] = useState<{ label: string; type: FieldType; required: boolean }>({ label: "", type: "text", required: false });
+  const [fieldDraft, setFieldDraft] = useState<{ label: string; type: FieldType; required: boolean; placeholder: string }>({ label: "", type: "text", required: false, placeholder: "" });
   const [optionsText, setOptionsText] = useState("");
 
   const [selected, setSelected] = useState<RForm | null>(null);
@@ -80,8 +80,8 @@ export default function RequestFormsAdmin() {
       n += 1;
     }
     const options = fieldDraft.type === "select" ? optionsText.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
-    setFields([...fields, { key, label: fieldDraft.label, type: fieldDraft.type, required: fieldDraft.required, options }]);
-    setFieldDraft({ label: "", type: "text", required: false });
+    setFields([...fields, { key, label: fieldDraft.label, type: fieldDraft.type, required: fieldDraft.required, options, placeholder: fieldDraft.placeholder.trim() || undefined }]);
+    setFieldDraft({ label: "", type: "text", required: false, placeholder: "" });
     setOptionsText("");
   };
 
@@ -236,29 +236,35 @@ export default function RequestFormsAdmin() {
             <Input label="وصف مختصر" value={meta.description} onChange={(e) => setMeta({ ...meta, description: e.target.value })} />
           </div>
 
-          <div className="rounded-lg border border-surface-border p-3">
-            <p className="mb-2 text-sm font-bold text-primary">الحقول ({fields.length})</p>
-            <div className="mb-2 space-y-1">
-              {fields.map((f, i) => (
-                <div key={f.key} className="flex flex-wrap items-center gap-2 text-sm">
-                  <strong>{f.label}</strong>
-                  <Badge>{FIELD_TYPE_LABELS[f.type]}</Badge>
-                  {f.required && <Badge variant="warning">إلزامي</Badge>}
-                  <Button type="button" variant="danger" size="sm" onClick={() => setFields(fields.filter((_, j) => j !== i))}>إزالة</Button>
-                </div>
-              ))}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border border-surface-border p-3">
+              <p className="mb-2 text-sm font-bold text-primary">الحقول ({fields.length})</p>
+              <div className="mb-2 space-y-1">
+                {fields.map((f, i) => (
+                  <div key={f.key} className="flex flex-wrap items-center gap-2 text-sm">
+                    <strong>{f.label}</strong>
+                    <Badge>{FIELD_TYPE_LABELS[f.type]}</Badge>
+                    {f.required && <Badge variant="warning">إلزامي</Badge>}
+                    <Button type="button" variant="danger" size="sm" onClick={() => setFields(fields.filter((_, j) => j !== i))}>إزالة</Button>
+                  </div>
+                ))}
+                {fields.length === 0 && <p className="text-xs text-brand-gray">لا حقول بعد — أضف حقلاً واحداً على الأقل.</p>}
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Input label="تسمية الحقل (عربية)" value={fieldDraft.label} onChange={(e) => setFieldDraft({ ...fieldDraft, label: e.target.value })} />
+                <Select label="النوع" value={fieldDraft.type} onChange={(e) => setFieldDraft({ ...fieldDraft, type: e.target.value as FieldType })}>
+                  {(Object.keys(FIELD_TYPE_LABELS) as FieldType[]).map((t) => <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>)}
+                </Select>
+                <Input label="نص إرشادي (placeholder)" value={fieldDraft.placeholder} onChange={(e) => setFieldDraft({ ...fieldDraft, placeholder: e.target.value })} />
+                {fieldDraft.type === "select" && (
+                  <Input label="الخيارات (بفواصل)" value={optionsText} onChange={(e) => setOptionsText(e.target.value)} />
+                )}
+                <div className="flex items-end"><Checkbox label="إلزامي" checked={fieldDraft.required} onChange={(e) => setFieldDraft({ ...fieldDraft, required: e.target.checked })} /></div>
+                <div className="flex items-end"><Button type="button" variant="secondary" onClick={addField}>إضافة حقل</Button></div>
+              </div>
             </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
-              <Input label="تسمية الحقل" value={fieldDraft.label} onChange={(e) => setFieldDraft({ ...fieldDraft, label: e.target.value })} />
-              <Select label="النوع" value={fieldDraft.type} onChange={(e) => setFieldDraft({ ...fieldDraft, type: e.target.value as FieldType })}>
-                {(Object.keys(FIELD_TYPE_LABELS) as FieldType[]).map((t) => <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>)}
-              </Select>
-              {fieldDraft.type === "select" && (
-                <Input label="الخيارات (بفواصل)" value={optionsText} onChange={(e) => setOptionsText(e.target.value)} />
-              )}
-              <div className="flex items-end"><Checkbox label="إلزامي" checked={fieldDraft.required} onChange={(e) => setFieldDraft({ ...fieldDraft, required: e.target.checked })} /></div>
-              <div className="flex items-end"><Button type="button" variant="secondary" onClick={addField}>إضافة حقل</Button></div>
-            </div>
+
+            <FormPreview title={meta.title} fields={fields} />
           </div>
 
           <div className="flex gap-2">
@@ -268,5 +274,49 @@ export default function RequestFormsAdmin() {
         </form>
       </Modal>
     </AdminShell>
+  );
+}
+
+/**
+ * معاينة حيّة للنموذج كما يراه مقدّم الطلب (UX2 P4 · 3.5).
+ * عرض فقط — لا إرسال. O(F) على الحقول.
+ */
+function FormPreview({ title, fields }: { title: string; fields: SchemaField[] }) {
+  return (
+    <div className="rounded-lg border border-surface-border bg-surface-muted p-3">
+      <p className="mb-2 text-sm font-bold text-primary">معاينة نموذج المستفيد</p>
+      <div className="rounded-lg bg-surface p-3">
+        <h4 className="mb-3 text-base font-bold text-primary">{title || "عنوان النموذج"}</h4>
+        {fields.length === 0 ? (
+          <p className="text-xs text-brand-gray">ستظهر الحقول هنا فور إضافتها.</p>
+        ) : (
+          <div className="space-y-3">
+            {fields.map((f) => {
+              const label = `${f.label}${f.required ? " *" : ""}`;
+              if (f.type === "select") {
+                return (
+                  <Select key={f.key} label={label} disabled defaultValue="">
+                    <option value="">{f.placeholder || "اختر…"}</option>
+                    {(f.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
+                  </Select>
+                );
+              }
+              if (f.type === "boolean") {
+                return <Checkbox key={f.key} label={label} disabled checked={false} onChange={() => {}} />;
+              }
+              return (
+                <Input
+                  key={f.key}
+                  label={label}
+                  type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                  placeholder={f.placeholder || ""}
+                  disabled
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

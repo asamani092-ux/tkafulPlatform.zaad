@@ -11,6 +11,7 @@ urlpatterns = [
     path("reports/volunteers-performance/", views.volunteers_performance_report, name="volunteers-performance"),
     path("reports/volunteer-tasks/", views.volunteer_tasks_report, name="volunteer-tasks"),
     path("reports/generate/", views.generate_report, name="generate-report"),
+    path("reports/scope/", views.report_scope, name="report-scope"),
     path("reports/", views.list_reports, name="list-reports"),
     path("reports/<int:report_id>/", views.get_report_detail, name="report-detail"),
     path("reports/<int:report_id>/delete/", views.delete_report, name="delete-report"),

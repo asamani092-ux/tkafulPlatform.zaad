@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../../../contexts/AuthContext";
 import DonorPortal from "./DonorPortal";
 import SupplierPortal from "./SupplierPortal";
@@ -13,6 +13,7 @@ import Button from "../../ui/Button";
  */
 export default function SaqyaHome() {
   const { user, isAuthenticated } = useAuth();
+  const { slug } = useParams();
 
   if (!isAuthenticated || !user) {
     return (
@@ -27,7 +28,7 @@ export default function SaqyaHome() {
   }
 
   switch (user.role) {
-    case "admin": return <AdminPortal />;
+    case "admin": return <AdminPortal projectSlug={slug} />;
     case "donor": return <DonorPortal />;
     case "supplier": return <SupplierPortal />;
     case "representative": return <RepresentativePortal />;
