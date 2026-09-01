@@ -6,6 +6,7 @@ import Select from "../../ui/Select";
 import Alert from "../../ui/Alert";
 import { LoadingState, EmptyState } from "../../feedback/PageStates";
 import { downloadCsv } from "../../../utils/csv";
+import { labelAr } from "../../../i18n/labels";
 
 type Scope = "platform" | "project" | "volunteers" | "sponsorships";
 
@@ -138,7 +139,7 @@ export default function ReportGateway() {
                 <thead>
                   <tr>
                     {data.columns.map((c) => (
-                      <th key={c} scope="col" className="py-2 text-xs text-brand-gray">{COL_LABELS[c] || c}</th>
+                      <th key={c} scope="col" className="py-2 text-xs text-brand-gray">{labelAr(COL_LABELS, c)}</th>
                     ))}
                   </tr>
                 </thead>

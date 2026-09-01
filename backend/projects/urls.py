@@ -12,5 +12,6 @@ urlpatterns = [
     path("public/projects/<slug:slug>/", views.public_project_detail, name="public-project-detail"),
     path("public/project-types/", views.public_project_types, name="public-project-types"),
     path("my-memberships/", views.my_memberships, name="my-memberships"),
+    path("tool-config-schema/", views.tool_config_schema, name="tool-config-schema"),
     path("", include(router.urls)),
 ]

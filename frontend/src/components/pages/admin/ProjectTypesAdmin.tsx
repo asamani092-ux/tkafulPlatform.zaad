@@ -9,7 +9,7 @@ import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
 import type { ProjectType } from "../projects/types";
 
-const emptyForm = { name: "", slug: "", order: 0 };
+const emptyForm = { name: "", order: 0 };
 
 /** إدارة «أنواع المشاريع» — قابلة للتوسّع من الإعدادات (المشرف العام). */
 export default function ProjectTypesAdmin() {
@@ -43,11 +43,11 @@ export default function ProjectTypesAdmin() {
     try {
       const res = await authFetch("/api/platform/project-types/", {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify({ name: form.name, order: form.order }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error({ title: "تعذّر الإنشاء", description: data.slug?.[0] || data.name?.[0] || "تحقّق من الحقول" });
+        toast.error({ title: "تعذّر الإنشاء", description: data.name?.[0] || "تحقّق من الحقول" });
       } else {
         toast.success({ title: "تمت إضافة النوع" });
         setForm(emptyForm);
@@ -81,7 +81,6 @@ export default function ProjectTypesAdmin() {
         <h2 className="mb-3 text-lg font-bold text-primary">إضافة نوع</h2>
         <form className="grid gap-3 sm:grid-cols-3" onSubmit={(e) => void create(e)}>
           <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-          <Input label="المعرّف (slug)" dir="ltr" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} required />
           <Input label="الترتيب" type="number" min={0} dir="ltr" value={String(form.order)} onChange={(e) => setForm({ ...form, order: Number(e.target.value) || 0 })} />
           <div className="sm:col-span-3"><Button type="submit" disabled={busy}>{busy ? "جاري الحفظ…" : "إضافة"}</Button></div>
         </form>
@@ -97,7 +96,7 @@ export default function ProjectTypesAdmin() {
               <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-surface-border p-3">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-primary">{t.name}</span>
-                  <span className="text-xs text-brand-gray" dir="ltr">{t.slug}</span>
+                  
                   <Badge variant={t.is_active ? "success" : "danger"}>{t.is_active ? "مفعّل" : "معطّل"}</Badge>
                 </div>
                 <div className="flex gap-2">

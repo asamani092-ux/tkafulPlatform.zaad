@@ -7,6 +7,7 @@ import Card from "../../ui/Card";
 import Badge from "../../ui/Badge";
 import Button from "../../ui/Button";
 import Tabs from "../../ui/Tabs";
+import { labelAr, SERVICE_STATUS_AR } from "../../../i18n/labels";
 
 interface ServiceRequest { id: number; service_title: string; beneficiary_name: string; beneficiary_contact: string; details: string; status: string }
 
@@ -16,7 +17,6 @@ const TABS = [
   { key: "APPROVED", label: "مقبولة" },
   { key: "DONE", label: "منجزة" },
 ];
-const statusLabel: Record<string, string> = { PENDING: "قيد المراجعة", APPROVED: "مقبول", REJECTED: "مرفوض", DONE: "منجز" };
 
 export default function ServiceRequests() {
   const { access } = useAuth();
@@ -50,7 +50,7 @@ export default function ServiceRequests() {
             <Card key={r.id}>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="font-bold text-primary">{r.service_title}</h3>
-                <Badge variant={r.status === "DONE" || r.status === "APPROVED" ? "success" : r.status === "REJECTED" ? "danger" : "warning"}>{statusLabel[r.status] || r.status}</Badge>
+                <Badge variant={r.status === "DONE" || r.status === "APPROVED" ? "success" : r.status === "REJECTED" ? "danger" : "warning"}>{labelAr(SERVICE_STATUS_AR, r.status)}</Badge>
               </div>
               <p className="text-sm text-brand-gray">{r.beneficiary_name} · {r.beneficiary_contact}</p>
               {r.details && <p className="mb-3 mt-1 text-xs text-brand-gray">{r.details}</p>}

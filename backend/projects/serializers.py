@@ -2,13 +2,29 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from .models import Project, ProjectMember, ProjectTool, ProjectType
+from .slug_utils import unique_slug_from_name
 from .validators import validate_https_donation_url
 
 
 class ProjectTypeSerializer(serializers.ModelSerializer):
+    slug = serializers.SlugField(required=False, allow_blank=True, allow_unicode=True)
+
     class Meta:
         model = ProjectType
         fields = ["id", "name", "slug", "is_active", "order"]
+
+    def create(self, validated_data):
+        slug = (validated_data.get("slug") or "").strip()
+        if not slug:
+            validated_data["slug"] = unique_slug_from_name(ProjectType, validated_data.get("name", ""))
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        # لا نفرض على المستخدم تعديل الـ slug؛ إن أُرسل فارغاً يُتجاهل
+        if "slug" in validated_data and not (validated_data.get("slug") or "").strip():
+            validated_data.pop("slug")
+        return super().update(instance, validated_data)
+
 
 
 class ProjectToolSerializer(serializers.ModelSerializer):
@@ -57,6 +73,8 @@ class ProjectAdminSerializer(serializers.ModelSerializer):
     next_actions = serializers.SerializerMethodField()
     type_name = serializers.CharField(source="type.name", read_only=True, allow_null=True)
     type_slug = serializers.CharField(source="type.slug", read_only=True, allow_null=True)
+    # عند الإنشاء: اختياري — يُولَّد من الاسم إن غاب (لا يُطلب من المستخدم)
+    slug = serializers.SlugField(required=False, allow_blank=True, allow_unicode=True)
 
     class Meta:
         model = Project
@@ -71,6 +89,17 @@ class ProjectAdminSerializer(serializers.ModelSerializer):
             "next_actions",
         ]
         read_only_fields = ["created_by", "created_at", "updated_at"]
+
+    def create(self, validated_data):
+        slug = (validated_data.get("slug") or "").strip()
+        if not slug:
+            validated_data["slug"] = unique_slug_from_name(Project, validated_data.get("name", ""))
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if "slug" in validated_data and not (validated_data.get("slug") or "").strip():
+            validated_data.pop("slug")
+        return super().update(instance, validated_data)
 
     def validate_donation_url(self, value):
         if value:

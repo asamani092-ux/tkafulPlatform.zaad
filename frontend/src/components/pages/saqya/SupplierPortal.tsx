@@ -9,13 +9,10 @@ import Badge from "../../ui/Badge";
 import Input from "../../ui/Input";
 import FileInput from "../../ui/FileInput";
 import Modal from "../../ui/Modal";
+import { labelAr, ORDER_STATUS_AR } from "../../../i18n/labels";
 
 interface Order { id: number; sponsorship_type: string; status: string; }
 
-const STATUS_AR: Record<string, string> = {
-  pending: "بانتظار", assigned: "مُسند", preparing: "قيد التحضير",
-  ready: "جاهز", delivered: "مُسلَّم", completed: "مكتمل", cancelled: "ملغى",
-};
 
 export default function SupplierPortal() {
   const { success, error } = useToast();
@@ -59,7 +56,7 @@ export default function SupplierPortal() {
             <Card key={o.id}>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="font-bold text-primary">طلب #{o.id} — {o.sponsorship_type}</h3>
-                <Badge variant="primary">{STATUS_AR[o.status] || o.status}</Badge>
+                <Badge variant="primary">{labelAr(ORDER_STATUS_AR, o.status)}</Badge>
               </div>
               <div className="flex flex-wrap gap-2">
                 {o.status === "assigned" && <Button onClick={() => act(o.id, "prepare")}>بدء التحضير</Button>}

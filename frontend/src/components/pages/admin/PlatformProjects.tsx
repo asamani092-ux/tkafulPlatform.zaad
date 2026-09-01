@@ -5,13 +5,15 @@ import Button from "../../ui/Button";
 import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Badge from "../../ui/Badge";
-import Textarea from "../../ui/Textarea";
 import MultiSelect from "../../ui/MultiSelect";
 import Alert from "../../ui/Alert";
 import Modal from "../../ui/Modal";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
+import { labelAr, ROLE_AR } from "../../../i18n/labels";
+import ToolConfigFields from "../../admin/ToolConfigFields";
+import { Link } from "react-router-dom";
 import { TOOL_LABELS, STATUS_LABELS, LIFECYCLE_ACTION_LABELS, type ProjectType } from "../projects/types";
 
 interface AdminTool { id: number; tool_key: string; config: Record<string, unknown>; is_enabled: boolean }
@@ -35,19 +37,14 @@ const STATUS_BADGE: Record<string, "success" | "warning" | "danger" | "primary">
 };
 
 const ALL_TOOLS = Object.keys(TOOL_LABELS);
-// تلميح المفاتيح المقبولة لكل أداة (يطابق backend/projects/tool_config.py و PROJECT_TOOLS.md)
-const TOOL_CONFIG_KEYS: Record<string, string> = {
-  map: "default_center [lat,lng]، default_zoom (1-20)",
-  sponsorships: "show_target_amount (bool)، target_amount (رقم ≥ 0)",
-  volunteering: "show_opportunities (bool)",
-  services: 'request_form ("service"|"water_supply")، show_request_button (bool)',
-  reports: "public (bool)",
-};
 const MEMBER_ROLES = [
   { value: "project_admin", label: "مدير مشروع" },
   { value: "project_editor", label: "محرر" },
   { value: "project_viewer", label: "مشاهد" },
 ];
+const MEMBER_ROLE_AR: Record<string, string> = Object.fromEntries(MEMBER_ROLES.map((r) => [r.value, r.label]));
+const UNKNOWN_AR = "غير معروف";
+
 
 /** إدارة مشاريع المنصّة — نطاق حسب الدور (super-admin يرى الكل). */
 export default function PlatformProjects() {
@@ -56,7 +53,7 @@ export default function PlatformProjects() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [form, setForm] = useState({ name: "", slug: "", description: "", brand_color: "#8b1538", type: "" });
+  const [form, setForm] = useState({ name: "", description: "", brand_color: "#8b1538", type: "" });
   const [types, setTypes] = useState<ProjectType[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
@@ -93,7 +90,7 @@ export default function PlatformProjects() {
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload: Record<string, unknown> = {
-      name: form.name, slug: form.slug, description: form.description, brand_color: form.brand_color,
+      name: form.name, description: form.description, brand_color: form.brand_color,
     };
     if (form.type) payload.type = Number(form.type);
     const res = await authFetch("/api/platform/projects/", {
@@ -102,12 +99,12 @@ export default function PlatformProjects() {
     });
     if (res.ok) {
       toast.success({ title: "تم إنشاء المشروع" });
-      setForm({ name: "", slug: "", description: "", brand_color: "#8b1538", type: "" });
+      setForm({ name: "", description: "", brand_color: "#8b1538", type: "" });
       setCreateOpen(false);
       void load();
     } else {
       const data = await res.json().catch(() => ({}));
-      toast.error({ title: data.detail || data.slug?.[0] || "تعذّر إنشاء المشروع" });
+      toast.error({ title: data.detail || data.name?.[0] || "تعذّر إنشاء المشروع" });
     }
   };
 
@@ -141,17 +138,10 @@ export default function PlatformProjects() {
     return false;
   };
 
-  const [cfgEdit, setCfgEdit] = useState<{ projectId: number; toolKey: string; text: string } | null>(null);
+  const [cfgEdit, setCfgEdit] = useState<{ projectId: number; toolKey: string; config: Record<string, unknown> } | null>(null);
 
-  const saveToolConfig = async (project: AdminProject, toolKey: string, text: string) => {
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = text.trim() ? JSON.parse(text) : {};
-    } catch {
-      toast.error({ title: "JSON غير صالح" });
-      return;
-    }
-    await setTool(project, toolKey, true, parsed);
+  const saveToolConfig = async (project: AdminProject, toolKey: string, config: Record<string, unknown>) => {
+    await setTool(project, toolKey, true, config);
   };
 
   const [editDonation, setEditDonation] = useState({ projectId: 0, donation_url: "", donation_label: "تبرع الآن" });
@@ -182,7 +172,7 @@ export default function PlatformProjects() {
 
   const runTransition = async (project: AdminProject, action: string) => {
     if (!isSuperAdmin) return;
-    const label = LIFECYCLE_ACTION_LABELS[action] || action;
+    const label = labelAr(LIFECYCLE_ACTION_LABELS, action, UNKNOWN_AR);
     if (!window.confirm(`تأكيد ${label} المشروع «${project.name}»؟`)) return;
     const res = await authFetch(`/api/platform/projects/${project.id}/${action}/`, {
       method: "POST",
@@ -282,7 +272,7 @@ export default function PlatformProjects() {
             {projects.filter((p) => p.tools.some((t) => t.tool_key === "sponsorships" && t.is_enabled)).map((p) => (
               <li key={`sp-${p.id}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border py-2 last:border-0">
                 <span className="font-semibold text-primary">{p.name}</span>
-                <a href={`/projects/${p.slug}/sponsorships`} target="_blank" rel="noreferrer" className="font-bold text-primary hover:underline">فتح بوابة الكفالات ↗</a>
+                <Link to={`/Admin/projects/${p.slug}/sponsorships`} className="font-bold text-primary hover:underline">إدارة الكفالات</Link>
               </li>
             ))}
           </ul>
@@ -313,7 +303,6 @@ export default function PlatformProjects() {
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="إنشاء مشروع جديد" wide>
         <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={createProject}>
           <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-          <Input label="رابط مختصر (slug)" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} dir="ltr" required />
           <Input label="الوصف" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           <Input label="لون الهوية" type="color" value={form.brand_color} onChange={(e) => setForm({ ...form, brand_color: e.target.value })} />
           <Select label="النوع (اختياري)" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
@@ -331,12 +320,12 @@ export default function PlatformProjects() {
         {detail && (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={STATUS_BADGE[detail.status] || "warning"}>{STATUS_LABELS[detail.status] || detail.status}</Badge>
+              <Badge variant={STATUS_BADGE[detail.status] || "warning"}>{labelAr(STATUS_LABELS, detail.status, UNKNOWN_AR)}</Badge>
               {detail.type_name && <Badge>{detail.type_name}</Badge>}
               {detail.is_featured && <Badge variant="success">مميز</Badge>}
               <a href={`/projects/${detail.slug}`} target="_blank" rel="noreferrer" className="text-sm font-bold text-primary hover:underline">صفحة المشروع ↗</a>
               {detail.tools.some((t) => t.tool_key === "sponsorships" && t.is_enabled) && (
-                <a href={`/projects/${detail.slug}/sponsorships`} target="_blank" rel="noreferrer" className="text-sm font-bold text-primary hover:underline">بوابة الكفالات ↗</a>
+                <Link to={`/Admin/projects/${detail.slug}/sponsorships`} className="text-sm font-bold text-primary hover:underline">إدارة الكفالات</Link>
               )}
             </div>
 
@@ -348,7 +337,7 @@ export default function PlatformProjects() {
                   <button key={action} type="button"
                     className="rounded-full border border-surface-border bg-surface px-3 py-1 text-xs font-bold text-primary"
                     onClick={() => void runTransition(detail, action)}>
-                    {LIFECYCLE_ACTION_LABELS[action] || action}
+                    {labelAr(LIFECYCLE_ACTION_LABELS, action, UNKNOWN_AR)}
                   </button>
                 ))}
               </div>
@@ -405,7 +394,7 @@ export default function PlatformProjects() {
                 <Alert tone="info">
                   <span className="text-xs">
                     اضغط اسم الأداة لتفعيلها/تعطيلها للمشروع. بعد التفعيل يظهر زر «إعدادات»
-                    لضبط خيارات الأداة (JSON) — مثل مركز الخريطة أو مبلغ الكفالة المستهدف.
+                    اضبط خيارات الأداة من الحقول أدناه — مثل مركز الخريطة أو مبلغ الكفالة المستهدف.
                   </span>
                 </Alert>
               </div>
@@ -419,9 +408,9 @@ export default function PlatformProjects() {
                       onClick={() => isSuperAdmin && setTool(detail, toolKey, !enabled)}>
                       {TOOL_LABELS[toolKey]}
                     </button>
-                    {isSuperAdmin && enabled && TOOL_CONFIG_KEYS[toolKey] && (
+                    {isSuperAdmin && enabled && (
                       <button type="button" className="text-[11px] text-primary underline"
-                        onClick={() => setCfgEdit({ projectId: detail.id, toolKey, text: JSON.stringify(tool?.config ?? {}, null, 2) })}>
+                        onClick={() => setCfgEdit({ projectId: detail.id, toolKey, config: { ...(tool?.config ?? {}) } })}>
                         إعدادات
                       </button>
                     )}
@@ -430,17 +419,14 @@ export default function PlatformProjects() {
               })}
               {cfgEdit && cfgEdit.projectId === detail.id && (
                 <div className="mt-2 rounded-lg border border-surface-border p-3">
-                  <Textarea
-                    label={`إعداد الأداة (JSON) — ${TOOL_LABELS[cfgEdit.toolKey] || cfgEdit.toolKey}`}
-                    hint={TOOL_CONFIG_KEYS[cfgEdit.toolKey]}
-                    dir="ltr"
-                    rows={5}
-                    className="font-mono text-xs"
-                    value={cfgEdit.text}
-                    onChange={(e) => setCfgEdit({ ...cfgEdit, text: e.target.value })}
+                  <p className="mb-2 text-sm font-bold text-primary">إعدادات {labelAr(TOOL_LABELS, cfgEdit.toolKey, UNKNOWN_AR)}</p>
+                  <ToolConfigFields
+                    toolKey={cfgEdit.toolKey}
+                    value={cfgEdit.config}
+                    onChange={(config) => setCfgEdit({ ...cfgEdit, config })}
                   />
                   <div className="mt-2 flex gap-2">
-                    <Button type="button" onClick={() => void saveToolConfig(detail, cfgEdit.toolKey, cfgEdit.text)}>حفظ</Button>
+                    <Button type="button" onClick={() => void saveToolConfig(detail, cfgEdit.toolKey, cfgEdit.config)}>حفظ</Button>
                     <Button type="button" variant="secondary" onClick={() => setCfgEdit(null)}>إلغاء</Button>
                   </div>
                 </div>
@@ -452,7 +438,7 @@ export default function PlatformProjects() {
               <ul className="mt-1 space-y-1 text-sm">
                 {detail.members.map((m) => (
                   <li key={m.id} className="flex items-center gap-2">
-                    <span>{m.username} — {MEMBER_ROLES.find((r) => r.value === m.role)?.label || m.role}</span>
+                    <span>{m.username} — {labelAr(MEMBER_ROLE_AR, m.role, UNKNOWN_AR)}</span>
                     {(isSuperAdmin || detail.my_role === "project_admin" || detail.my_role === "super_admin") && (
                       <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => removeMember(detail, m.user)}>إزالة</button>
                     )}

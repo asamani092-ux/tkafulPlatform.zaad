@@ -12,6 +12,7 @@ import { LoadingState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
 import { autoFieldKeyFromLabel, autoSlugFromLabel } from "../../../utils/autoSlug";
+import { labelAr } from "../../../i18n/labels";
 
 type FieldType = "text" | "textarea" | "number" | "select" | "boolean" | "date";
 interface SchemaField { key: string; label: string; type: FieldType; required: boolean; options?: string[]; placeholder?: string }
@@ -47,7 +48,7 @@ export default function RequestFormsAdmin() {
 
   const labelMap = useMemo(() => {
     const m: Record<string, string> = {};
-    for (const f of selected?.fields_schema || []) m[f.key] = f.label || f.key;
+    for (const f of selected?.fields_schema || []) m[f.key] = f.label || "حقل";
     return m;
   }, [selected]);
 
@@ -176,7 +177,7 @@ export default function RequestFormsAdmin() {
           {selected && (
             <p className="text-sm text-brand-gray">
               مراجعة الطلبات: قبول / رفض / إنجاز تغيّر حالة الطلب للمتابعة الإدارية.
-              الرابط العام: <code dir="ltr">/forms/{selected.slug}</code>
+              <>الرابط العام: <button type="button" className="font-bold text-primary underline" onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/forms/${selected.slug}`)}>نسخ الرابط</button></>
             </p>
           )}
           {selected && subs.length === 0 && <p className="text-brand-gray">لا طلبات على هذا النموذج بعد.</p>}
@@ -184,14 +185,14 @@ export default function RequestFormsAdmin() {
             <Card key={s.id}>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <Badge variant={s.status === "APPROVED" ? "success" : s.status === "REJECTED" ? "danger" : s.status === "DONE" ? "primary" : "warning"}>
-                  {SUB_STATUS[s.status] || s.status}
+                  {labelAr(SUB_STATUS, s.status)}
                 </Badge>
                 <span className="text-xs text-brand-gray">{new Date(s.created_at).toLocaleString("ar")}</span>
               </div>
               <dl className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
                 {Object.entries(s.data).filter(([k]) => k !== "legacy_id").map(([k, v]) => (
                   <div key={k} className="flex gap-2">
-                    <dt className="font-bold text-brand-gray">{labelMap[k] || k}:</dt>
+                    <dt className="font-bold text-brand-gray">{labelAr(labelMap, k)}:</dt>
                     <dd>{typeof v === "boolean" ? (v ? "نعم" : "لا") : String(v)}</dd>
                   </div>
                 ))}
@@ -220,13 +221,6 @@ export default function RequestFormsAdmin() {
                   slug: m.slug && m.slug !== autoSlugFromLabel(m.title, "form") ? m.slug : autoSlugFromLabel(title, "form"),
                 }));
               }}
-              required
-            />
-            <Input
-              label="رابط النموذج (يُنشأ تلقائياً)"
-              dir="ltr"
-              value={meta.slug}
-              onChange={(e) => setMeta({ ...meta, slug: e.target.value })}
               required
             />
             <Select label="المشروع (اختياري)" value={meta.project} onChange={(e) => setMeta({ ...meta, project: e.target.value })}>

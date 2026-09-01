@@ -169,7 +169,7 @@ export default function PlatformSettingsPage() {
                 ) : (
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <div className="font-bold text-primary">{p.title} <span className="text-xs text-brand-gray" dir="ltr">/{p.slug}</span></div>
+                      <div className="font-bold text-primary">{p.title}</div>
                       <div className="text-xs text-brand-gray">{p.is_published ? "منشورة" : "مسودة"}</div>
                     </div>
                     <Button type="button" variant="secondary" onClick={() => setEdit(p)}>تحرير</Button>
