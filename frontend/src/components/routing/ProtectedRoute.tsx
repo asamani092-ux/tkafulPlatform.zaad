@@ -5,8 +5,6 @@ import { useMembershipsContext } from "../../contexts/MembershipsContext";
 import { canAccessAdminPath } from "../../admin/access";
 import { LoadingState } from "../feedback/PageStates";
 
-const ORG_STAFF_ROLES = ["admin", "manager", "employee"];
-
 type RequiredRole = "admin" | "authenticated" | "staff" | "orgStaff";
 
 interface ProtectedRouteProps {
@@ -36,11 +34,13 @@ export default function ProtectedRoute({
   requiredRole,
   signInPath = "/signin",
 }: ProtectedRouteProps) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const location = useLocation();
-  const { loading, isSuperAdmin, access } = useMembershipsContext();
+  const { loading, access } = useMembershipsContext();
 
-  if (requiredRole === "staff") {
+  // بوابة موحّدة (RC-C): staff و orgStaff يمرّان عبر canAccessAdminPath
+  // فلا تشعّب في مفردات الأدوار ولا شاشات ميتة للمشرف.
+  if (requiredRole === "staff" || requiredRole === "orgStaff") {
     return <StaffGate signInPath={signInPath}>{children}</StaffGate>;
   }
 
@@ -51,10 +51,6 @@ export default function ProtectedRoute({
   if (requiredRole === "admin") {
     if (loading) return <LoadingState title="جاري التحقق من الصلاحيات…" />;
     if (!access.isGlobalAdmin) return <Navigate to="/403" replace />;
-  }
-
-  if (requiredRole === "orgStaff" && !ORG_STAFF_ROLES.includes(user?.role || "")) {
-    return <Navigate to="/403" replace />;
   }
 
   return <>{children}</>;

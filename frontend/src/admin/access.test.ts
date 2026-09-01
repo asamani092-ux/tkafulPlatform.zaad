@@ -33,4 +33,26 @@ describe("admin access", () => {
     expect(canAccessAdminPath("/Admin/reports", pm)).toBe(false);
     expect(canAccessAdminPath("/Admin/users", pm)).toBe(false);
   });
+
+  it("PM cannot reach staff domain (لا شاشة كادر لعضو المشروع)", () => {
+    expect(canAccessAdminPath("/Admin/staff", pm)).toBe(false);
+    expect(canAccessAdminPath("/Admin/staff/manage", pm)).toBe(false);
+  });
+
+  it("admin reaches staff domain (لا شاشة ميتة — RC-C)", () => {
+    const admin = buildAdminAccess("admin", true, []);
+    expect(canAccessAdminPath("/Admin/staff", admin)).toBe(true);
+    expect(canAccessAdminPath("/Admin/staff/manage", admin)).toBe(true);
+    expect(canAccessAdminPath("/Admin/executive", admin)).toBe(true);
+  });
+
+  it("orgStaff (manager/employee) reaches staff domain but not admin-only domains", () => {
+    const manager = buildAdminAccess("manager", false, []);
+    expect(canAccessAdminPath("/Admin/staff", manager)).toBe(true);
+    expect(canAccessAdminPath("/Admin/staff/manage", manager)).toBe(true);
+    expect(canAccessAdminPath("/Admin/users", manager)).toBe(false);
+    expect(canAccessAdminPath("/Admin/settings", manager)).toBe(false);
+    const employee = buildAdminAccess("employee", false, []);
+    expect(canAccessAdminPath("/Admin/staff", employee)).toBe(true);
+  });
 });
