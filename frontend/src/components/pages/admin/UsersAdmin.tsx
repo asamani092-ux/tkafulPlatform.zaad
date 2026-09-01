@@ -6,6 +6,7 @@ import DataTable from "../../ui/DataTable";
 import type { Column } from "../../ui/DataTable";
 import Input from "../../ui/Input";
 import Select from "../../ui/Select";
+import Checkbox from "../../ui/Checkbox";
 import Button from "../../ui/Button";
 import Modal from "../../ui/Modal";
 import { LoadingState, ErrorState, EmptyState } from "../../feedback/PageStates";
@@ -241,10 +242,7 @@ export default function UsersAdmin() {
           <Select label="الدور" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
             {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
-            نشط
-          </label>
+            <Checkbox label="نشط" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
           <Button type="button" disabled={busy} onClick={() => void saveEdit()}>{busy ? "جاري الحفظ…" : "حفظ"}</Button>
         </div>
       </Modal>

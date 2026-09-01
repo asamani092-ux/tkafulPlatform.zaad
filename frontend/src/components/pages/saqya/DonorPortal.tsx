@@ -6,6 +6,7 @@ import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Badge from "../../ui/Badge";
 import Input from "../../ui/Input";
+import Textarea from "../../ui/Textarea";
 import Modal from "../../ui/Modal";
 import ProgressBar from "../../ui/ProgressBar";
 import { LoadingState, EmptyState } from "../../feedback/PageStates";
@@ -82,10 +83,7 @@ export default function DonorPortal() {
             <Input label="نوع الكفالة" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} required />
             <Input label="الموقع" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
             <Input type="number" label="عدد المستفيدين" value={form.beneficiaries_count} onChange={(e) => setForm({ ...form, beneficiaries_count: e.target.value })} />
-            <div>
-              <label className="label-field" htmlFor="desc">الوصف</label>
-              <textarea id="desc" className="input-field min-w-0 w-full" style={{ resize: "none" }} rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            </div>
+            <Textarea label="الوصف" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             <Button type="submit" className="w-full">إنشاء الكفالة</Button>
           </form>
         </Card>
