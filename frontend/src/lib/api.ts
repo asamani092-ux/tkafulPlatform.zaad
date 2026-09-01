@@ -1,10 +1,13 @@
 import { API_BASE_URL } from "../config";
+import { notifySessionExpired } from "./authEvents";
 
 /**
  * عميل API موحّد:
  * - يضيف ترويسة Bearer تلقائياً من localStorage.
  * - عند 401 يحاول تجديد التوكن عبر refresh مرة واحدة ثم يعيد الطلب.
- * - عند فشل التجديد: يمسح الجلسة ويحوّل لصفحة الدخول.
+ * - عند فشل التجديد الحقيقي: يمسح الجلسة ويُبلّغ طبقة التوجيه للانتقال
+ *   لصفحة الدخول عبر React Router (دون إعادة تحميل كاملة — RC-B).
+ * - 403 (جلسة صالحة لكن المورد غير مصرّح): يُعاد كما هو ولا تُمسّ الجلسة إطلاقاً.
  *
  * يحافظ على نفس مفاتيح التخزين المستخدمة في AuthContext.
  */
@@ -54,7 +57,14 @@ function withAuth(options: RequestInit, token: string | null): RequestInit {
   return { ...options, headers };
 }
 
-/** طلب مصادق مع تجديد تلقائي للتوكن عند 401. `path` يبدأ بـ /api/... */
+/**
+ * طلب مصادق مع تجديد تلقائي للتوكن عند 401. `path` يبدأ بـ /api/...
+ *
+ * قاعدة الحالة:
+ * - 401 + نجاح التجديد → إعادة الطلب بصمت (الجلسة محفوظة).
+ * - 401 + فشل التجديد → انتهاء جلسة حقيقي: مسح + إبلاغ الراوتر (لا إعادة تحميل).
+ * - 403 → يُعاد كما هو؛ لا مساس بالجلسة (مصرّح دخولاً، ممنوع المورد).
+ */
 export async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const url = `${API_BASE_URL}${path}`;
   let res = await fetch(url, withAuth(options, getAccess()));
@@ -63,12 +73,16 @@ export async function authFetch(path: string, options: RequestInit = {}): Promis
     const newAccess = await tryRefresh();
     if (newAccess) {
       res = await fetch(url, withAuth(options, newAccess));
+      // إن بقي 401 بعد تجديد ناجح فالجلسة منتهية فعلاً.
+      if (res.status === 401) {
+        clearSession();
+        notifySessionExpired();
+      }
     } else {
       clearSession();
-      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/signin")) {
-        window.location.href = "/signin";
-      }
+      notifySessionExpired();
     }
   }
+  // 403 وغيرها: تُعاد كما هي دون أي تأثير على الجلسة.
   return res;
 }

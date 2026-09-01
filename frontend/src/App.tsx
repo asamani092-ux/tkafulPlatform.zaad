@@ -1,7 +1,8 @@
-import { lazy, Suspense, type ReactNode } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { registerSessionExpiredHandler } from "./lib/authEvents";
 import { PlatformSettingsProvider } from "./contexts/PlatformSettingsContext";
 import { MembershipsProvider } from "./contexts/MembershipsContext";
 import { ToastProvider } from "./contexts/ToastContext";
@@ -63,7 +64,29 @@ function Lazy({ children }: { children: ReactNode }) {
   return <Suspense fallback={<LoadingState />}>{children}</Suspense>;
 }
 
+/**
+ * يربط انتهاء الجلسة (من طبقة الـ API) بتنقّل React Router دون إعادة تحميل (RC-B).
+ * يتجاهل الإشعار إن كنا أصلاً في صفحة الدخول لتفادي الحلقات.
+ */
+function useSessionExpiryRedirect() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { logout } = useAuth();
+  useEffect(() => {
+    return registerSessionExpiredHandler(() => {
+      // تفريغ حالة السياق (مسح التخزين تم في طبقة الـ API) دون طلب شبكة إضافي.
+      void logout();
+      if (!location.pathname.toLowerCase().startsWith("/signin")) {
+        const next = encodeURIComponent(location.pathname + location.search);
+        navigate(`/signin?next=${next}`, { replace: true });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigate, location.pathname]);
+}
+
 function AppContent() {
+  useSessionExpiryRedirect();
   const location = useLocation();
   const pathname = location.pathname.toLowerCase();
   const isUserPage = pathname.startsWith("/user");
