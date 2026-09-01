@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { API_BASE_URL } from "../../config";
+import { authFetch } from "../../lib/api";
 import Card from "../ui/Card";
 import Donut from "../ui/Donut";
 import DataTable from "../ui/DataTable";
@@ -46,7 +46,7 @@ export default function ExecutiveDashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/dashboard/executive/`)
+    authFetch(`/api/dashboard/executive/`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((d: DashboardData) => setData(d))
       .catch(() => setError("تعذّر تحميل بيانات اللوحة"))
@@ -56,6 +56,35 @@ export default function ExecutiveDashboard() {
   if (loading) return <AdminShell><LoadingState title="جارٍ تحميل لوحة الكادر…" /></AdminShell>;
   if (error) return <AdminShell><ErrorState title="خطأ" message={error} /></AdminShell>;
   if (!data) return <AdminShell><EmptyState title="لا توجد بيانات" /></AdminShell>;
+
+  // لا «غير موجود»: نطاق الكادر بلا بيانات بعد → توجيه صريح للتغذية.
+  const isEmpty =
+    data.sections.length === 0 &&
+    data.employees.length === 0 &&
+    data.tasks.length === 0 &&
+    data.kpis.length === 0;
+  if (isEmpty) {
+    return (
+      <AdminShell>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-extrabold text-primary">الكادر</h1>
+            <p className="mt-1 text-sm text-brand-gray">الأقسام والموظفون ومؤشرات الأداء</p>
+          </div>
+          <Link to="/Admin/staff/manage" className="btn-secondary">تغذية اللوحة</Link>
+        </div>
+        <Card>
+          <EmptyState
+            title="لا توجد بيانات كادر بعد"
+            message="ابدأ بإضافة الأقسام والموظفين والمهام من صفحة «تغذية لوحة الكادر»."
+          />
+          <div className="mt-4 flex justify-center">
+            <Link to="/Admin/staff/manage" className="btn-primary">فتح تغذية اللوحة</Link>
+          </div>
+        </Card>
+      </AdminShell>
+    );
+  }
 
   return (
     <AdminShell>
