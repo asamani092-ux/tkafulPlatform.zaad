@@ -1,13 +1,23 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "../../../contexts/AuthContext";
 import { API_BASE_URL } from "../../../config";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
 import Button from "../../ui/Button";
 
+/** يقبل مسارات داخلية آمنة فقط (يبدأ بـ / وليس //) لتفادي التحويل المفتوح. */
+function safeNext(raw: string | null): string | null {
+  if (!raw) return null;
+  const path = decodeURIComponent(raw);
+  if (path.startsWith("/") && !path.startsWith("//")) return path;
+  return null;
+}
+
 export default function SignIn() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const next = safeNext(searchParams.get("next"));
   const { login } = useAuth();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -52,6 +62,11 @@ export default function SignIn() {
       const userData = await profileRes.json();
       const role = userData.profile?.role || "user";
       login({ name: userData.profile?.name || userData.username, email: userData.email, role }, tokenData.access, tokenData.refresh);
+      // إعادة المستخدم لوجهته السابقة إن وُجدت (بعد انتهاء جلسة) — RC-B.
+      if (next) {
+        navigate(next, { replace: true });
+        return;
+      }
       // Phase B: مشرف→/Admin · طاقم→الكادر · عضو مشروع→المشاريع · متطوع→/user
       // المتبرعون يصلون لبوابة الكفالات عبر /projects/:slug/sponsorships (SaqyaHome يوجّه حسب الدور)
       if (role === "admin") {
