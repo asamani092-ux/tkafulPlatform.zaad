@@ -7,6 +7,7 @@ import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Badge from "../../ui/Badge";
 import Input from "../../ui/Input";
+import FileInput from "../../ui/FileInput";
 import Modal from "../../ui/Modal";
 
 interface Order { id: number; sponsorship_type: string; status: string; }
@@ -74,10 +75,7 @@ export default function SupplierPortal() {
           <Input label="رقم الفاتورة" value={inv.invoice_number} onChange={(e) => setInv({ ...inv, invoice_number: e.target.value })} />
           <Input type="number" label="المبلغ" value={inv.amount} onChange={(e) => setInv({ ...inv, amount: e.target.value })} />
           <Input type="number" label="الإجمالي" value={inv.total_amount} onChange={(e) => setInv({ ...inv, total_amount: e.target.value })} />
-          <div>
-            <label className="label-field">ملف الفاتورة</label>
-            <input type="file" className="input-field" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-          </div>
+          <FileInput label="ملف الفاتورة" onChange={(e) => setFile(e.target.files?.[0] || null)} />
           <div className="flex gap-2"><Button onClick={submitInvoice}>رفع</Button><Button variant="secondary" onClick={() => setInvoiceFor(null)}>إلغاء</Button></div>
         </div>
       </Modal>

@@ -95,3 +95,24 @@ Legend: ✅ allowed · 🚫 denied (401/403) · 🔎 scoped queryset · — n/a
 | `GET /api/volunteers/?q=` | 🚫 | 🚫 | 🚫 | ✅ | بحث متطوعين |
 | `POST/PATCH /api/accounts/users/` (+city) | 🚫 | 🚫 | 🚫 | ✅ | إنشاء متطوّع معتمد |
 | قائمة كفالات `total_funded` | 🚫 | 🔎 | — | ✅ | annotate Subquery D-49 |
+
+## UX2 (الجولة الثانية) — نقاط جديدة/معدّلة
+
+| Endpoint | Anon | Auth | Role-scoped | Admin | Notes |
+|----------|------|------|-------------|-------|-------|
+| `GET /api/reports/scope/?type=&project=` | 🚫 | 🚫 | 🚫 | ✅ | **IsAdmin**؛ نطاق platform/project/volunteers/sponsorships؛ لا تسريب عام (P4) |
+| `GET /api/reports/volunteer-tasks/` (+metrics) | 🚫 | 🚫 | 🚫 | ✅ | IsAdmin؛ أضيف كتلة `metrics` (ساعات/مشاريع/مهام) |
+| `POST /api/maps/admin/items/bulk_upload/` | 🚫 | 🔎 | project staff (can_edit) | ✅ | رفع مواقع بالجملة؛ `_require_edit(map)`؛ إحداثيات تُطبَّع خادمياً |
+| `GET /api/maps/admin/items/template/` | 🚫 | 🔎 | project staff | ✅ | قالب CSV؛ نفس نطاق كتابة الخرائط |
+| `POST …/projects/<id>/add_member/` | 🚫 | 🔎 | super/project_admin | ✅ | **أي مستخدم** بلا قيد دور (قرار العميل)؛ الحارس يبقى على المُضيف لا المُضاف |
+| `GET /api/saqya/{dashboard,sponsorships,orders}/?project=<slug>` | 🚫 | 🔎 | role-scoped + project | ✅ | تصفية إضافية بالمشروع فوق نطاق الدور (IDOR-safe يبقى) |
+
+### تدقيق الخصوصية (UX2)
+- **بوّابة التقارير** و**تقرير إنجاز المتطوّع**: `IsAdmin` حصراً؛ الأسماء/البُرد تُعرض
+  للمشرف فقط (لا نقطة عامة). لا حاجة لإخفاء `<5` لأنها ليست تجميعات عامة.
+- **رفع الخرائط بالجملة**: يقبل إحداثيات/أسماء مواقع فقط (لا PII شخصية)؛ محمي بنطاق
+  كتابة المشروع؛ الحقول المخصّصة تُقصَر على مخطط `MapItemField` المعرّف (نطاق دقيق).
+- **إضافة الأعضاء**: تقرأ `/api/accounts/users/` (‏`IsAdmin`)؛ تُعرض الأسماء/البُرد
+  للمشرف فقط ضمن مُنتقٍ داخل بطاقة المشروع.
+- **نطاق الكفالات بالمشروع**: يضيّق الرؤية فقط؛ لا يوسّعها (يبقى فلتر الدور الأساسي).
+- **PDF التقارير**: يُولَّد عبر محرّك طباعة المتصفّح (DOM) فلا يمرّ النص بخدمة خارجية.

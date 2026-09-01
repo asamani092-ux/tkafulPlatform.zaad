@@ -9,7 +9,12 @@ import { join } from "node:path";
  * O(F·L) — F ملفات الإدارة، L أسطر كل ملف.
  */
 
-const ADMIN_DIR = join(__dirname, "..", "components", "pages", "admin");
+const BASE = join(__dirname, "..", "components");
+const SCAN_DIRS = [
+  join(BASE, "pages", "admin"),
+  join(BASE, "pages", "saqya"),
+  join(BASE, "layout"),
+];
 
 function tsxFiles(dir: string): string[] {
   return readdirSync(dir)
@@ -19,9 +24,9 @@ function tsxFiles(dir: string): string[] {
 }
 
 describe("تبنّي نظام التصميم في الإدارة", () => {
-  const files = tsxFiles(ADMIN_DIR);
+  const files = SCAN_DIRS.flatMap(tsxFiles);
 
-  it("يوجد ملفات إدارة للفحص", () => {
+  it("يوجد ملفات للفحص", () => {
     expect(files.length).toBeGreaterThan(5);
   });
 
