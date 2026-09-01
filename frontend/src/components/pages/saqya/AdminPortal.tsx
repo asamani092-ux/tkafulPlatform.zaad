@@ -17,9 +17,10 @@ interface Profile { id: number; user: number; name: string; business_name?: stri
 const TABS = [{ key: "sponsorships", label: "الكفالات" }, { key: "orders", label: "الطلبات" }, { key: "map", label: "الخريطة" }];
 const SP_STATUS: Record<string, string> = { pending: "قيد المراجعة", approved: "معتمدة", rejected: "مرفوضة", in_progress: "قيد التنفيذ", completed: "مكتملة" };
 
-export default function AdminPortal() {
+export default function AdminPortal({ projectSlug }: { projectSlug?: string }) {
   const { success, error } = useToast();
   const [tab, setTab] = useState("sponsorships");
+  const scope = projectSlug ? `?project=${encodeURIComponent(projectSlug)}` : "";
   const [stats, setStats] = useState<Record<string, number>>({});
   const [sponsorships, setSponsorships] = useState<Sponsorship[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -30,14 +31,14 @@ export default function AdminPortal() {
   const j = (p: string) => authFetch(p).then((r) => (r.ok ? r.json() : null));
 
   const load = () => {
-    j("/api/saqya/dashboard/").then((d) => d && setStats(d));
-    j("/api/saqya/sponsorships/").then((d) => d && setSponsorships(d.results || d));
-    j("/api/saqya/orders/").then((d) => d && setOrders(d.results || d));
+    j(`/api/saqya/dashboard/${scope}`).then((d) => d && setStats(d));
+    j(`/api/saqya/sponsorships/${scope}`).then((d) => d && setSponsorships(d.results || d));
+    j(`/api/saqya/orders/${scope}`).then((d) => d && setOrders(d.results || d));
     j("/api/saqya/suppliers/").then((d) => d && setSuppliers(d.results || d));
     j("/api/saqya/representatives/").then((d) => d && setReps(d.results || d));
     j("/api/saqya/map/").then((d) => d && setPoints(d.points || []));
   };
-  useEffect(load, []);
+  useEffect(load, [scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const spAct = async (id: number, a: "approve" | "reject") => {
     const res = await authFetch(`/api/saqya/sponsorships/${id}/${a}/`, { method: "POST", body: JSON.stringify({}) });
@@ -113,9 +114,9 @@ function AssignRow({ suppliers, reps, onAssign }: { suppliers: Profile[]; reps: 
   const [r, setR] = useState("");
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-      <Select value={s} onChange={(e) => setS(e.target.value)}><option value="">المورّد</option>{suppliers.map((x) => <option key={x.id} value={x.user}>{x.business_name || x.name}</option>)}</Select>
-      <Select value={r} onChange={(e) => setR(e.target.value)}><option value="">المندوب</option>{reps.map((x) => <option key={x.id} value={x.user}>{x.name}</option>)}</Select>
-      <Button onClick={() => onAssign(s, r)}>إسناد</Button>
+      <Select label="المورّد" value={s} onChange={(e) => setS(e.target.value)}><option value="">اختر المورّد</option>{suppliers.map((x) => <option key={x.id} value={x.user}>{x.business_name || x.name}</option>)}</Select>
+      <Select label="المندوب" value={r} onChange={(e) => setR(e.target.value)}><option value="">اختر المندوب</option>{reps.map((x) => <option key={x.id} value={x.user}>{x.name}</option>)}</Select>
+      <div className="flex items-end"><Button onClick={() => onAssign(s, r)}>إسناد</Button></div>
     </div>
   );
 }

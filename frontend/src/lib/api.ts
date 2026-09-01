@@ -51,7 +51,9 @@ async function tryRefresh(): Promise<string | null> {
 function withAuth(options: RequestInit, token: string | null): RequestInit {
   const headers = new Headers(options.headers || {});
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  if (options.body && !headers.has("Content-Type")) {
+  // FormData يضبط حدوده بنفسه — لا تفرض JSON عليه.
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  if (options.body && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
   return { ...options, headers };

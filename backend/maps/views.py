@@ -223,6 +223,8 @@ class MapItemViewSet(_MapChildViewSet):
                 MapItemField.objects.filter(map_id=map_id).order_by("order").values_list("key", flat=True)
             )
             headers += field_keys
+        from django.http import HttpResponse
+
         buf = io.StringIO()
         writer = csv.writer(buf)
         writer.writerow(headers)
@@ -230,7 +232,7 @@ class MapItemViewSet(_MapChildViewSet):
         example = ["مركز التوزيع", "https://maps.google.com/?q=24.7136,46.6753", "الطبقة الأولى"]
         example += [""] * (len(headers) - 3)
         writer.writerow(example)
-        resp = Response(buf.getvalue(), content_type="text/csv; charset=utf-8")
+        resp = HttpResponse("\ufeff" + buf.getvalue(), content_type="text/csv; charset=utf-8")
         resp["Content-Disposition"] = 'attachment; filename="map_items_template.csv"'
         return resp
 

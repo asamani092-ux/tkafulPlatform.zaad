@@ -60,8 +60,10 @@ class BulkUploadTests(APITestCase):
         self.client.force_authenticate(self.admin)
         res = self.client.get(f"/api/maps/admin/items/template/?map={self.map.id}")
         self.assertEqual(res.status_code, 200)
-        self.assertIn("name", res.data)
-        self.assertIn("coordinates", res.data)
+        self.assertTrue(res["Content-Type"].startswith("text/csv"))
+        body = res.content.decode("utf-8-sig")
+        self.assertIn("name", body)
+        self.assertIn("coordinates", body)
 
     def test_bulk_upload_csv_with_links(self):
         self.client.force_authenticate(self.admin)

@@ -6,6 +6,7 @@ import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Tabs from "../../ui/Tabs";
+import ReportGateway from "./ReportGateway";
 import { LoadingState } from "../../feedback/PageStates";
 
 interface Report { id: number; title: string; total_projects: number; total_volunteers: number; total_tasks: number; generated_at: string }
@@ -40,7 +41,7 @@ const SUMMARY_LABELS: Record<string, string> = {
 export default function Reports() {
   const { access } = useAuth();
   const { success, error } = useToast();
-  const [tab, setTab] = useState("saved");
+  const [tab, setTab] = useState("gateway");
 
   const [reports, setReports] = useState<Report[]>([]);
   const [generating, setGenerating] = useState(false);
@@ -96,11 +97,14 @@ export default function Reports() {
 
       <div className="mb-4">
         <Tabs active={tab} onChange={(k) => { setTab(k); setDetail(null); }} tabs={[
+          { key: "gateway", label: "بوّابة التقارير" },
           { key: "saved", label: "التقارير المحفوظة" },
           { key: "performance", label: "أداء المتطوعين" },
           { key: "progress", label: "تقدّم المشاريع" },
         ]} />
       </div>
+
+      {tab === "gateway" && <ReportGateway />}
 
       {tab === "saved" && (
         <>

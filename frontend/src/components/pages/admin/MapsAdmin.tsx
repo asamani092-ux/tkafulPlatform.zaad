@@ -8,9 +8,11 @@ import Badge from "../../ui/Badge";
 import Checkbox from "../../ui/Checkbox";
 import Tabs from "../../ui/Tabs";
 import Modal from "../../ui/Modal";
+import Alert from "../../ui/Alert";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
+import { externalMapUrl } from "../../../utils/mapsLink";
 import { optionLabel, optionValue } from "../projects/filters";
 import type { MapFieldDef } from "../projects/types";
 
@@ -283,10 +285,16 @@ export default function MapsAdmin() {
                     <span className="text-xs text-brand-gray">({i.layer_name})</span>
                     <span className="text-xs text-brand-gray" dir="ltr">{i.lat.toFixed(4)}, {i.lng.toFixed(4)}</span>
                     <Badge variant={i.status === "active" ? "success" : "warning"}>{arLabel(ITEM_STATUS_LABELS, i.status)}</Badge>
+                    <a href={externalMapUrl(i.lat, i.lng)} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
+                      الذهاب للموقع ↗
+                    </a>
                   </div>
                 ))}
                 {items.length === 0 && <p className="text-brand-gray">لا عناصر بعد.</p>}
               </div>
+
+              <BulkUploadItems mapId={selected.id} onDone={() => void loadChildren(selected.id)} />
 
               {/* نموذج إدخال ديناميكي مبني على مخطط MapItemField */}
               <h3 className="mb-2 text-sm font-bold text-primary">إضافة عنصر (نموذج ديناميكي من مخطط الخريطة)</h3>
@@ -377,5 +385,83 @@ export default function MapsAdmin() {
         </Card>
       )}
     </AdminShell>
+  );
+}
+
+/**
+ * رفع مواقع بالجملة عبر CSV (UX2 P4 · 3.7).
+ * الإحداثيات تُقبل بأي صيغة (رابط Google/خام) وتُطبَّع على الخادم.
+ */
+function BulkUploadItems({ mapId, onDone }: { mapId: number; onDone: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ created: number; errors: Array<{ row: number; reason: string }> } | null>(null);
+
+  const upload = async (file: File) => {
+    setBusy(true);
+    setResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("map", String(mapId));
+      fd.append("file", file);
+      const res = await authFetch("/api/maps/admin/items/bulk_upload/", { method: "POST", body: fd });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data) {
+        setResult(data);
+        toast.success({ title: `أُضيف ${data.created} موقعاً`, description: data.errors.length ? `${data.errors.length} صفوف بها أخطاء` : undefined });
+        onDone();
+      } else {
+        toast.error({ title: data?.detail || "تعذّر الرفع" });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const downloadTemplate = async () => {
+    const res = await authFetch(`/api/maps/admin/items/template/?map=${mapId}`);
+    if (!res.ok) { toast.error({ title: "تعذّر تنزيل القالب" }); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "map_items_template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="mt-4 rounded-lg border border-surface-border p-3">
+      <h3 className="mb-2 text-sm font-bold text-primary">رفع مواقع بالجملة (Excel/CSV)</h3>
+      <p className="mb-2 text-xs text-brand-gray">
+        نزّل القالب، عبّئ الأعمدة (الاسم، الإحداثيات، الطبقة)، ثم ارفعه. عمود «الإحداثيات» يقبل
+        رابط خرائط Google أو إحداثيات خام مثل <code dir="ltr">24.71, 46.67</code>.
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="button" variant="secondary" size="sm" onClick={() => void downloadTemplate()}>تنزيل القالب</Button>
+        <label className="btn-primary btn-sm" style={{ cursor: busy ? "not-allowed" : "pointer" }}>
+          {busy ? "جاري الرفع…" : "اختيار ملف CSV"}
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            className="sr-only"
+            disabled={busy}
+            aria-label="رفع ملف مواقع CSV"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ""; }}
+          />
+        </label>
+      </div>
+      {result && result.errors.length > 0 && (
+        <div className="mt-3">
+          <Alert tone="warning" title={`${result.errors.length} صفوف لم تُضَف`}>
+            <ul className="mt-1 max-h-32 list-disc space-y-0.5 overflow-y-auto pe-4 text-xs">
+              {result.errors.slice(0, 20).map((er, i) => (
+                <li key={i}>الصف {er.row}: {er.reason}</li>
+              ))}
+            </ul>
+          </Alert>
+        </div>
+      )}
+    </div>
   );
 }
