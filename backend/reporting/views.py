@@ -97,11 +97,25 @@ def volunteer_tasks_report(request):
 
     tasks = Task.objects.filter(
         volunteer_id=volunteer_id
-    ).order_by('-due_date')
+    ).select_related('project').order_by('-due_date')
 
     serializer = TaskSerializer(tasks, many=True)
+
+    # مقاييس الإنجاز المطلوبة (UX2 P4 · المتطوّعون 3.4):
+    # ساعات التطوّع + عدد المشاريع المشارَك فيها + المهام المنجزة.
+    completed_tasks = sum(1 for t in tasks if t.status == 'مكتملة')
+    projects_participated = len({t.project_id for t in tasks if t.project_id})
+    profile = getattr(User.objects.filter(pk=volunteer_id).first(), 'profile', None)
+    volunteer_hours = getattr(profile, 'total_volunteer_hours', 0) if profile else 0
+
     return Response({
-        'tasks': serializer.data
+        'tasks': serializer.data,
+        'metrics': {
+            'volunteer_hours': volunteer_hours,
+            'projects_participated': projects_participated,
+            'completed_tasks': completed_tasks,
+            'total_tasks': tasks.count(),
+        },
     })
 
 
@@ -342,6 +356,99 @@ def delete_report(request, report_id):
             {'error': 'التقرير غير موجود'},
             status=status.HTTP_404_NOT_FOUND
         )
+
+
+@api_view(['GET'])
+@permission_classes([IsAdmin])
+def report_scope(request):
+    """
+    GET /api/reports/scope/?type=<platform|project|volunteers|sponsorships>&project=<id|slug>
+    بوّابة تقارير موحّدة (UX2 P4 · 3.9) — تُعيد بيانات منظّمة للعرض على الشاشة
+    وتصدير CSV/PDF على الواجهة (المتصفّح يشكّل العربية طباعياً بشكل صحيح).
+    O(N) على صفوف النطاق المطلوب.
+    """
+    from projects.models import Project
+
+    scope = request.query_params.get('type', 'platform')
+    project_ref = request.query_params.get('project')
+
+    def project_row(p):
+        tasks = Task.objects.filter(project=p)
+        total = tasks.count()
+        done = tasks.filter(status='مكتملة').count()
+        return {
+            'id': p.id,
+            'name': p.name,
+            'slug': p.slug,
+            'status': p.status,
+            'volunteers': ProjectAssignment.objects.filter(project=p).count(),
+            'tasks_total': total,
+            'tasks_completed': done,
+            'completion_rate': int((done / total) * 100) if total else 0,
+        }
+
+    if scope == 'project':
+        if not project_ref:
+            return Response({'error': 'معرّف المشروع مطلوب'}, status=status.HTTP_400_BAD_REQUEST)
+        p = Project.objects.filter(slug=project_ref).first() or Project.objects.filter(pk=project_ref if str(project_ref).isdigit() else 0).first()
+        if not p:
+            return Response({'error': 'المشروع غير موجود'}, status=status.HTTP_404_NOT_FOUND)
+        rows = [project_row(p)]
+        return Response({'scope': 'project', 'title': f'تقرير المشروع: {p.name}',
+                         'columns': ['name', 'status', 'volunteers', 'tasks_total', 'tasks_completed', 'completion_rate'],
+                         'rows': rows})
+
+    if scope == 'volunteers':
+        vols = User.objects.filter(profile__role='user', profile__is_approved=True).select_related('profile')
+        rows = []
+        for v in vols:
+            completed = v.assigned_tasks.filter(status='مكتملة').count()
+            projects_participated = len({t.project_id for t in v.assigned_tasks.all() if t.project_id})
+            rows.append({
+                'id': v.id,
+                'name': v.profile.name,
+                'email': v.email,
+                'volunteer_hours': v.profile.total_volunteer_hours,
+                'projects_participated': projects_participated,
+                'completed_tasks': completed,
+            })
+        return Response({'scope': 'volunteers', 'title': 'تقرير المتطوّعين',
+                         'columns': ['name', 'email', 'volunteer_hours', 'projects_participated', 'completed_tasks'],
+                         'rows': rows})
+
+    if scope == 'sponsorships':
+        try:
+            from sponsorships.models import Sponsorship
+        except Exception:
+            return Response({'scope': 'sponsorships', 'title': 'تقرير الكفالات', 'columns': [], 'rows': []})
+        qs = Sponsorship.objects.select_related('donor__profile', 'project')
+        if project_ref:
+            qs = qs.filter(project__slug=project_ref)
+        rows = [{
+            'id': s.id,
+            'type': s.type,
+            'amount': float(s.amount),
+            'status': s.status,
+            'donor': getattr(getattr(s.donor, 'profile', None), 'name', '') or (s.donor.email if s.donor_id else ''),
+            'project': s.project.name if s.project_id else '—',
+        } for s in qs]
+        return Response({'scope': 'sponsorships', 'title': 'تقرير الكفالات',
+                         'columns': ['type', 'amount', 'status', 'donor', 'project'],
+                         'rows': rows})
+
+    # platform (افتراضي)
+    projects = Project.objects.all()
+    rows = [project_row(p) for p in projects]
+    summary = {
+        'total_projects': projects.count(),
+        'total_volunteers': User.objects.filter(profile__role='user', profile__is_approved=True).count(),
+        'total_tasks': Task.objects.count(),
+        'total_completed_tasks': Task.objects.filter(status='مكتملة').count(),
+        'total_hours': User.objects.filter(profile__role='user').aggregate(t=Sum('profile__total_volunteer_hours'))['t'] or 0,
+    }
+    return Response({'scope': 'platform', 'title': 'تقرير المنصّة الشامل', 'summary': summary,
+                     'columns': ['name', 'status', 'volunteers', 'tasks_total', 'tasks_completed', 'completion_rate'],
+                     'rows': rows})
 
 
 @api_view(['GET'])

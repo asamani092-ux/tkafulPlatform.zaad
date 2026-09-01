@@ -78,6 +78,10 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
         qs = annotate_sponsorship_funding(
             Sponsorship.objects.select_related("donor__profile")
         )
+        # نطاق المشروع (UX2 P4): البوابة تُفتح من بطاقة مشروع فتُصفّى بكفالاته.
+        project_slug = self.request.query_params.get("project")
+        if project_slug:
+            qs = qs.filter(project__slug=project_slug)
         if r == "admin":
             return qs
         if r == "donor":
@@ -194,6 +198,9 @@ class OrderViewSet(viewsets.ModelViewSet):
         u = self.request.user
         r = role(u)
         qs = Order.objects.select_related("sponsorship", "supplier__profile", "representative__profile")
+        project_slug = self.request.query_params.get("project")
+        if project_slug:
+            qs = qs.filter(sponsorship__project__slug=project_slug)
         if r == "admin":
             return qs
         if r == "supplier":
@@ -432,13 +439,19 @@ def saqya_dashboard(request):
     """إحصاءات حسب الدور."""
     u = request.user
     r = role(u)
+    project_slug = request.query_params.get("project")
     if r == "admin":
+        base = Sponsorship.objects.all()
+        payments = Payment.objects.filter(status="completed")
+        if project_slug:
+            base = base.filter(project__slug=project_slug)
+            payments = payments.filter(sponsorship__project__slug=project_slug)
         data = {
-            "total_sponsorships": Sponsorship.objects.count(),
-            "active": Sponsorship.objects.filter(status="in_progress").count(),
-            "completed": Sponsorship.objects.filter(status="completed").count(),
-            "pending": Sponsorship.objects.filter(status="pending").count(),
-            "total_funded": float(sum(float(p.amount) for p in Payment.objects.filter(status="completed"))),
+            "total_sponsorships": base.count(),
+            "active": base.filter(status="in_progress").count(),
+            "completed": base.filter(status="completed").count(),
+            "pending": base.filter(status="pending").count(),
+            "total_funded": float(sum(float(p.amount) for p in payments)),
         }
     elif r == "donor":
         mine = Sponsorship.objects.filter(donor=u)
