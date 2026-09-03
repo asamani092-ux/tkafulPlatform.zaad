@@ -27,7 +27,7 @@
 ## بوابة الاختبار
 
 - `sponsorships.tests_sponsorship_types` — CRUD، تحقق الحقول، كفالة مع/بدون نوع، ملء `type`، بقاء null للقديم
-- `sponsorships` + `core.tests_security` — حماية التمويل ما زالت خضراء
+- جناح `sponsorships` + `core.tests_security` — حماية التمويل خضراء
 - `npm run build` (tsc + vite) أخضر
 - `manage.py check` نظيف
 
