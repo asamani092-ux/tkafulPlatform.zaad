@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
 import SaqyaShell from "../../layout/SaqyaShell";
+import { labelAr, ORDER_STATUS_AR, SPONSORSHIP_STATUS_AR } from "../../../i18n/labels";
+import type { ReactNode } from "react";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Badge from "../../ui/Badge";
@@ -15,9 +17,9 @@ interface Order { id: number; sponsorship_type: string; status: string; supplier
 interface Profile { id: number; user: number; name: string; business_name?: string; }
 
 const TABS = [{ key: "sponsorships", label: "الكفالات" }, { key: "orders", label: "الطلبات" }, { key: "map", label: "الخريطة" }];
-const SP_STATUS: Record<string, string> = { pending: "قيد المراجعة", approved: "معتمدة", rejected: "مرفوضة", in_progress: "قيد التنفيذ", completed: "مكتملة" };
-
-export default function AdminPortal({ projectSlug }: { projectSlug?: string }) {
+export default function AdminPortal({ projectSlug, embedded = false }: { projectSlug?: string; embedded?: boolean }) {
+  const Shell = ({ children }: { children: ReactNode }) =>
+    embedded ? <div>{children}</div> : <SaqyaShell>{children}</SaqyaShell>;
   const { success, error } = useToast();
   const [tab, setTab] = useState("sponsorships");
   const scope = projectSlug ? `?project=${encodeURIComponent(projectSlug)}` : "";
@@ -61,7 +63,7 @@ export default function AdminPortal({ projectSlug }: { projectSlug?: string }) {
   ];
 
   return (
-    <SaqyaShell>
+    <Shell>
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {kpis.map((k) => (
           <Card key={k.label}><div className="text-center"><div className="text-2xl font-extrabold text-primary">{k.value.toLocaleString("en-US")}</div><div className="mt-1 text-xs text-brand-gray">{k.label}</div></div></Card>
@@ -76,7 +78,7 @@ export default function AdminPortal({ projectSlug }: { projectSlug?: string }) {
             <Card key={s.id}>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="font-bold text-primary">{s.type} — {Number(s.amount).toLocaleString("en-US")} ر.س</h3>
-                <Badge variant={s.status === "completed" ? "success" : s.status === "rejected" ? "danger" : "warning"}>{SP_STATUS[s.status] || s.status}</Badge>
+                <Badge variant={s.status === "completed" ? "success" : s.status === "rejected" ? "danger" : "warning"}>{labelAr(SPONSORSHIP_STATUS_AR, s.status)}</Badge>
               </div>
               <p className="mb-2 text-xs text-brand-gray">المتبرّع: {s.donor_name} · مموّل: {s.total_funded}</p>
               {s.status === "pending" && (
@@ -93,7 +95,7 @@ export default function AdminPortal({ projectSlug }: { projectSlug?: string }) {
             <Card key={o.id}>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="font-bold text-primary">طلب #{o.id} — {o.sponsorship_type}</h3>
-                <Badge variant="primary">{o.status}</Badge>
+                <Badge variant="primary">{labelAr(ORDER_STATUS_AR, o.status)}</Badge>
               </div>
               <p className="mb-2 text-xs text-brand-gray">مورّد: {o.supplier_name || "—"} · مندوب: {o.representative_name || "—"}</p>
               {(o.status === "pending" || o.status === "assigned") && (
@@ -105,7 +107,7 @@ export default function AdminPortal({ projectSlug }: { projectSlug?: string }) {
       )}
 
       {tab === "map" && <SaqyaMap points={points} />}
-    </SaqyaShell>
+    </Shell>
   );
 }
 

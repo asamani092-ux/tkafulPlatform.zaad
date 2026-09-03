@@ -48,6 +48,7 @@ const ProjectLanding = lazy(() => import("./components/pages/projects/ProjectLan
 const ProjectMapPage = lazy(() => import("./components/pages/projects/ProjectMapPage"));
 const MapsAggregator = lazy(() => import("./components/pages/projects/MapsAggregator"));
 const PlatformProjects = lazy(() => import("./components/pages/admin/PlatformProjects"));
+const ProjectSponsorshipsAdmin = lazy(() => import("./components/pages/admin/ProjectSponsorshipsAdmin"));
 const MapsAdmin = lazy(() => import("./components/pages/admin/MapsAdmin"));
 const PlatformSettingsPage = lazy(() => import("./components/pages/admin/PlatformSettings"));
 const BroadcastAdmin = lazy(() => import("./components/pages/admin/BroadcastAdmin"));
@@ -127,6 +128,7 @@ function AppContent() {
 
           {/* 1. المشاريع — الإنشاء داخل القائمة؛ /create يُحوّل توافقياً (domains.ts) */}
           <Route path="/Admin/projects" element={<Lazy><ProtectedRoute requiredRole="staff"><PlatformProjects /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/projects/:slug/sponsorships" element={<Lazy><ProtectedRoute requiredRole="staff"><ProjectSponsorshipsAdmin /></ProtectedRoute></Lazy>} />
 
           {/* 2. المستخدمون */}
           <Route path="/Admin/users" element={<Lazy><ProtectedRoute requiredRole="admin"><UsersAdmin /></ProtectedRoute></Lazy>} />

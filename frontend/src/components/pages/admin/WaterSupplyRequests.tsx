@@ -6,6 +6,7 @@ import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Badge from "../../ui/Badge";
 import { LoadingState, EmptyState, ErrorState } from "../../feedback/PageStates";
+import { labelAr, WATER_STATUS_AR } from "../../../i18n/labels";
 
 interface WaterRow {
   id: number;
@@ -59,7 +60,7 @@ export default function WaterSupplyRequests() {
             <Card key={r.id}>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="font-bold text-primary">{r.mosque_name || `طلب #${r.id}`}</h3>
-                {r.status && <Badge variant="warning">{r.status}</Badge>}
+                {r.status && <Badge variant="warning">{labelAr(WATER_STATUS_AR, r.status)}</Badge>}
               </div>
               <p className="text-sm text-brand-gray">
                 {r.applicant_name || "—"} · {r.neighborhood || "—"}

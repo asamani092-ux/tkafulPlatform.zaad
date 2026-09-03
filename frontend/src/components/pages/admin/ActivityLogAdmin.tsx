@@ -9,7 +9,7 @@ import Button from "../../ui/Button";
 import { LoadingState, ErrorState, EmptyState } from "../../feedback/PageStates";
 import { authFetch } from "../../../lib/api";
 import { ACTION_AR, ACTION_OPTIONS, activityQuery, type ActivityFilters } from "../../../admin/activityLog";
-import { labelAr } from "../../../i18n/labels";
+import { labelAr, formatActivityTarget } from "../../../i18n/labels";
 
 interface Row {
   id: number;
@@ -64,7 +64,7 @@ export default function ActivityLogAdmin() {
     { key: "created_at", header: "الوقت", render: (r) => r.created_at.slice(0, 16).replace("T", " ") },
     { key: "actor_email", header: "المنفّذ", render: (r) => r.actor_email || "—" },
     { key: "action", header: "الإجراء", render: (r) => labelAr(ACTION_AR, r.action) },
-    { key: "target_type", header: "الهدف", render: (r) => (r.target_type ? `${r.target_type} #${r.target_id}` : "—") },
+    { key: "target_type", header: "الهدف", render: (r) => formatActivityTarget(r.target_type, r.target_id) },
     { key: "summary", header: "الملخص" },
   ];
 
@@ -80,7 +80,6 @@ export default function ActivityLogAdmin() {
             setApplied({ ...filters });
           }}
         >
-          <Input label="معرّف المنفّذ" value={filters.actor} onChange={(e) => setFilters({ ...filters, actor: e.target.value })} />
           <Select label="الإجراء" value={filters.action} onChange={(e) => setFilters({ ...filters, action: e.target.value })}>
             <option value="">الكل</option>
             {ACTION_OPTIONS.map((o) => (

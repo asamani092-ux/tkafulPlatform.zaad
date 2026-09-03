@@ -15,6 +15,7 @@ import { authFetch } from "../../../lib/api";
 import { externalMapUrl } from "../../../utils/mapsLink";
 import { optionLabel, optionValue } from "../projects/filters";
 import type { MapFieldDef } from "../projects/types";
+import { labelAr } from "../../../i18n/labels";
 
 interface AdminMap {
   id: number; project: number; project_slug: string; project_name: string;
@@ -47,7 +48,7 @@ const ITEM_STATUS_LABELS: Record<string, string> = {
 const CONTRIB_STATUS_LABELS: Record<string, string> = {
   pending: "بانتظار الاعتماد", approved: "معتمد", fulfilled: "منفّذ", cancelled: "ملغى",
 };
-const arLabel = (map: Record<string, string>, key: string) => map[key] || key;
+const arLabel = (map: Record<string, string>, key: string) => labelAr(map, key);
 
 /** إدارة نظام الخرائط المتعددة — نطاق حسب عضوية المشروع. */
 export default function MapsAdmin() {
@@ -237,7 +238,7 @@ export default function MapsAdmin() {
               {fields.map((f) => (
                 <div key={f.id} className="flex flex-wrap items-center gap-2 text-sm">
                   <strong>{f.label}</strong>
-                  <code className="text-xs text-brand-gray" dir="ltr">{f.key}</code>
+                  
                   <Badge>{arLabel(FIELD_TYPE_LABELS, f.type)}</Badge>
                   {f.required && <Badge variant="warning">إلزامي</Badge>}
                   <Badge variant={f.is_public ? "success" : "danger"}>{f.is_public ? "عام" : "داخلي"}</Badge>
@@ -260,7 +261,6 @@ export default function MapsAdmin() {
                   label: e.target.value,
                   key: fieldForm.key && fieldForm.key !== fieldForm.label.replace(/\s+/g, "_") ? fieldForm.key : e.target.value.trim().replace(/\s+/g, "_").replace(/[^\w\u0600-\u06FF_]/g, "").toLowerCase(),
                 })} required />
-                <Input label="المفتاح (تلقائي)" value={fieldForm.key} onChange={(e) => setFieldForm({ ...fieldForm, key: e.target.value })} dir="ltr" required />
                 <Select label="النوع" value={fieldForm.type} onChange={(e) => setFieldForm({ ...fieldForm, type: e.target.value })}>
                   {FIELD_TYPES.map((t) => <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>)}
                 </Select>

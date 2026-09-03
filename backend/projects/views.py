@@ -25,7 +25,7 @@ from notifications.services import notify, EVENT_PROJECT
 
 from . import services
 from . import lifecycle
-from .tool_config import validate_tool_config
+from .tool_config import schema_payload, validate_tool_config
 from .models import Project, ProjectMember, ProjectTool, ProjectType
 from .permissions import CanManageProjectObject, IsSuperAdminOrProjectMember
 from .serializers import (
@@ -36,6 +36,13 @@ from .serializers import (
     ProjectTypeSerializer,
     PublicProjectSerializer,
 )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def tool_config_schema(request):
+    """مخطّط إعدادات أدوات المشروع + تسميات عربية لبناء نموذج الواجهة."""
+    return Response(schema_payload())
 
 
 # ---- عام ----

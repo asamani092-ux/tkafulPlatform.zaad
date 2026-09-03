@@ -10,16 +10,13 @@ import Textarea from "../../ui/Textarea";
 import Modal from "../../ui/Modal";
 import ProgressBar from "../../ui/ProgressBar";
 import { LoadingState, EmptyState } from "../../feedback/PageStates";
+import { labelAr, SPONSORSHIP_STATUS_AR } from "../../../i18n/labels";
 
 interface Sponsorship {
   id: number; amount: string; type: string; description: string; status: string;
   total_funded: number; remaining: number; is_fully_funded: boolean; beneficiaries_count: number;
 }
 
-const STATUS_AR: Record<string, string> = {
-  pending: "قيد المراجعة", approved: "معتمدة", rejected: "مرفوضة",
-  in_progress: "قيد التنفيذ", completed: "مكتملة", cancelled: "ملغاة",
-};
 
 export default function DonorPortal() {
   const { success, error } = useToast();
@@ -100,7 +97,7 @@ export default function DonorPortal() {
                   <Card key={s.id}>
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <h3 className="font-bold text-primary break-words">{s.type} — {Number(s.amount).toLocaleString("en-US")} ر.س</h3>
-                      <Badge variant={s.status === "completed" ? "success" : s.status === "rejected" ? "danger" : "warning"}>{STATUS_AR[s.status] || s.status}</Badge>
+                      <Badge variant={s.status === "completed" ? "success" : s.status === "rejected" ? "danger" : "warning"}>{labelAr(SPONSORSHIP_STATUS_AR, s.status)}</Badge>
                     </div>
                     <p className="mb-2 text-xs text-brand-gray break-words">{s.description}</p>
                     <div className="mb-2"><span className="me-2 text-sm">مموّل {s.total_funded} / {Number(s.amount)} ({pct}%)</span><ProgressBar value={pct} /></div>
