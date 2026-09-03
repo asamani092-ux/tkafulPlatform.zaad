@@ -19,6 +19,10 @@ TOOL_CONFIG_SCHEMA: dict[str, dict[str, str]] = {
     "sponsorships": {
         "show_target_amount": "bool",
         "target_amount": "number",  # >= 0
+        "show_description": "bool",
+        "show_location": "bool",
+        "show_public_type_fields": "bool",
+        "show_donation_cta": "bool",
     },
     "volunteering": {
         "show_opportunities": "bool",
@@ -54,6 +58,21 @@ TOOL_CONFIG_UI: dict[str, dict[str, dict]] = {
             "label": "المبلغ المستهدف",
             "hint": "بالريال، صفر أو أكثر",
             "min": 0,
+        },
+        "show_description": {
+            "label": "إظهار وصف الكفالة",
+            "hint": "في العرض العام للمتبرّعين",
+        },
+        "show_location": {
+            "label": "إظهار موقع الكفالة",
+        },
+        "show_public_type_fields": {
+            "label": "إظهار حقول النوع العامة",
+            "hint": "الحقول المعلّمة is_public في نوع الكفالة",
+        },
+        "show_donation_cta": {
+            "label": "إظهار زر التبرّع",
+            "hint": "يُخفى تلقائياً إن لم يُضبط رابط تبرّع للمشروع",
         },
     },
     "volunteering": {

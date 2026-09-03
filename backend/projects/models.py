@@ -143,3 +143,38 @@ class ProjectTool(models.Model):
 
     def __str__(self):
         return f"{self.project.slug}:{self.tool_key} ({'on' if self.is_enabled else 'off'})"
+
+
+class ProjectAllowedSupplier(models.Model):
+    """مورّدون مسموح إسنادهم ضمن مشروع — قائمة فارغة = بلا قيد."""
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="allowed_supplier_links")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="project_supplier_allowances"
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["project", "user"], name="uq_project_allowed_supplier"),
+        ]
+
+    def __str__(self):
+        return f"supplier {self.user_id} @ {self.project_id}"
+
+
+class ProjectAllowedRepresentative(models.Model):
+    """مندوبون مسموح إسنادهم ضمن مشروع — قائمة فارغة = بلا قيد."""
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="allowed_representative_links")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="project_representative_allowances"
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["project", "user"], name="uq_project_allowed_representative"),
+        ]
+
+    def __str__(self):
+        return f"representative {self.user_id} @ {self.project_id}"
+

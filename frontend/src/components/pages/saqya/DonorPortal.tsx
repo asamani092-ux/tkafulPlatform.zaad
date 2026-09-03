@@ -25,6 +25,7 @@ export default function DonorPortal({ projectSlug }: { projectSlug?: string }) {
   const [items, setItems] = useState<Sponsorship[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ amount: "", type: "سقيا", description: "", beneficiaries_count: "1", location: "" });
+  const [cfg, setCfg] = useState<{ show_description?: boolean; show_location?: boolean; show_public_type_fields?: boolean }>({});
   const [types, setTypes] = useState<{ id: number; name: string; fields: SchemaField[] }[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState("");
   const [typeData, setTypeData] = useState<Record<string, unknown>>({});
@@ -48,6 +49,13 @@ export default function DonorPortal({ projectSlug }: { projectSlug?: string }) {
     authFetch(`/api/saqya/sponsorship-types/?project=${encodeURIComponent(projectSlug)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setTypes(d.results || d))
+      .catch(() => undefined);
+    authFetch(`/api/platform/public/projects/${encodeURIComponent(projectSlug)}/`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const c = d?.tool_config?.sponsorships || {};
+        setCfg(c);
+      })
       .catch(() => undefined);
   }, [projectSlug]);
 
@@ -145,7 +153,9 @@ export default function DonorPortal({ projectSlug }: { projectSlug?: string }) {
                       <h3 className="font-bold text-primary break-words">{s.type} — {Number(s.amount).toLocaleString("en-US")} ر.س</h3>
                       <Badge variant={s.status === "completed" ? "success" : s.status === "rejected" ? "danger" : "warning"}>{labelAr(SPONSORSHIP_STATUS_AR, s.status)}</Badge>
                     </div>
-                    <p className="mb-2 text-xs text-brand-gray break-words">{s.description}</p>
+                    {cfg.show_description !== false && s.description && (
+                      <p className="mb-2 text-xs text-brand-gray break-words">{s.description}</p>
+                    )}
                     <div className="mb-2"><span className="me-2 text-sm">مموّل {s.total_funded} / {Number(s.amount)} ({pct}%)</span><ProgressBar value={pct} /></div>
                     {!s.is_fully_funded && s.status !== "rejected" && s.status !== "completed" && (
                       <Button variant="secondary" aria-label={`تبرّع للكفالة ${s.id}`} onClick={() => { setContribTarget(s); setContribAmount(String(s.remaining)); }}>

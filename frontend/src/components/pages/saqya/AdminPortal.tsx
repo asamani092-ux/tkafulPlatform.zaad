@@ -32,6 +32,8 @@ export default function AdminPortal({ projectSlug, embedded = false }: { project
   const [orders, setOrders] = useState<Order[]>([]);
   const [suppliers, setSuppliers] = useState<Profile[]>([]);
   const [reps, setReps] = useState<Profile[]>([]);
+  const [allowedSupplierIds, setAllowedSupplierIds] = useState<number[] | null>(null);
+  const [allowedRepIds, setAllowedRepIds] = useState<number[] | null>(null);
   const [points, setPoints] = useState<MapPoint[]>([]);
 
   const j = (p: string) => authFetch(p).then((r) => (r.ok ? r.json() : null));
@@ -43,6 +45,20 @@ export default function AdminPortal({ projectSlug, embedded = false }: { project
     j("/api/saqya/suppliers/").then((d) => d && setSuppliers(d.results || d));
     j("/api/saqya/representatives/").then((d) => d && setReps(d.results || d));
     j("/api/saqya/map/").then((d) => d && setPoints(d.points || []));
+    if (projectSlug) {
+      j(`/api/platform/projects/?slug=${encodeURIComponent(projectSlug)}`).then((d) => {
+        const arr = d?.results || d || [];
+        const proj = Array.isArray(arr) ? arr.find((x: { slug?: string }) => x.slug === projectSlug) || arr[0] : d;
+        if (!proj) return;
+        const sids = proj.allowed_supplier_ids;
+        const rids = proj.allowed_representative_ids;
+        setAllowedSupplierIds(Array.isArray(sids) && sids.length ? sids.map(Number) : null);
+        setAllowedRepIds(Array.isArray(rids) && rids.length ? rids.map(Number) : null);
+      });
+    } else {
+      setAllowedSupplierIds(null);
+      setAllowedRepIds(null);
+    }
   };
   useEffect(load, [scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -57,6 +73,13 @@ export default function AdminPortal({ projectSlug, embedded = false }: { project
     });
     if (res.ok) { success({ title: "تم الإسناد" }); load(); } else error({ title: "تعذّر الإسناد" });
   };
+
+  const assignableSuppliers = allowedSupplierIds
+    ? suppliers.filter((x) => allowedSupplierIds.includes(x.user))
+    : suppliers;
+  const assignableReps = allowedRepIds
+    ? reps.filter((x) => allowedRepIds.includes(x.user))
+    : reps;
 
   const kpis = [
     { label: "إجمالي الكفالات", value: stats.total_sponsorships ?? 0 },
@@ -105,7 +128,7 @@ export default function AdminPortal({ projectSlug, embedded = false }: { project
               </div>
               <p className="mb-2 text-xs text-brand-gray">مورّد: {o.supplier_name || "—"} · مندوب: {o.representative_name || "—"}</p>
               {(o.status === "pending" || o.status === "assigned") && (
-                <AssignRow suppliers={suppliers} reps={reps} onAssign={(s, r) => assign(o.id, s, r)} />
+                <AssignRow suppliers={assignableSuppliers} reps={assignableReps} onAssign={(s, r) => assign(o.id, s, r)} />
               )}
             </Card>
           ))}

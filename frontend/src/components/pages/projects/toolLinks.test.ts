@@ -36,3 +36,8 @@ describe("project tool links", () => {
     expect(donationInContext("", ["sponsorships"])).toBe(false);
   });
 });
+
+  it("hides donation when show_donation_cta is false", () => {
+    expect(donationInContext("https://x", ["sponsorships"], { sponsorships: { show_donation_cta: false } })).toBe(false);
+    expect(donationInContext("https://x", ["sponsorships"], { sponsorships: { show_donation_cta: true } })).toBe(true);
+  });

@@ -39,7 +39,7 @@ export default function ProjectLanding() {
   // الأدوات المعروضة عامّاً = المفعّلة التي لها وجهة فعلية (لا أزرار ميتة)
   const shownTools = visibleTools(project.tools, linkCtx);
   // زر التبرع يظهر فقط ضمن سياق الكفالات/الخدمات وعند وجود الرابط
-  const showDonation = donationInContext(project.donation_url, project.tools);
+  const showDonation = donationInContext(project.donation_url, project.tools, project.tool_config);
 
   return (
     <div dir="rtl" className="bg-surface-muted">

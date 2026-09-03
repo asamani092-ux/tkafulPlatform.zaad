@@ -216,8 +216,19 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
     def assign(self, request, pk=None):
         order = self.get_object()
-        order.supplier_id = request.data.get("supplier_id") or order.supplier_id
-        order.representative_id = request.data.get("representative_id") or order.representative_id
+        supplier_id = request.data.get("supplier_id") or order.supplier_id
+        representative_id = request.data.get("representative_id") or order.representative_id
+        project = getattr(order.sponsorship, "project", None)
+        if project is not None:
+            allowed_suppliers = list(project.allowed_supplier_links.values_list("user_id", flat=True))
+            allowed_reps = list(project.allowed_representative_links.values_list("user_id", flat=True))
+            # قائمة غير فارغة = فرض النطاق فقط؛ فارغة = بلا قيود
+            if allowed_suppliers and supplier_id and int(supplier_id) not in allowed_suppliers:
+                return Response({"detail": "المورّد غير مسموح ضمن هذا المشروع"}, status=400)
+            if allowed_reps and representative_id and int(representative_id) not in allowed_reps:
+                return Response({"detail": "المندوب غير مسموح ضمن هذا المشروع"}, status=400)
+        order.supplier_id = supplier_id
+        order.representative_id = representative_id
         order.status = "assigned"
         order.assigned_at = timezone.now()
         order.save()

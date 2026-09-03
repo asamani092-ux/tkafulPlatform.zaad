@@ -34,7 +34,18 @@ export function visibleTools(tools: string[], ctx: ToolLinkContext): string[] {
   return tools.filter((t) => resolveToolLink(t, ctx) !== null);
 }
 
-/** زر التبرع يظهر فقط ضمن سياق الكفالات/الخدمات وعند وجود الرابط. */
-export function donationInContext(donationUrl: string | undefined, tools: string[]): boolean {
-  return !!donationUrl && (tools.includes("sponsorships") || tools.includes("services"));
+/**
+ * زر التبرع يظهر فقط ضمن سياق الكفالات/الخدمات وعند وجود الرابط،
+ * ومع احترام show_donation_cta إن وُجد في إعدادات أداة الكفالات (افتراضياً true).
+ */
+export function donationInContext(
+  donationUrl: string | undefined,
+  tools: string[],
+  toolConfig?: Record<string, Record<string, unknown>>,
+): boolean {
+  if (!donationUrl) return false;
+  if (!(tools.includes("sponsorships") || tools.includes("services"))) return false;
+  const flag = toolConfig?.sponsorships?.show_donation_cta;
+  if (flag === false) return false;
+  return true;
 }

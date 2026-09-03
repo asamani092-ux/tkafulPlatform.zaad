@@ -27,6 +27,8 @@ interface AdminProject {
   next_actions: string[];
   type: number | null; type_name: string | null; type_slug: string | null;
   created_at?: string;
+  allowed_supplier_ids?: number[];
+  allowed_representative_ids?: number[];
 }
 
 const STATUS_BADGE: Record<string, "success" | "warning" | "danger" | "primary"> = {
@@ -61,15 +63,21 @@ export default function PlatformProjects() {
   const [allUsers, setAllUsers] = useState<Array<{ id: number; name: string; email: string }>>([]);
   const [memberPick, setMemberPick] = useState<string[]>([]);
   const [memberRole, setMemberRole] = useState("project_viewer");
+  const [supplierOpts, setSupplierOpts] = useState<Array<{ value: string; label: string }>>([]);
+  const [repOpts, setRepOpts] = useState<Array<{ value: string; label: string }>>([]);
+  const [allowSuppliers, setAllowSuppliers] = useState<string[]>([]);
+  const [allowReps, setAllowReps] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(false);
     try {
-      const [projectsRes, meRes, typesRes] = await Promise.all([
+      const [projectsRes, meRes, typesRes, supRes, repRes] = await Promise.all([
         authFetch("/api/platform/projects/"),
         authFetch("/api/platform/my-memberships/"),
         authFetch("/api/platform/project-types/"),
+        authFetch("/api/saqya/suppliers/"),
+        authFetch("/api/saqya/representatives/"),
       ]);
       if (!projectsRes.ok || !meRes.ok) throw new Error("fetch");
       setProjects(await projectsRes.json());
@@ -77,6 +85,20 @@ export default function PlatformProjects() {
       if (typesRes.ok) {
         const td = await typesRes.json();
         setTypes(Array.isArray(td) ? td : td.results || []);
+      }
+      if (supRes.ok) {
+        const sd = await supRes.json();
+        const arr = Array.isArray(sd) ? sd : sd.results || [];
+        setSupplierOpts(arr.map((x: { user: number; business_name?: string; name?: string }) => ({
+          value: String(x.user), label: x.business_name || x.name || String(x.user),
+        })));
+      }
+      if (repRes.ok) {
+        const rd = await repRes.json();
+        const arr = Array.isArray(rd) ? rd : rd.results || [];
+        setRepOpts(arr.map((x: { user: number; name?: string }) => ({
+          value: String(x.user), label: x.name || String(x.user),
+        })));
       }
     } catch {
       setError(true);
@@ -167,6 +189,22 @@ export default function PlatformProjects() {
     } else {
       const data = await res.json().catch(() => ({}));
       toast.error({ title: data.donation_url?.[0] || "تعذّر الحفظ" });
+    }
+  };
+
+  const saveAllowlists = async (project: AdminProject) => {
+    const res = await authFetch(`/api/platform/projects/${project.id}/`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        allowed_supplier_ids: allowSuppliers.map(Number),
+        allowed_representative_ids: allowReps.map(Number),
+      }),
+    });
+    if (res.ok) {
+      toast.success({ title: "تم حفظ نطاق الإسناد" });
+      void load();
+    } else {
+      toast.error({ title: "تعذّر حفظ نطاق الإسناد" });
     }
   };
 
@@ -293,7 +331,11 @@ export default function PlatformProjects() {
                   {p.created_at ? new Date(p.created_at).toLocaleDateString("ar") : "—"}
                 </span>
               </div>
-              <Button type="button" variant="secondary" onClick={() => setDetailId(p.id)}>التفاصيل</Button>
+              <Button type="button" variant="secondary" onClick={() => {
+                setDetailId(p.id);
+                setAllowSuppliers((p.allowed_supplier_ids || []).map(String));
+                setAllowReps((p.allowed_representative_ids || []).map(String));
+              }}>التفاصيل</Button>
             </div>
           </Card>
         ))}

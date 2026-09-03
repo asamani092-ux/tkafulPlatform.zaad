@@ -100,3 +100,20 @@ class ToolVisibilityTests(APITestCase):
         res = self.client.get("/api/platform/public/projects/vis-p/")
         self.assertNotIn("sponsorships", res.json()["tools"])
         self.assertNotIn("sponsorships", res.json().get("tool_config", {}))
+
+
+class SponsorshipToolConfigExtendedTests(APITestCase):
+    def test_new_sponsorship_keys_accepted(self):
+        from .tool_config import validate_tool_config, TOOL_CONFIG_SCHEMA, schema_payload
+        cfg = {
+            "show_target_amount": True,
+            "target_amount": 10,
+            "show_description": False,
+            "show_location": True,
+            "show_public_type_fields": True,
+            "show_donation_cta": False,
+        }
+        self.assertEqual(validate_tool_config("sponsorships", cfg), cfg)
+        for k in cfg:
+            self.assertIn(k, TOOL_CONFIG_SCHEMA["sponsorships"])
+            self.assertIn(k, schema_payload()["sponsorships"])
