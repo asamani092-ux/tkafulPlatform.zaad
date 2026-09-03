@@ -46,6 +46,10 @@ Legend: ✅ allowed · 🚫 denied (401/403) · 🔎 scoped queryset · — n/a
 | `GET /api/suggestions/` | 🚫 | 🚫 | — | ✅ | List IsAdmin; create AllowAny |
 | `POST /api/public-suggestions/` | ✅ | ✅ | — | ✅ | PublicWriteRateThrottle |
 | `GET/POST /api/saqya/sponsorships/` | 🚫 | 🔎 | donor owns | ✅ | IDOR-safe queryset |
+
+| `GET/POST/PATCH/DELETE /api/saqya/sponsorship-types/?project=` | 🚫 | 🔎 | donor: active list | ✅ admin / project_admin | أنواع ديناميكية؛ الكتابة لإدارة المشروع/المشرف |
+| `allowed_supplier_ids` / `allowed_representative_ids` على `PATCH /api/platform/projects/<id>/` | 🚫 | 🔎 | project_admin | ✅ | نطاق إسناد؛ قائمة فارغة = بلا قيد |
+| `POST /api/saqya/orders/<id>/assign/` | 🚫 | 🚫 | — | ✅ | يفرض نطاق المورّد/المندوب إن وُجدت قائمة غير فارغة |
 | `POST …/sponsorships/<id>/pay/` | 🚫 | 🔎 | donor | ✅ | PublicWriteRateThrottle on pay |
 | `GET /api/saqya/orders|invoices|documentation|payments/` | 🚫 | 🔎 | role/ownership | ✅ | IDOR-safe |
 | `GET /api/saqya/invoices/<id>/file/` | 🚫 | 🔎 | ownership | ✅ | Authenticated FileResponse |

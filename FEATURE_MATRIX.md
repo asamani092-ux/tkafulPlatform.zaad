@@ -31,7 +31,10 @@
 | طلبات الانضمام | `/Admin/volunteers/join-requests` | ✓ | — | — | — | قبول/رفض | admin | `/api/volunteer-requests/` |
 | الطلبات (نماذج) | `/Admin/requests/forms` | ✓ | ✓ | ✓ | ✓ | ربط بمشروع، إرسالات، حالة | admin | `/api/admin/request-forms/`, `…/request-submissions/` |
 | طلبات قديمة (توافق) | `/Admin/requests`, `…/water-supply`, `…/suggestions` | — | — | — | — | → `/Admin/requests/forms` | admin | جداول قديمة + مرآة |
-| الكفالات (فهرس) | داخل `/Admin/projects` | ✓ | — | — | — | رابط `/projects/:slug/sponsorships` (**بوابة مُنطّقة بالمشروع** `?project=slug`) | admin/staff | `/api/saqya/*` عبر البوابة |
+| الكفالات (فهرس) | داخل `/Admin/projects` | ✓ | — | — | — | رابط `/Admin/projects/:slug/sponsorships` (**بوابة مدمجة**) + `/projects/:slug/sponsorships` للمتبرّع | admin/staff | `/api/saqya/*` |
+| أنواع الكفالات | تبويب داخل بوابة كفالات المشروع | ✓ | ✓ | ✓ | ✓ | بنّاء حقول + معاينة؛ slug تلقائي؛ `type_data` | admin/staff | `/api/saqya/sponsorship-types/` |
+| إعدادات أداة الكفالات | إعدادات أداة المشروع | ✓ | — | ✓ | — | هدف/وصف/موقع/حقول عامة/CTA تبرّع | admin | `tool_config.sponsorships` |
+| نطاق إسناد مورّد/مندوب | تفاصيل المشروع | ✓ | — | ✓ | — | M2M؛ قائمة فارغة بلا قيد؛ فرض في `assign` | admin | `allowed_*_ids` |
 | الكفالات (توافق) | `/Admin/sponsorships` | — | — | — | — | → projects | — | — |
 | الخرائط | `/Admin/maps` | ✓ | ✓ + **رفع CSV بالجملة** | ✓ | ✓ | طبقات/عناصر/حقول/تعهدات/نشر، **قالب**، **ذهاب للموقع↗**، محلّل إحداثيات متساهل | admin/staff+map | `/api/maps/admin/*`, `…/items/bulk_upload/`, `…/items/template/` |
 | التقارير | `/Admin/reports` | ✓ | ✓ توليد + **بوّابة نطاقات** | — | ✓ | **نطاق: منصّة/مشروع/متطوّعون/كفالات**، عرض، CSV، **طباعة PDF عربية**، أداء، تقدّم | admin | `/api/reports/`, `/api/reports/scope/` |
