@@ -17,11 +17,13 @@ from django.db.models import DecimalField, OuterRef, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 
 from .models import (
-    SupplierProfile, RepresentativeProfile, Sponsorship, Order, Invoice, Payment, Documentation,
+    SupplierProfile, RepresentativeProfile, Sponsorship, SponsorshipType,
+    Order, Invoice, Payment, Documentation,
 )
 from .serializers import (
     SupplierProfileSerializer, RepresentativeProfileSerializer, SponsorshipSerializer,
-    OrderSerializer, InvoiceSerializer, PaymentSerializer, DocumentationSerializer,
+    SponsorshipTypeSerializer, OrderSerializer, InvoiceSerializer, PaymentSerializer,
+    DocumentationSerializer,
 )
 from .permissions import IsSaqyaAdmin, IsSaqyaStaffOrReadOnly
 from . import notifications as notify
@@ -478,3 +480,44 @@ def saqya_map(request):
     points = Sponsorship.objects.exclude(latitude__isnull=True).exclude(longitude__isnull=True) \
         .values("id", "type", "status", "location", "latitude", "longitude", "amount")
     return Response({"points": list(points)})
+
+
+# ============ أنواع الكفالات ============
+class SponsorshipTypeViewSet(viewsets.ModelViewSet):
+    """CRUD لأنواع الكفالات بنطاق مشروع + قائمة نشطة للمتبرّع."""
+    serializer_class = SponsorshipTypeSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = SponsorshipType.objects.select_related("project").all()
+        project_slug = self.request.query_params.get("project")
+        if project_slug:
+            qs = qs.filter(project__slug=project_slug)
+        r = role(self.request.user)
+        # غير المشرف: الأنواع النشطة فقط (واجهة المتبرّع)
+        if r != "admin" and self.action in ("list", "retrieve"):
+            qs = qs.filter(is_active=True)
+        return qs.order_by("order", "name")
+
+    def _assert_can_manage(self, project):
+        from rest_framework.exceptions import PermissionDenied
+        from projects.services import can_manage_project
+        u = self.request.user
+        if role(u) == "admin" or can_manage_project(u, project):
+            return
+        raise PermissionDenied("غير مصرّح بإدارة أنواع كفالات هذا المشروع")
+
+    def perform_create(self, serializer):
+        project = serializer.validated_data["project"]
+        self._assert_can_manage(project)
+        serializer.save()
+
+    def perform_update(self, serializer):
+        project = serializer.validated_data.get("project", serializer.instance.project)
+        self._assert_can_manage(project)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._assert_can_manage(instance.project)
+        instance.delete()
+

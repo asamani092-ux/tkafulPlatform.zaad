@@ -172,36 +172,8 @@ class RequestForm(models.Model):
 
     def validate_submission(self, data):
         """يتحقق من المدخلات مقابل المخطط — O(f). يعيد dict نظيفاً أو يرفع ValueError."""
-        cleaned = {}
-        schema = self.fields_schema if isinstance(self.fields_schema, list) else []
-        for field in schema:
-            if not isinstance(field, dict):
-                continue
-            key = field.get("key")
-            if not key:
-                continue
-            ftype = field.get("type", "text")
-            required = bool(field.get("required"))
-            raw = data.get(key, "")
-            if raw in (None, "") or (isinstance(raw, str) and not raw.strip()):
-                if required:
-                    raise ValueError(f"الحقل «{field.get('label') or key}» مطلوب")
-                continue
-            if ftype == "number":
-                try:
-                    cleaned[key] = float(raw)
-                except (TypeError, ValueError):
-                    raise ValueError(f"الحقل «{field.get('label') or key}» يجب أن يكون رقماً")
-            elif ftype == "boolean":
-                cleaned[key] = raw in (True, "true", "1", 1, "نعم")
-            elif ftype == "select":
-                options = field.get("options") or []
-                if options and str(raw) not in [str(o) for o in options]:
-                    raise ValueError(f"قيمة غير صالحة للحقل «{field.get('label') or key}»")
-                cleaned[key] = raw
-            else:
-                cleaned[key] = raw
-        return cleaned
+        from core.dynamic_fields import validate_submission
+        return validate_submission(self.fields_schema, data)
 
 
 class RequestSubmission(models.Model):

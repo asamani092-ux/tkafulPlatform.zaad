@@ -11,16 +11,20 @@ import Select from "../../ui/Select";
 import Tabs from "../../ui/Tabs";
 import SaqyaMap from "./SaqyaMap";
 import type { MapPoint } from "./SaqyaMap";
+import SponsorshipTypesPanel from "./SponsorshipTypesPanel";
 
 interface Sponsorship { id: number; type: string; amount: string; status: string; donor_name: string; total_funded: number; }
 interface Order { id: number; sponsorship_type: string; status: string; supplier_name: string | null; representative_name: string | null; }
 interface Profile { id: number; user: number; name: string; business_name?: string; }
 
-const TABS = [{ key: "sponsorships", label: "الكفالات" }, { key: "orders", label: "الطلبات" }, { key: "map", label: "الخريطة" }];
+const BASE_TABS = [{ key: "sponsorships", label: "الكفالات" }, { key: "orders", label: "الطلبات" }, { key: "map", label: "الخريطة" }];
 export default function AdminPortal({ projectSlug, embedded = false }: { projectSlug?: string; embedded?: boolean }) {
   const Shell = ({ children }: { children: ReactNode }) =>
     embedded ? <div>{children}</div> : <SaqyaShell>{children}</SaqyaShell>;
   const { success, error } = useToast();
+  const tabs = projectSlug
+    ? [{ key: "sponsorships", label: "الكفالات" }, { key: "types", label: "أنواع الكفالات" }, { key: "orders", label: "الطلبات" }, { key: "map", label: "الخريطة" }]
+    : BASE_TABS;
   const [tab, setTab] = useState("sponsorships");
   const scope = projectSlug ? `?project=${encodeURIComponent(projectSlug)}` : "";
   const [stats, setStats] = useState<Record<string, number>>({});
@@ -70,7 +74,9 @@ export default function AdminPortal({ projectSlug, embedded = false }: { project
         ))}
       </div>
 
-      <div className="mb-4"><Tabs tabs={TABS} active={tab} onChange={setTab} /></div>
+      <div className="mb-4"><Tabs tabs={tabs} active={tab} onChange={setTab} /></div>
+
+      {tab === "types" && projectSlug && <SponsorshipTypesPanel projectSlug={projectSlug} />}
 
       {tab === "sponsorships" && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

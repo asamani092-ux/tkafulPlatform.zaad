@@ -5,6 +5,7 @@ from . import views
 
 router = DefaultRouter()
 router.register(r"sponsorships", views.SponsorshipViewSet, basename="saqya-sponsorship")
+router.register(r"sponsorship-types", views.SponsorshipTypeViewSet, basename="saqya-sponsorship-type")
 router.register(r"orders", views.OrderViewSet, basename="saqya-order")
 router.register(r"invoices", views.InvoiceViewSet, basename="saqya-invoice")
 router.register(r"documentation", views.DocumentationViewSet, basename="saqya-documentation")

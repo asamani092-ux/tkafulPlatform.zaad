@@ -49,6 +49,40 @@ class RepresentativeProfile(models.Model):
         return f"Representative {self.user_id} ({self.area})"
 
 
+
+# ============ نوع الكفالة (حقول وصفية ديناميكية) ============
+class SponsorshipType(models.Model):
+    """نوع كفالة مرتبط بمشروع؛ الحقول وصفية فقط ولا تغيّر دورة الكفالة."""
+
+    project = models.ForeignKey(
+        "projects.Project",
+        on_delete=models.CASCADE,
+        related_name="sponsorship_types",
+    )
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(max_length=140, allow_unicode=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+    # مخطط الحقول: [{ key, label, type, required, options?, is_public? }]
+    fields = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "saqya_sponsorshiptype"
+        ordering = ["order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "slug"],
+                name="uq_saqya_sponsorshiptype_project_slug",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.project_id})"
+
+
 # ============ الكفالة ============
 class Sponsorship(models.Model):
     STATUS_CHOICES = [
@@ -66,6 +100,14 @@ class Sponsorship(models.Model):
         on_delete=models.SET_NULL,
         related_name="sponsorships",
     )
+    sponsorship_type = models.ForeignKey(
+        "SponsorshipType",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sponsorships",
+    )
+    type_data = models.JSONField(default=dict, blank=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     type = models.CharField(max_length=50)
     description = models.TextField(blank=True)

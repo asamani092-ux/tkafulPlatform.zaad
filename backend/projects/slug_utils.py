@@ -4,16 +4,17 @@ from __future__ import annotations
 from django.utils.text import slugify
 
 
-def unique_slug_from_name(model_cls, name: str, *, field: str = "slug", exclude_pk=None) -> str:
+def unique_slug_from_name(model_cls, name: str, *, field: str = "slug", exclude_pk=None, **filters) -> str:
     """
     يشتق slug من الاسم مع لاحقة رقمية عند التعارض.
+    filters: نطاق إضافي (مثل project=...) للفرادة المركّبة.
     التعقيد: O(k) لعدد المحاولات حتى فراغ فريد (عادة 1).
     """
     base = slugify(name or "", allow_unicode=True).strip("-") or "item"
     candidate = base
     n = 2
     while True:
-        qs = model_cls.objects.filter(**{field: candidate})
+        qs = model_cls.objects.filter(**{field: candidate, **filters})
         if exclude_pk is not None:
             qs = qs.exclude(pk=exclude_pk)
         if not qs.exists():

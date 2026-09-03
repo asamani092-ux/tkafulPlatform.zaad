@@ -29,7 +29,7 @@ export default function SaqyaHome() {
 
   switch (user.role) {
     case "admin": return <AdminPortal projectSlug={slug} />;
-    case "donor": return <DonorPortal />;
+    case "donor": return <DonorPortal projectSlug={slug} />;
     case "supplier": return <SupplierPortal />;
     case "representative": return <RepresentativePortal />;
     default:
