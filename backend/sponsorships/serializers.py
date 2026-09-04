@@ -193,6 +193,33 @@ class SponsorshipSerializer(serializers.ModelSerializer):
             target = attrs.get("units_target", getattr(self.instance, "units_target", None))
             if target is not None and target < 1:
                 raise serializers.ValidationError({"units_target": "يجب أن يكون هدف الوحدات ≥ 1"})
+
+        # فرض سياسة بيانات المتبرّع + رفض أي PII لمستفيد (لا حقول مستفيد على النموذج)
+        from core.models import PlatformSetting
+        from core.runtime_config import donor_data_policy
+
+        forbidden = {
+            "beneficiary_name", "beneficiary_phone", "beneficiary_national_id",
+            "beneficiary_address", "beneficiary_email",
+        }
+        leaked = forbidden.intersection(set(initial.keys()))
+        if leaked:
+            raise serializers.ValidationError(
+                {k: "لا يُسمح بتخزين بيانات مستفيد على الكفالة" for k in leaked}
+            )
+
+        policy = donor_data_policy()
+        name = attrs.get("sponsor_name", getattr(self.instance, "sponsor_name", "") if self.instance else "")
+        name = (name or "").strip()
+        if policy == PlatformSetting.DONOR_DATA_NONE:
+            if name or initial.get("sponsor_name"):
+                raise serializers.ValidationError({"sponsor_name": "جمع بيانات المتبرّع معطّل لهذه المنصّة"})
+            attrs["sponsor_name"] = ""
+        elif policy == PlatformSetting.DONOR_DATA_NAME_OPTIONAL:
+            attrs["sponsor_name"] = name
+        else:
+            # full — الاسم مسموح (حقول إضافية غير موجودة على النموذج عمداً)
+            attrs["sponsor_name"] = name
         return attrs
 
     def create(self, validated_data):

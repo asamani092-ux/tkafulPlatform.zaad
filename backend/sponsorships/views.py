@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from core.throttles import PublicWriteRateThrottle
@@ -101,11 +101,21 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
         return super().get_throttles()
 
     def perform_create(self, serializer):
-        serializer.save(donor=self.request.user)
+        from core.roles import role_of
+
+        role = role_of(self.request.user)
+        # تسجيل إداري: بلا ربط donor إلزامي؛ المتبرّع يُربط بحسابه
+        if role in ("admin", "manager"):
+            serializer.save(donor=serializer.validated_data.get("donor") or None)
+        else:
+            serializer.save(donor=self.request.user)
 
     def create(self, request, *args, **kwargs):
         if not has_capability(request.user, CAP_CREATE_SPONSORSHIP):
-            return Response({"detail": "إنشاء الكفالة متاح للمتبرّع فقط"}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "إنشاء الكفالة غير مصرّح لدورك"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         return super().create(request, *args, **kwargs)
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
@@ -496,6 +506,28 @@ def saqya_dashboard(request):
     else:
         data = {}
     return Response(data)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def public_sponsorship_stats(request):
+    """إحصاءات عامة للكفالات مع إخفاء العدّاد إن كان أقل من 5."""
+    from maps.services import mask_small_count
+
+    project_slug = request.query_params.get("project")
+    qs = Sponsorship.objects.all()
+    if project_slug:
+        qs = qs.filter(project__slug=project_slug)
+    total = qs.count()
+    available = qs.filter(status__in=("available", "pending")).count()
+    sponsored = qs.filter(status__in=("sponsored", "approved", "prepared", "in_progress", "delivered", "completed")).count()
+    community = qs.filter(kind=Sponsorship.KIND_COMMUNITY).count()
+    return Response({
+        "total": mask_small_count(total),
+        "available": mask_small_count(available),
+        "sponsored": mask_small_count(sponsored),
+        "community": mask_small_count(community),
+    })
 
 
 @api_view(["GET"])
