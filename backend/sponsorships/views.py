@@ -110,13 +110,18 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
     def approve(self, request, pk=None):
+        from .status_ops import set_sponsorship_status
+
         sp = self.get_object()
-        if sp.status != "pending":
-            return Response({"detail": "يمكن اعتماد الكفالات قيد المراجعة فقط"}, status=400)
-        sp.status = "approved"
+        # pending (قديم) أو available (زاد)
+        if sp.status not in ("pending", "available"):
+            return Response({"detail": "يمكن اعتماد الكفالات المتاحة/قيد المراجعة فقط"}, status=400)
         sp.approved_at = timezone.now()
-        sp.admin_notes = request.data.get("admin_notes", "")
-        sp.save()
+        notes = request.data.get("admin_notes", "")
+        extra = {"approved_at": sp.approved_at}
+        if hasattr(sp, "admin_notes"):
+            extra["admin_notes"] = notes
+        set_sponsorship_status(sp, "sponsored", extra_updates=extra)
         Order.objects.create(sponsorship=sp, status="pending")  # طلب أوّلي بانتظار الإسناد
         platform_notify(
             message=f"تم اعتماد الكفالة #{sp.id}",
@@ -137,12 +142,16 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
     def reject(self, request, pk=None):
+        from .status_ops import set_sponsorship_status
+
         sp = self.get_object()
-        if sp.status != "pending":
-            return Response({"detail": "يمكن رفض الكفالات قيد المراجعة فقط"}, status=400)
-        sp.status = "rejected"
-        sp.rejection_reason = request.data.get("rejection_reason", "")
-        sp.save()
+        if sp.status not in ("pending", "available"):
+            return Response({"detail": "يمكن رفض الكفالات المتاحة/قيد المراجعة فقط"}, status=400)
+        set_sponsorship_status(
+            sp,
+            "cancelled",
+            extra_updates={"rejection_reason": request.data.get("rejection_reason", "")},
+        )
         return Response({"message": "تم رفض الكفالة"})
 
     @action(detail=True, methods=["post"])
@@ -291,14 +300,18 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
     def complete(self, request, pk=None):
+        from .status_ops import set_sponsorship_status
+
         order = self.get_object()
         order.status = "completed"
         order.completed_at = timezone.now()
         order.save()
         sp = order.sponsorship
-        sp.status = "completed"
-        sp.completed_at = timezone.now()
-        sp.save(update_fields=["status", "completed_at", "updated_at"])
+        set_sponsorship_status(
+            sp,
+            "delivered",
+            extra_updates={"completed_at": timezone.now()},
+        )
         return Response({"message": "اكتمل تنفيذ الطلب والكفالة"})
 
 

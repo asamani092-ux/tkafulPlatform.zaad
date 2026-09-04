@@ -71,7 +71,7 @@ class SponsorshipTypeSerializer(serializers.ModelSerializer):
 
 
 class SponsorshipSerializer(serializers.ModelSerializer):
-    donor_name = serializers.CharField(source="donor.profile.name", read_only=True)
+    donor_name = serializers.CharField(source="donor.profile.name", read_only=True, allow_null=True)
     sponsorship_type_name = serializers.CharField(source="sponsorship_type.name", read_only=True, allow_null=True)
     project = serializers.SlugRelatedField(
         slug_field="slug",
@@ -81,23 +81,39 @@ class SponsorshipSerializer(serializers.ModelSerializer):
     total_funded = serializers.SerializerMethodField()
     remaining = serializers.SerializerMethodField()
     is_fully_funded = serializers.SerializerMethodField()
+    units_progress = serializers.SerializerMethodField()
+    payments_enabled = serializers.SerializerMethodField()
 
     class Meta:
         model = Sponsorship
         fields = [
-            "id", "donor", "donor_name", "project", "sponsorship_type", "sponsorship_type_name",
+            "id", "donor", "donor_name", "sponsor_name", "kind",
+            "units_target", "units_completed", "units_progress",
+            "project", "sponsorship_type", "sponsorship_type_name",
             "type_data", "amount", "type", "description", "location",
-            "latitude", "longitude", "beneficiaries_count", "status", "priority", "target_date",
+            "latitude", "longitude", "beneficiaries_count", "status", "status_ref",
+            "priority", "target_date",
             "approved_at", "funded_at", "completed_at", "admin_notes", "rejection_reason",
-            "total_funded", "remaining", "is_fully_funded", "created_at", "updated_at",
+            "total_funded", "remaining", "is_fully_funded", "payments_enabled",
+            "created_at", "updated_at",
         ]
-        read_only_fields = ["donor", "status", "approved_at", "funded_at", "completed_at",
+        read_only_fields = ["donor", "status", "status_ref", "approved_at", "funded_at", "completed_at",
                             "admin_notes", "rejection_reason", "created_at", "updated_at"]
         extra_kwargs = {
             "type": {"required": False, "allow_blank": True},
             "type_data": {"required": False},
             "sponsorship_type": {"required": False, "allow_null": True},
+            "amount": {"required": False, "allow_null": True},
+            "sponsor_name": {"required": False, "allow_blank": True},
         }
+
+    def _payments_on(self) -> bool:
+        cached = getattr(self, "_payments_on_flag", None)
+        if cached is None:
+            from core.runtime_config import payments_enabled
+            cached = payments_enabled()
+            self._payments_on_flag = cached
+        return cached
 
     def _funded(self, obj):
         annotated = getattr(obj, "_total_funded", None)
@@ -106,23 +122,43 @@ class SponsorshipSerializer(serializers.ModelSerializer):
         return float(obj.total_funded)
 
     def get_total_funded(self, obj):
+        if not self._payments_on():
+            return 0
         return self._funded(obj)
 
     def get_remaining(self, obj):
+        if not self._payments_on() or obj.amount is None:
+            return None
         return float(obj.amount) - self._funded(obj)
 
     def get_is_fully_funded(self, obj):
+        if not self._payments_on() or obj.amount is None:
+            return False
         return self._funded(obj) >= float(obj.amount)
 
+    def get_units_progress(self, obj):
+        return obj.units_progress
+
+    def get_payments_enabled(self, obj):
+        return self._payments_on()
 
     def validate(self, attrs):
         """التحقق من type_data عند ربط نوع ديناميكي — O(f) لعدد الحقول."""
         from core.dynamic_fields import validate_submission
+
         initial = getattr(self, "initial_data", {}) or {}
         creating = self.instance is None
+        pe = self._payments_on()
+
+        if "amount" in attrs and attrs["amount"] is not None and not pe:
+            # المبلغ للعرض فقط عند تعطيل المدفوعات — مسموح لكن لا يُفرض
+            pass
+        if pe and creating and attrs.get("amount") is None and "amount" not in initial:
+            # في وضع المال: المبلغ مستحسن لكن غير إلزامي على مستوى الحقل (اختبارات عينية)
+            pass
 
         if "sponsorship_type" in initial:
-            st = attrs.get("sponsorship_type")  # قد يكون None لإلغاء الربط
+            st = attrs.get("sponsorship_type")
             type_data = attrs.get("type_data")
             if type_data is None:
                 type_data = {} if creating else (self.instance.type_data or {})
@@ -151,14 +187,28 @@ class SponsorshipSerializer(serializers.ModelSerializer):
                 attrs["type_data"] = validate_submission(st.fields or [], attrs.get("type_data") or {})
             except ValueError as exc:
                 raise serializers.ValidationError({"type_data": str(exc)}) from exc
+
+        kind = attrs.get("kind", getattr(self.instance, "kind", Sponsorship.KIND_INDIVIDUAL))
+        if kind == Sponsorship.KIND_COMMUNITY:
+            target = attrs.get("units_target", getattr(self.instance, "units_target", None))
+            if target is not None and target < 1:
+                raise serializers.ValidationError({"units_target": "يجب أن يكون هدف الوحدات ≥ 1"})
         return attrs
 
     def create(self, validated_data):
+        from .models import SponsorshipStatus
+        from .status_catalog import resolve_status_ref
+
         st = validated_data.get("sponsorship_type")
         if st and not validated_data.get("type"):
             validated_data["type"] = (st.name or "")[:50]
         if st and not validated_data.get("project"):
             validated_data["project"] = st.project
+        if not validated_data.get("status"):
+            validated_data["status"] = "available"
+        ref = resolve_status_ref(model=SponsorshipStatus, slug=validated_data["status"])
+        if ref:
+            validated_data["status_ref"] = ref
         return super().create(validated_data)
 
 
