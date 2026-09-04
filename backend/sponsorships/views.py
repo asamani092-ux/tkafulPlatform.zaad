@@ -375,9 +375,12 @@ class DocumentationViewSet(viewsets.ModelViewSet):
         err = validate_upload_file(f)
         if err:
             return Response({"detail": err}, status=400)
-        gps_err = validate_gps(request.data.get("latitude"), request.data.get("longitude"))
-        if gps_err:
-            return Response({"detail": gps_err}, status=400)
+        from core.runtime_config import gps_documentation_enabled
+
+        if gps_documentation_enabled():
+            gps_err = validate_gps(request.data.get("latitude"), request.data.get("longitude"))
+            if gps_err:
+                return Response({"detail": gps_err}, status=400)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         extra = {"uploaded_by": request.user}

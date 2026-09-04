@@ -286,7 +286,14 @@ class DocumentationSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        from core.runtime_config import gps_documentation_enabled
         from .validators import validate_gps
+
+        if not gps_documentation_enabled():
+            # زاد: لا GPS — اسقط الحقول إن وُجدت ولا تفرضها
+            attrs.pop("latitude", None)
+            attrs.pop("longitude", None)
+            return attrs
         err = validate_gps(attrs.get("latitude"), attrs.get("longitude"))
         if err:
             raise serializers.ValidationError({"latitude": err})
