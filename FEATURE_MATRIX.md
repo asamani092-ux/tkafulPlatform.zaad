@@ -57,3 +57,18 @@
 - الخصوصية: لا PII في النقاط العامة؛ إرسالات الطلبات IsAdmin فقط.
 - التحويلات: `ACTIVE_LEGACY_REDIRECTS` + اختبارات LegacyRedirects.
 - خارج هذه الجولة (23 بنداً): دورة كفالات 5.x، خرائط 6.x، سلامة بيانات 7.1.
+
+## نموذج المنصّة القابل للتهيئة (زاد / تكافل وأثر)
+
+| القدرة | زاد (افتراضي) | إعداد بديل (تصدير) | مسار التهيئة |
+|--------|---------------|---------------------|---------------|
+| مدفوعات الكفالة | Off — عيني/وحدات | On — مال + overfund | `sponsorship_payments_enabled` |
+| دخول donor/supplier/representative | Off | On (اختياري) | `roles_can_login` |
+| GPS توثيق | Off | On | `sponsorship_gps_documentation` |
+| بيانات متبرّع | name_optional | none / full | `sponsorship_collect_donor_data` |
+| فرصة عامة | زر متجر خارجي `donation_url` | نفس الزر + دفع داخلي إن On | مشروع + إعداد المدفوعات |
+| تسجيل إداري لكفالة | ✓ | ✓ | CAP_CREATE للمشرف/المدير |
+| إحصاءات عامة | ✓ مع تمويه `<5` | ✓ | `/api/saqya/public-stats/` |
+| بذرة | `manage.py seed_zaad_config` | — | — |
+
+تفاصيل المفاتيح: انظر `CONFIGURATION.md`. تقارير المراحل: `CFG_PHASE_1_REPORT.md` … `CFG_PHASE_4_REPORT.md`.
