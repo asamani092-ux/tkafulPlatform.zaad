@@ -143,7 +143,16 @@ class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
             except User.DoesNotExist:
                 pass
 
-        return super().validate(attrs)
+        data = super().validate(attrs)
+        # بوابة الأدوار: بعد نجاح كلمة المرور، ارفض الدور المعطّل في الإعدادات — بلا توكن.
+        from core.runtime_config import role_can_login
+
+        role = getattr(getattr(self.user, "profile", None), "role", None) or "user"
+        if not role_can_login(role):
+            raise serializers.ValidationError(
+                {"detail": "تسجيل الدخول غير مفعّل لهذا الدور على هذه المنصّة"}
+            )
+        return data
 
 
 class AdminUserSerializer(serializers.ModelSerializer):

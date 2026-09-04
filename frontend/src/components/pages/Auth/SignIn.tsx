@@ -67,13 +67,17 @@ export default function SignIn() {
         navigate(next, { replace: true });
         return;
       }
-      // Phase B: مشرف→/Admin · طاقم→الكادر · عضو مشروع→المشاريع · متطوع→/user
-      // المتبرعون يصلون لبوابة الكفالات عبر /projects/:slug/sponsorships (SaqyaHome يوجّه حسب الدور)
+      // توجيه صريح لكل دور مفعّل — بلا سقوط صامت لأدوار الكفالات إلى /user/main
       if (role === "admin") {
         navigate("/Admin");
       } else if (role === "manager" || role === "employee") {
         navigate("/Admin/staff");
+      } else if (role === "donor" || role === "supplier" || role === "representative") {
+        navigate("/projects");
+      } else if (role === "beneficiary") {
+        navigate("/user/main");
       } else {
+        // user = متطوّع
         try {
           const membershipsRes = await fetch(`${API_BASE_URL}/api/platform/my-memberships/`, {
             headers: { Authorization: `Bearer ${tokenData.access}` },

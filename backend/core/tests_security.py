@@ -109,6 +109,14 @@ class PrivateMediaSecurityTests(APITestCase):
 class ConcurrentPaymentTests(TransactionTestCase):
     def setUp(self):
         from rest_framework.test import APIClient
+        from core.models import PlatformSetting
+        from core.runtime_config import clear_runtime_config_cache
+
+        s = PlatformSetting.load()
+        s.sponsorship_payments_enabled = True
+        s.save()
+        clear_runtime_config_cache()
+
         self.client = APIClient()
         self.donor = make_user("pay@x.com", "donor")
         self.client.force_authenticate(self.donor)

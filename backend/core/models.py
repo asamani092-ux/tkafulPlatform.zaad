@@ -1,6 +1,24 @@
+from copy import deepcopy
+
 from django.db import models
 
 from .validators import validate_https_url, validate_phone
+
+# بذرة زاد الافتراضية (user = متطوّع). الكتلة قابلة للنسخ لاحقاً إلى Organization.
+ZAAD_ROLES_CAN_LOGIN = {
+    "admin": True,
+    "manager": True,
+    "employee": True,
+    "user": True,
+    "donor": False,
+    "supplier": False,
+    "representative": False,
+    "beneficiary": False,
+}
+
+
+def default_roles_can_login():
+    return deepcopy(ZAAD_ROLES_CAN_LOGIN)
 
 
 class PlatformSetting(models.Model):
@@ -15,6 +33,37 @@ class PlatformSetting(models.Model):
     show_map = models.BooleanField(default=True)
     show_services = models.BooleanField(default=True)
     show_volunteering = models.BooleanField(default=True)
+
+    # --- كتلة إعدادات قابلة للنسخ لاحقاً إلى Organization ---
+    # مفاتيح ROLE_CHOICES في accounts.Profile؛ user = متطوّع
+    roles_can_login = models.JSONField(
+        default=default_roles_can_login,
+        blank=True,
+        help_text="أي الأدوار يُسمح لها بالحصول على جلسة دخول",
+    )
+    sponsorship_payments_enabled = models.BooleanField(
+        default=False,
+        help_text="تفعيل منطق المال (جمع/متبقي/منع تجاوز التمويل). زاد=False",
+    )
+    sponsorship_gps_documentation = models.BooleanField(
+        default=False,
+        help_text="عرض التقاط GPS عند توثيق التسليم. زاد=False",
+    )
+    DONOR_DATA_NONE = "none"
+    DONOR_DATA_NAME_OPTIONAL = "name_optional"
+    DONOR_DATA_FULL = "full"
+    DONOR_DATA_CHOICES = [
+        (DONOR_DATA_NONE, "none"),
+        (DONOR_DATA_NAME_OPTIONAL, "name_optional"),
+        (DONOR_DATA_FULL, "full"),
+    ]
+    sponsorship_collect_donor_data = models.CharField(
+        max_length=20,
+        choices=DONOR_DATA_CHOICES,
+        default=DONOR_DATA_NAME_OPTIONAL,
+        help_text="سياسة جمع بيانات المتبرّع. زاد=name_optional",
+    )
+
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

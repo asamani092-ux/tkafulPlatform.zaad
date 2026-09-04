@@ -9,11 +9,27 @@ import Button from "../../ui/Button";
 import Tabs from "../../ui/Tabs";
 import { LoadingState, ErrorState, EmptyState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
-import { usePlatformSettings, type PublicPlatformSettings } from "../../../contexts/PlatformSettingsContext";
+import {
+  usePlatformSettings,
+  type DonorDataPolicy,
+  type PublicPlatformSettings,
+  type RolesCanLogin,
+} from "../../../contexts/PlatformSettingsContext";
 import { authFetch } from "../../../lib/api";
 import { extractErrorDetail } from "../../../admin/userManagement";
 
 type FlagKey = "show_map" | "show_services" | "show_volunteering";
+
+const ROLE_LABELS: { key: keyof RolesCanLogin; label: string }[] = [
+  { key: "admin", label: "مشرف" },
+  { key: "manager", label: "مدير" },
+  { key: "employee", label: "موظف" },
+  { key: "user", label: "متطوّع (user)" },
+  { key: "donor", label: "متبرّع" },
+  { key: "supplier", label: "مورّد" },
+  { key: "representative", label: "مندوب" },
+  { key: "beneficiary", label: "مستفيد" },
+];
 
 interface StaticPageRow {
   id: number;
@@ -72,6 +88,10 @@ export default function PlatformSettingsPage() {
           show_map: form.show_map,
           show_services: form.show_services,
           show_volunteering: form.show_volunteering,
+          roles_can_login: form.roles_can_login,
+          sponsorship_payments_enabled: form.sponsorship_payments_enabled,
+          sponsorship_gps_documentation: form.sponsorship_gps_documentation,
+          sponsorship_collect_donor_data: form.sponsorship_collect_donor_data,
         }),
       });
       if (!res.ok) {
@@ -110,7 +130,11 @@ export default function PlatformSettingsPage() {
     <AdminShell>
       <h1 className="mb-4 text-2xl font-bold text-primary">إعدادات المنصّة</h1>
       <Tabs
-        tabs={[{ key: "general", label: "عام" }, { key: "pages", label: "الصفحات الثابتة" }]}
+        tabs={[
+          { key: "general", label: "عام" },
+          { key: "sponsorship", label: "الكفالات والدخول" },
+          { key: "pages", label: "الصفحات الثابتة" },
+        ]}
         active={tab}
         onChange={setTab}
       />
@@ -143,6 +167,62 @@ export default function PlatformSettingsPage() {
                 ["show_volunteering", "إظهار التطوّع"],
               ] as [FlagKey, string][]).map(([k, label]) => (
                 <Switch key={k} label={label} checked={form[k]} onChange={(v) => setForm({ ...form, [k]: v })} />
+              ))}
+            </div>
+          </Card>
+          <Button type="button" disabled={saving} onClick={() => void save()}>{saving ? "جاري الحفظ…" : "حفظ الإعدادات"}</Button>
+        </div>
+      )}
+
+      {tab === "sponsorship" && (
+        <div className="mt-4 space-y-4">
+          <Card>
+            <h2 className="mb-3 text-lg font-bold text-primary">الكفالات</h2>
+            <div className="space-y-3">
+              <Switch
+                label="تفعيل المدفوعات النقدية"
+                checked={form.sponsorship_payments_enabled}
+                onChange={(v) => setForm({ ...form, sponsorship_payments_enabled: v })}
+              />
+              <Switch
+                label="توثيق GPS عند التسليم"
+                checked={form.sponsorship_gps_documentation}
+                onChange={(v) => setForm({ ...form, sponsorship_gps_documentation: v })}
+              />
+              <label className="block text-sm font-medium text-primary">
+                سياسة بيانات المتبرّع
+                <select
+                  className="mt-1 w-full rounded-lg border border-surface-border bg-white px-3 py-2"
+                  value={form.sponsorship_collect_donor_data}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      sponsorship_collect_donor_data: e.target.value as DonorDataPolicy,
+                    })
+                  }
+                >
+                  <option value="none">بدون بيانات</option>
+                  <option value="name_optional">اسم اختياري</option>
+                  <option value="full">بيانات كاملة</option>
+                </select>
+              </label>
+            </div>
+          </Card>
+          <Card>
+            <h2 className="mb-3 text-lg font-bold text-primary">أدوار مسموح بدخولها</h2>
+            <div className="space-y-2">
+              {ROLE_LABELS.map(({ key, label }) => (
+                <Switch
+                  key={key}
+                  label={label}
+                  checked={Boolean(form.roles_can_login?.[key])}
+                  onChange={(v) =>
+                    setForm({
+                      ...form,
+                      roles_can_login: { ...form.roles_can_login, [key]: v },
+                    })
+                  }
+                />
               ))}
             </div>
           </Card>
