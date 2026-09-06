@@ -23,8 +23,12 @@ def record_payment(*, sponsorship_id: int, user, user_role: str, amount: Decimal
                    reference_number: str = "") -> tuple[Payment, Sponsorship]:
     """
     يسجّل دفعة مكتملة بقفل صف الكفالة (select_for_update) لمنع سباق التمويل الزائد،
-    ويرقّي الحالة إلى in_progress عند اكتمال التمويل.
+    ويرقّي الحالة عند اكتمال التمويل. يُرفض بالكامل إذا المدفوعات معطّلة في الإعدادات.
     """
+    from core.runtime_config import payments_enabled
+
+    if not payments_enabled():
+        raise PaymentError("المدفوعات غير مفعّلة لهذه المنصّة", status_code=403)
     if amount <= 0:
         raise PaymentError("المبلغ يجب أن يكون موجباً")
 
@@ -32,7 +36,9 @@ def record_payment(*, sponsorship_id: int, user, user_role: str, amount: Decimal
         sp = Sponsorship.objects.select_for_update().get(pk=sponsorship_id)
         if user_role != "admin" and sp.donor_id != user.id:
             raise PaymentError("غير مصرّح", status_code=403)
-        if sp.status in ("rejected", "cancelled", "completed"):
+        if sp.amount is None:
+            raise PaymentError("هذه الكفالة عينية ولا تقبل دفعاً نقدياً")
+        if sp.status in ("rejected", "cancelled", "completed", "delivered"):
             raise PaymentError("لا يمكن الدفع لهذه الكفالة")
         if float(sp.total_funded) + float(amount) > float(sp.amount):
             raise PaymentError(f"المبلغ يتجاوز المتبقّي ({sp.remaining})")
@@ -45,9 +51,19 @@ def record_payment(*, sponsorship_id: int, user, user_role: str, amount: Decimal
             reference_number=reference_number,
             status="completed",
         )
-        if sp.is_fully_funded and sp.status in ("pending", "approved"):
-            sp.status = "in_progress"
+        if sp.is_fully_funded and sp.status in (
+            "pending", "approved", "available", "sponsored"
+        ):
+            # مع المدفوعات: الانتقال إلى in_progress؛ مع حالات زاد يبقى sponsored
+            sp.status = "in_progress" if sp.status in ("pending", "approved") else "sponsored"
             sp.funded_at = timezone.now()
-            sp.save(update_fields=["status", "funded_at", "updated_at"])
+            # مزامنة status_ref إن وُجدت
+            from .models import SponsorshipStatus
+            ref = SponsorshipStatus.objects.filter(slug=sp.status).first()
+            update_fields = ["status", "funded_at", "updated_at"]
+            if ref:
+                sp.status_ref = ref
+                update_fields.append("status_ref")
+            sp.save(update_fields=update_fields)
 
     return payment, sp

@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useToast } from "../../../contexts/ToastContext";
+import { usePlatformSettings } from "../../../contexts/PlatformSettingsContext";
 import { authFetch } from "../../../lib/api";
 import SaqyaShell from "../../layout/SaqyaShell";
 import { labelAr, ORDER_STATUS_AR, SPONSORSHIP_STATUS_AR } from "../../../i18n/labels";
-import type { ReactNode } from "react";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Badge from "../../ui/Badge";
+import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Tabs from "../../ui/Tabs";
 import SaqyaMap from "./SaqyaMap";
@@ -54,8 +55,52 @@ export default function AdminPortal({ projectSlug, embedded = false }: { project
   const [allowedSupplierIds, setAllowedSupplierIds] = useState<number[] | null>(null);
   const [allowedRepIds, setAllowedRepIds] = useState<number[] | null>(null);
   const [points, setPoints] = useState<MapPoint[]>([]);
+  const { settings } = usePlatformSettings();
+  const donorPolicy = settings.sponsorship_collect_donor_data || "name_optional";
+  const [recordForm, setRecordForm] = useState({
+    type: "كفالة عينية",
+    kind: "individual",
+    sponsor_name: "",
+    units_target: "",
+  });
+  const [recording, setRecording] = useState(false);
 
   const j = (p: string) => authFetch(p).then((r) => (r.ok ? r.json() : null));
+
+  const recordSponsorship = async () => {
+    setRecording(true);
+    try {
+      const body: Record<string, unknown> = {
+        type: recordForm.type,
+        kind: recordForm.kind,
+      };
+      if (projectSlug) body.project = projectSlug;
+      if (donorPolicy !== "none" && recordForm.sponsor_name.trim()) {
+        body.sponsor_name = recordForm.sponsor_name.trim();
+      }
+      if (recordForm.kind === "community") {
+        body.units_target = Number(recordForm.units_target) || 1;
+        body.units_completed = 0;
+      }
+      const res = await authFetch("/api/saqya/sponsorships/", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        const msg = typeof d.sponsor_name === "string" ? d.sponsor_name
+          : typeof d.detail === "string" ? d.detail
+          : "تحقق من الحقول";
+        error({ title: "تعذّر التسجيل", description: msg });
+        return;
+      }
+      success({ title: "تم تسجيل الكفالة" });
+      setRecordForm({ type: "كفالة عينية", kind: "individual", sponsor_name: "", units_target: "" });
+      load();
+    } finally {
+      setRecording(false);
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -167,7 +212,36 @@ export default function AdminPortal({ projectSlug, embedded = false }: { project
       )}
 
       {!loading && tab === "sponsorships" && (
-        sponsorships.length === 0 ? (
+        <>
+          <Card className="mb-4">
+            <h3 className="mb-3 font-bold text-primary">تسجيل كفالة إدارية</h3>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Input label="النوع" value={recordForm.type} onChange={(e) => setRecordForm({ ...recordForm, type: e.target.value })} />
+              <Select label="التصنيف" value={recordForm.kind} onChange={(e) => setRecordForm({ ...recordForm, kind: e.target.value })}>
+                <option value="individual">فردية</option>
+                <option value="community">مجتمعية</option>
+              </Select>
+              {donorPolicy !== "none" && (
+                <Input
+                  label={donorPolicy === "full" ? "اسم المتبرّع" : "اسم المتبرّع (اختياري)"}
+                  value={recordForm.sponsor_name}
+                  onChange={(e) => setRecordForm({ ...recordForm, sponsor_name: e.target.value })}
+                />
+              )}
+              {recordForm.kind === "community" && (
+                <Input
+                  label="هدف الوحدات"
+                  type="number"
+                  value={recordForm.units_target}
+                  onChange={(e) => setRecordForm({ ...recordForm, units_target: e.target.value })}
+                />
+              )}
+            </div>
+            <Button className="mt-3" disabled={recording} onClick={() => void recordSponsorship()}>
+              {recording ? "جاري التسجيل…" : "تسجيل"}
+            </Button>
+          </Card>
+        {sponsorships.length === 0 ? (
           <EmptyState title="لا كفالات في هذا النطاق" message="عند إنشاء المتبرّعين لكفالات جديدة ستظهر هنا للمراجعة." />
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -196,13 +270,14 @@ export default function AdminPortal({ projectSlug, embedded = false }: { project
                     </Button>
                   </div>
                 )}
-                {s.status !== "pending" && (
+                {s.status !== "pending" && s.status !== "available" && (
                   <p className="text-xs text-brand-gray">لا إجراءات معلّقة على هذه الكفالة.</p>
                 )}
               </Card>
             ))}
           </div>
-        )
+        )}
+        </>
       )}
 
       {!loading && tab === "orders" && (

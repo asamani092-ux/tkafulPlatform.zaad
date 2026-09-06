@@ -4,6 +4,7 @@ import { HandHeart, Map as MapIcon, Users, FileBarChart, LayoutGrid } from "luci
 import Card from "../../ui/Card";
 import Badge from "../../ui/Badge";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
+import { API_BASE_URL } from "../../../config";
 import { fetchPublicProject } from "./api";
 import { TOOL_LABELS, type PublicProjectDetail } from "./types";
 import { donationInContext, resolveToolLink, visibleTools } from "./toolLinks";
@@ -16,12 +17,13 @@ const TOOL_ICONS: Record<string, typeof MapIcon> = {
   reports: FileBarChart,
 };
 
-/** صفحة هبوط المشروع — هوية ثابتة + أدوات قابلة للتفعيل. */
+/** صفحة هبوط المشروع — هوية ثابتة + أدوات قابلة للتفعيل + إحصاءات عامة مموّهة. */
 export default function ProjectLanding() {
   const { slug = "" } = useParams();
   const [project, setProject] = useState<PublicProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [publicStats, setPublicStats] = useState<Record<string, number | string> | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -32,18 +34,22 @@ export default function ProjectLanding() {
       .finally(() => setLoading(false));
   }, [slug]);
 
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/saqya/public-stats/?project=${encodeURIComponent(slug)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setPublicStats(d))
+      .catch(() => {});
+  }, [slug]);
+
   if (loading) return <LoadingState title="جاري تحميل المشروع…" />;
   if (error || !project) return <ErrorState title="المشروع غير موجود" message="تأكد من الرابط أو عُد للصفحة الرئيسية." />;
 
   const linkCtx = { slug: project.slug, mapsCount: project.maps.length, toolConfig: project.tool_config };
-  // الأدوات المعروضة عامّاً = المفعّلة التي لها وجهة فعلية (لا أزرار ميتة)
   const shownTools = visibleTools(project.tools, linkCtx);
-  // زر التبرع يظهر فقط ضمن سياق الكفالات/الخدمات وعند وجود الرابط
   const showDonation = donationInContext(project.donation_url, project.tools, project.tool_config);
 
   return (
     <div dir="rtl" className="bg-surface-muted">
-      {/* شريط لون المشروع كتمييز فقط — لا خلفية مارون ممتلئة */}
       <div className="h-1.5 w-full" style={{ background: project.brand_color || "var(--brand-primary)" }} aria-hidden />
       <header className="border-b border-surface-border bg-surface px-4 py-14 text-center">
         <div className="mx-auto max-w-page">
@@ -54,12 +60,21 @@ export default function ProjectLanding() {
             {project.start_date && <span>البداية: {project.start_date}</span>}
             {project.end_date && <span>النهاية: {project.end_date}</span>}
             {showDonation && (
-              <a href={project.donation_url} className="btn-primary inline-block px-4 py-2 text-sm font-bold"
-                target="_blank" rel="noopener noreferrer">
-                {project.donation_label || "تبرع الآن"}
+              <a
+                href={project.donation_url}
+                className="btn-primary inline-block px-4 py-2 text-sm font-bold"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {project.donation_label || "التبرّع عبر المتجر الخارجي"}
               </a>
             )}
           </div>
+          {publicStats && (
+            <p className="mt-4 text-sm text-brand-gray">
+              كفالات: {publicStats.total} · متاحة: {publicStats.available} · مكفولة: {publicStats.sponsored}
+            </p>
+          )}
         </div>
       </header>
 

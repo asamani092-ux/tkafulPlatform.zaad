@@ -16,6 +16,12 @@ def make_user(email, role):
 
 class SaqyaWorkflowTests(APITestCase):
     def setUp(self):
+        from core.models import PlatformSetting
+        from core.runtime_config import clear_runtime_config_cache
+        s = PlatformSetting.load()
+        s.sponsorship_payments_enabled = True
+        s.save()
+        clear_runtime_config_cache()
         self.admin = make_user("admin@s.com", "admin")
         self.donor = make_user("donor@s.com", "donor")
         self.donor2 = make_user("donor2@s.com", "donor")
@@ -41,7 +47,7 @@ class SaqyaWorkflowTests(APITestCase):
         res = self.client.post(f"/api/saqya/sponsorships/{sp_id}/approve/", {}, format="json")
         self.assertEqual(res.status_code, 200)
         sp = Sponsorship.objects.get(pk=sp_id)
-        self.assertEqual(sp.status, "approved")
+        self.assertEqual(sp.status, "sponsored")
         self.assertEqual(Order.objects.filter(sponsorship=sp).count(), 1)
 
     def test_overfunding_prevented_and_autostatus(self):
@@ -50,12 +56,12 @@ class SaqyaWorkflowTests(APITestCase):
         # دفعة تتجاوز المبلغ -> مرفوضة
         over = self.client.post(f"/api/saqya/sponsorships/{sp_id}/pay/", {"amount": "1500", "method": "online"}, format="json")
         self.assertEqual(over.status_code, 400)
-        # دفعة كاملة -> الحالة in_progress
+        # دفعة كاملة -> available → sponsored (مسار زاد مع تفعيل المال)
         full = self.client.post(f"/api/saqya/sponsorships/{sp_id}/pay/", {"amount": "1000", "method": "online"}, format="json")
         self.assertEqual(full.status_code, 201)
         sp = Sponsorship.objects.get(pk=sp_id)
         self.assertEqual(float(sp.total_funded), 1000.0)
-        self.assertEqual(sp.status, "in_progress")
+        self.assertEqual(sp.status, "sponsored")
         # دفعة إضافية بعد الاكتمال -> مرفوضة (تمويل زائد)
         extra = self.client.post(f"/api/saqya/sponsorships/{sp_id}/pay/", {"amount": "1", "method": "online"}, format="json")
         self.assertEqual(extra.status_code, 400)

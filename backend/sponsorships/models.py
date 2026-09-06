@@ -83,15 +83,53 @@ class SponsorshipType(models.Model):
         return f"{self.name} ({self.project_id})"
 
 
+# ============ حالة الكفالة (جدول قابل للتوسّع مثل ProjectType) ============
+class SponsorshipStatus(models.Model):
+    """كتالوج حالات دورة الكفالة — قابل للتهيئة لكل مؤسسة عبر البذرة/الإدارة."""
+
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=40, unique=True, allow_unicode=True)
+    order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "saqya_sponsorshipstatus"
+        ordering = ["order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
 # ============ الكفالة ============
 class Sponsorship(models.Model):
+    # يُبقى للتوافق العكسي مع الفلاتر القديمة؛ المصدر بعد الهجرة هو status_ref
     STATUS_CHOICES = [
         ("pending", "pending"), ("approved", "approved"), ("rejected", "rejected"),
         ("in_progress", "in_progress"), ("completed", "completed"), ("cancelled", "cancelled"),
+        # حالات زاد النشطة
+        ("available", "available"), ("sponsored", "sponsored"),
+        ("prepared", "prepared"), ("delivered", "delivered"),
+    ]
+    KIND_INDIVIDUAL = "individual"
+    KIND_COMMUNITY = "community"
+    KIND_CHOICES = [
+        (KIND_INDIVIDUAL, "individual"),
+        (KIND_COMMUNITY, "community"),
     ]
     PRIORITY_CHOICES = [("urgent", "urgent"), ("high", "high"), ("normal", "normal"), ("low", "low")]
 
-    donor = models.ForeignKey(User, on_delete=models.CASCADE, related_name="saqya_sponsorships")
+    donor = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="saqya_sponsorships",
+        null=True,
+        blank=True,
+    )
+    sponsor_name = models.CharField(max_length=150, blank=True, default="")
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default=KIND_INDIVIDUAL)
+    units_target = models.PositiveIntegerField(null=True, blank=True)
+    units_completed = models.PositiveIntegerField(default=0)
     # الربط بالمشروع (project-first): تُملأ بهجرة بيانات إلى مشروع «كفالات السقيا»
     project = models.ForeignKey(
         "projects.Project",
@@ -108,14 +146,21 @@ class Sponsorship(models.Model):
         related_name="sponsorships",
     )
     type_data = models.JSONField(default=dict, blank=True)
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     type = models.CharField(max_length=50)
     description = models.TextField(blank=True)
     location = models.CharField(max_length=200, blank=True)
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
     beneficiaries_count = models.IntegerField(default=1)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="available")
+    status_ref = models.ForeignKey(
+        SponsorshipStatus,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="sponsorships",
+    )
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default="normal")
     target_date = models.DateTimeField(null=True, blank=True)
     approved_at = models.DateTimeField(null=True, blank=True)
@@ -143,19 +188,44 @@ class Sponsorship(models.Model):
     def __str__(self):
         return f"Sponsorship {self.id} - {self.type} - {self.status}"
 
-    # ---- التجميع المالي ----
+    def save(self, *args, **kwargs):
+        # مزامنة CharField ← FK عند توفر المرجع
+        if self.status_ref_id and self.status_ref and self.status != self.status_ref.slug:
+            self.status = self.status_ref.slug
+        super().save(*args, **kwargs)
+
+    # ---- التجميع المالي (يُفعَّل فقط عند sponsorship_payments_enabled) ----
     @property
     def total_funded(self):
         """مجموع الدفعات المكتملة لهذه الكفالة."""
+        from core.runtime_config import payments_enabled
+
+        if not payments_enabled() or self.amount is None:
+            return 0
         return self.payments.filter(status="completed").aggregate(s=Sum("amount"))["s"] or 0
 
     @property
     def remaining(self):
+        from core.runtime_config import payments_enabled
+
+        if not payments_enabled() or self.amount is None:
+            return None
         return float(self.amount) - float(self.total_funded)
 
     @property
     def is_fully_funded(self):
+        from core.runtime_config import payments_enabled
+
+        if not payments_enabled() or self.amount is None:
+            return False
         return float(self.total_funded) >= float(self.amount)
+
+    @property
+    def units_progress(self):
+        """تقدّم العدّ المجتمعي — يُستخدم عندما المدفوعات متوقفة."""
+        if self.kind != self.KIND_COMMUNITY or not self.units_target:
+            return None
+        return {"completed": self.units_completed, "target": self.units_target}
 
 
 # ============ الطلب (توريد/تنفيذ) ============

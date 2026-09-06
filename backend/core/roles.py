@@ -84,8 +84,8 @@ _ADMIN = frozenset({
 })
 
 ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
-    "admin": _ADMIN,
-    "manager": frozenset({CAP_MANAGE_STAFF}),
+    "admin": _ADMIN | frozenset({CAP_CREATE_SPONSORSHIP}),
+    "manager": frozenset({CAP_MANAGE_STAFF, CAP_CREATE_SPONSORSHIP, CAP_APPROVE_SPONSORSHIP}),
     "employee": frozenset({CAP_MANAGE_STAFF}),
     "user": frozenset({CAP_APPLY_VOLUNTEER}),
     "beneficiary": frozenset(),

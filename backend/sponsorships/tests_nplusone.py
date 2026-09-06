@@ -16,6 +16,12 @@ def make_user(email, role):
 
 class SponsorshipFundingAnnotateTests(APITestCase):
     def setUp(self):
+        from core.models import PlatformSetting
+        from core.runtime_config import clear_runtime_config_cache
+        s = PlatformSetting.load()
+        s.sponsorship_payments_enabled = True
+        s.save()
+        clear_runtime_config_cache()
         self.admin = make_user("admin@n1.com", "admin")
         self.donor = make_user("donor@n1.com", "donor")
 
@@ -35,8 +41,8 @@ class SponsorshipFundingAnnotateTests(APITestCase):
             expected[sp.id] = float(100 + i)
 
         self.client.force_authenticate(self.admin)
-        # استعلام واحد موضّح بـ Subquery للتمويل — لا يتصاعد مع N.
-        with self.assertNumQueries(1):
+        # قائمة + قراءة PlatformSetting مرة واحدة (بوابة المدفوعات) — ثابت لا يتصاعد مع N.
+        with self.assertNumQueries(2):
             res = self.client.get("/api/saqya/sponsorships/")
         self.assertEqual(res.status_code, 200)
         results = res.data["results"] if isinstance(res.data, dict) and "results" in res.data else res.data
@@ -47,6 +53,14 @@ class SponsorshipFundingAnnotateTests(APITestCase):
 
 
 class AnnotateHelperUnitTests(TestCase):
+    def setUp(self):
+        from core.models import PlatformSetting
+        from core.runtime_config import clear_runtime_config_cache
+        s = PlatformSetting.load()
+        s.sponsorship_payments_enabled = True
+        s.save()
+        clear_runtime_config_cache()
+
     def test_annotate_matches_property(self):
         donor = make_user("d2@n1.com", "donor")
         sp = Sponsorship.objects.create(donor=donor, amount=500, type="سقيا")

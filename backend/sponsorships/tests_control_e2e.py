@@ -25,6 +25,12 @@ def make_user(email: str, role: str) -> User:
 
 class SponsorshipControlE2ETests(APITestCase):
     def setUp(self):
+        from core.models import PlatformSetting
+        from core.runtime_config import clear_runtime_config_cache
+        s = PlatformSetting.load()
+        s.sponsorship_payments_enabled = True
+        s.save()
+        clear_runtime_config_cache()
         self.admin = make_user("admin-e2e@t.com", "admin")
         self.donor = make_user("donor-e2e@t.com", "donor")
         self.sup_ok = make_user("sup-ok-e2e@t.com", "supplier")
@@ -117,7 +123,7 @@ class SponsorshipControlE2ETests(APITestCase):
             self.assertEqual(order.status, expected)
 
         sp.refresh_from_db()
-        self.assertEqual(sp.status, "completed")
+        self.assertEqual(sp.status, "delivered")
 
         self.client.force_authenticate(self.donor)
         sp2 = self.client.post(

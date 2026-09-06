@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from core.throttles import PublicWriteRateThrottle
@@ -101,22 +101,37 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
         return super().get_throttles()
 
     def perform_create(self, serializer):
-        serializer.save(donor=self.request.user)
+        from core.roles import role_of
+
+        role = role_of(self.request.user)
+        # تسجيل إداري: بلا ربط donor إلزامي؛ المتبرّع يُربط بحسابه
+        if role in ("admin", "manager"):
+            serializer.save(donor=serializer.validated_data.get("donor") or None)
+        else:
+            serializer.save(donor=self.request.user)
 
     def create(self, request, *args, **kwargs):
         if not has_capability(request.user, CAP_CREATE_SPONSORSHIP):
-            return Response({"detail": "إنشاء الكفالة متاح للمتبرّع فقط"}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "إنشاء الكفالة غير مصرّح لدورك"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         return super().create(request, *args, **kwargs)
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
     def approve(self, request, pk=None):
+        from .status_ops import set_sponsorship_status
+
         sp = self.get_object()
-        if sp.status != "pending":
-            return Response({"detail": "يمكن اعتماد الكفالات قيد المراجعة فقط"}, status=400)
-        sp.status = "approved"
+        # pending (قديم) أو available (زاد)
+        if sp.status not in ("pending", "available"):
+            return Response({"detail": "يمكن اعتماد الكفالات المتاحة/قيد المراجعة فقط"}, status=400)
         sp.approved_at = timezone.now()
-        sp.admin_notes = request.data.get("admin_notes", "")
-        sp.save()
+        notes = request.data.get("admin_notes", "")
+        extra = {"approved_at": sp.approved_at}
+        if hasattr(sp, "admin_notes"):
+            extra["admin_notes"] = notes
+        set_sponsorship_status(sp, "sponsored", extra_updates=extra)
         Order.objects.create(sponsorship=sp, status="pending")  # طلب أوّلي بانتظار الإسناد
         platform_notify(
             message=f"تم اعتماد الكفالة #{sp.id}",
@@ -137,12 +152,16 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
     def reject(self, request, pk=None):
+        from .status_ops import set_sponsorship_status
+
         sp = self.get_object()
-        if sp.status != "pending":
-            return Response({"detail": "يمكن رفض الكفالات قيد المراجعة فقط"}, status=400)
-        sp.status = "rejected"
-        sp.rejection_reason = request.data.get("rejection_reason", "")
-        sp.save()
+        if sp.status not in ("pending", "available"):
+            return Response({"detail": "يمكن رفض الكفالات المتاحة/قيد المراجعة فقط"}, status=400)
+        set_sponsorship_status(
+            sp,
+            "cancelled",
+            extra_updates={"rejection_reason": request.data.get("rejection_reason", "")},
+        )
         return Response({"message": "تم رفض الكفالة"})
 
     @action(detail=True, methods=["post"])
@@ -291,14 +310,18 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
     def complete(self, request, pk=None):
+        from .status_ops import set_sponsorship_status
+
         order = self.get_object()
         order.status = "completed"
         order.completed_at = timezone.now()
         order.save()
         sp = order.sponsorship
-        sp.status = "completed"
-        sp.completed_at = timezone.now()
-        sp.save(update_fields=["status", "completed_at", "updated_at"])
+        set_sponsorship_status(
+            sp,
+            "delivered",
+            extra_updates={"completed_at": timezone.now()},
+        )
         return Response({"message": "اكتمل تنفيذ الطلب والكفالة"})
 
 
@@ -362,9 +385,12 @@ class DocumentationViewSet(viewsets.ModelViewSet):
         err = validate_upload_file(f)
         if err:
             return Response({"detail": err}, status=400)
-        gps_err = validate_gps(request.data.get("latitude"), request.data.get("longitude"))
-        if gps_err:
-            return Response({"detail": gps_err}, status=400)
+        from core.runtime_config import gps_documentation_enabled
+
+        if gps_documentation_enabled():
+            gps_err = validate_gps(request.data.get("latitude"), request.data.get("longitude"))
+            if gps_err:
+                return Response({"detail": gps_err}, status=400)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         extra = {"uploaded_by": request.user}
@@ -480,6 +506,28 @@ def saqya_dashboard(request):
     else:
         data = {}
     return Response(data)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def public_sponsorship_stats(request):
+    """إحصاءات عامة للكفالات مع إخفاء العدّاد إن كان أقل من 5."""
+    from maps.services import mask_small_count
+
+    project_slug = request.query_params.get("project")
+    qs = Sponsorship.objects.all()
+    if project_slug:
+        qs = qs.filter(project__slug=project_slug)
+    total = qs.count()
+    available = qs.filter(status__in=("available", "pending")).count()
+    sponsored = qs.filter(status__in=("sponsored", "approved", "prepared", "in_progress", "delivered", "completed")).count()
+    community = qs.filter(kind=Sponsorship.KIND_COMMUNITY).count()
+    return Response({
+        "total": mask_small_count(total),
+        "available": mask_small_count(available),
+        "sponsored": mask_small_count(sponsored),
+        "community": mask_small_count(community),
+    })
 
 
 @api_view(["GET"])
