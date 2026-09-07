@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Badge from "../../ui/Badge";
@@ -12,8 +12,10 @@ import Modal from "../../ui/Modal";
 import { LoadingState, ErrorState, EmptyState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
-import { ROLE_AR, ROLE_OPTIONS, labelAr } from "../../../i18n/labels";
+import { ROLE_AR, labelAr } from "../../../i18n/labels";
+import { PLATFORM_ROLE_OPTIONS } from "../../../admin/roleOptions";
 import { extractErrorDetail, type AdminUserRow } from "../../../admin/userManagement";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
 interface Paginated {
   count: number;
@@ -40,9 +42,12 @@ export default function UsersAdmin() {
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState(false);
 
-  const load = async (p = page) => {
-    setLoading(true);
-    setError(false);
+  const load = async (p = page, mode: AdminLoadMode = "silent") => {
+    const flip = shouldFlipPageLoading(mode);
+    if (flip) {
+      setLoading(true);
+      setError(false);
+    }
     const params = new URLSearchParams({ page: String(p) });
     if (search.trim()) params.set("search", search.trim());
     if (role) params.set("role", role);
@@ -55,14 +60,17 @@ export default function UsersAdmin() {
       setRows(data.results || []);
       setCount(data.count || 0);
     } catch {
-      setError(true);
+      if (flip) setError(true);
     } finally {
-      setLoading(false);
+      if (flip) setLoading(false);
     }
   };
 
+  const initialRef = useRef(true);
   useEffect(() => {
-    void load(page);
+    const mode = initialRef.current ? "initial" : "silent";
+    initialRef.current = false;
+    void load(page, mode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, role, status]);
 
@@ -192,12 +200,12 @@ export default function UsersAdmin() {
             label="بحث"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); void load(1); } }}
+            onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); void load(1, "silent"); } }}
             placeholder="الاسم أو البريد"
           />
           <Select label="الدور" value={role} onChange={(e) => { setRole(e.target.value); setPage(1); }}>
             <option value="">كل الأدوار</option>
-            {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {PLATFORM_ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
           <Select label="الحالة" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
             <option value="">الكل</option>
@@ -205,7 +213,7 @@ export default function UsersAdmin() {
             <option value="disabled">معطّل</option>
           </Select>
         </div>
-        <Button type="button" variant="secondary" className="mb-4" onClick={() => { setPage(1); void load(1); }}>تطبيق البحث</Button>
+        <Button type="button" variant="secondary" className="mb-4" onClick={() => { setPage(1); void load(1, "silent"); }}>تطبيق البحث</Button>
 
         {loading && <LoadingState title="جاري تحميل المستخدمين…" />}
         {error && <ErrorState title="تعذّر التحميل" message="تحقّق من الاتصال أو صلاحية المشرف." />}
@@ -228,7 +236,7 @@ export default function UsersAdmin() {
           <Input label="البريد" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <Select label="الدور" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-            {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {PLATFORM_ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
           <Input label="كلمة المرور الأولية" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
           <Button type="button" disabled={busy} onClick={() => void saveAdd()}>{busy ? "جاري الحفظ…" : "إنشاء"}</Button>
@@ -240,7 +248,7 @@ export default function UsersAdmin() {
           <Input label="البريد" dir="ltr" value={form.email} disabled />
           <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <Select label="الدور" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-            {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {PLATFORM_ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
             <Checkbox label="نشط" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
           <Button type="button" disabled={busy} onClick={() => void saveEdit()}>{busy ? "جاري الحفظ…" : "حفظ"}</Button>

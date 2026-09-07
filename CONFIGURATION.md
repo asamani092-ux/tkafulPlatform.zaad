@@ -19,6 +19,20 @@
 - إحصاءات عامة مموّهة: `GET /api/saqya/public-stats/`
 - بذرة: `python manage.py seed_zaad_config`
 
+## صفحات ثابتة (StaticPage)
+
+| slug | الاستخدام | منشور افتراضياً |
+|------|-----------|-----------------|
+| `home` | عنوان/مقدمة الصفحة الرئيسية | ✓ |
+| `about` | هيرو صفحة «من نحن» | ✓ |
+| `about-mission` | بطاقة رسالتنا | ✓ |
+| `about-values` | بطاقة قيمنا | ✓ |
+| `about-community` | بطاقة مجتمعنا | ✓ |
+| `terms` | شروط الاستخدام | ✗ |
+
+تُعرض الصفحات المنشورة فقط عبر `GET /api/public-settings/` ضمن `pages[]` (slug، title، body).
+يُحرَّر المحتوى من `/Admin/settings` → تبويب الصفحات الثابتة؛ البذرة في `core/migrations/0005_seed_content_pages.py`.
+
 ## قدرات تبقى في الكود (تهيئة لا حذف)
 
 - `record_payment` + overfund

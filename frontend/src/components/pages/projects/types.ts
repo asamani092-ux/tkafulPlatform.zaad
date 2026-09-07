@@ -15,6 +15,7 @@ export interface PlatformProject {
   tools: string[];
   type_name?: string | null;
   type_slug?: string | null;
+  request_forms?: { id: number; title: string; slug: string }[];
 }
 
 export interface ProjectType {

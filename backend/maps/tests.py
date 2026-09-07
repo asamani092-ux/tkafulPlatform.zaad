@@ -255,3 +255,20 @@ class MapAdminScopingTests(MapFixtureMixin, APITestCase):
         self.assertEqual(res.status_code, 200)
         c.refresh_from_db()
         self.assertEqual(c.status, "approved")
+
+    def test_admin_can_delete_layer_field_item(self):
+        self.client.force_authenticate(self.super_admin)
+        field = MapItemField.objects.create(
+            map=self.map, key="extra", label="حقل إضافي", type="text", order=9,
+        )
+        res = self.client.delete(f"/api/maps/admin/layers/{self.private_layer.id}/")
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(MapLayer.objects.filter(pk=self.private_layer.id).exists())
+
+        res = self.client.delete(f"/api/maps/admin/fields/{field.id}/")
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(MapItemField.objects.filter(pk=field.id).exists())
+
+        res = self.client.delete(f"/api/maps/admin/items/{self.public_item.id}/")
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(MapItem.objects.filter(pk=self.public_item.id).exists())

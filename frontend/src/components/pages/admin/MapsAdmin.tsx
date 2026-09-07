@@ -16,6 +16,7 @@ import { externalMapUrl } from "../../../utils/mapsLink";
 import { optionLabel, optionValue } from "../projects/filters";
 import type { MapFieldDef } from "../projects/types";
 import { labelAr } from "../../../i18n/labels";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
 interface AdminMap {
   id: number; project: number; project_slug: string; project_name: string;
@@ -71,12 +72,17 @@ export default function MapsAdmin() {
   const [layerForm, setLayerForm] = useState({ name: "", visibility: "public" });
   const [fieldForm, setFieldForm] = useState({ key: "", label: "", type: "text", required: false, is_public: true, options: "" });
   const [itemForm, setItemForm] = useState<{ layer: string; name: string; lat: string; lng: string; data: Record<string, string> }>({ layer: "", name: "", lat: "", lng: "", data: {} });
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: "layer" | "field" | "item"; id: number; label: string } | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const selected = maps.find((m) => m.id === selectedId) || null;
 
-  const loadMaps = useCallback(async () => {
-    setLoading(true);
-    setError(false);
+  const loadMaps = useCallback(async (mode: AdminLoadMode = "initial") => {
+    const flip = shouldFlipPageLoading(mode);
+    if (flip) {
+      setLoading(true);
+      setError(false);
+    }
     try {
       const [mapsRes, meRes, projectsRes] = await Promise.all([
         authFetch("/api/maps/admin/maps/"),
@@ -90,9 +96,9 @@ export default function MapsAdmin() {
       if (projectsRes.ok) setProjects((await projectsRes.json()).map((p: { id: number; name: string }) => ({ id: p.id, name: p.name })));
       if (data.length && !data.some((m) => m.id === selectedId)) setSelectedId(data[0].id);
     } catch {
-      setError(true);
+      if (flip) setError(true);
     } finally {
-      setLoading(false);
+      if (flip) setLoading(false);
     }
   }, [selectedId]);
 
@@ -109,7 +115,7 @@ export default function MapsAdmin() {
     setContributions(c as AdminContribution[]);
   }, []);
 
-  useEffect(() => { void loadMaps(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => { void loadMaps("initial"); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   useEffect(() => { if (selectedId) void loadChildren(selectedId); }, [selectedId, loadChildren]);
 
   const post = async (path: string, body: unknown, okMsg: string) => {
@@ -127,15 +133,44 @@ export default function MapsAdmin() {
     return false;
   };
 
+  const del = async (path: string, okMsg: string) => {
+    const res = await authFetch(path, { method: "DELETE" });
+    if (res.ok) {
+      toast.success({ title: okMsg });
+      if (selectedId) void loadChildren(selectedId);
+      return true;
+    }
+    const data = await res.json().catch(() => ({}));
+    toast.error({ title: data.detail || "تعذّر الحذف" });
+    return false;
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    try {
+      const paths = {
+        layer: `/api/maps/admin/layers/${deleteTarget.id}/`,
+        field: `/api/maps/admin/fields/${deleteTarget.id}/`,
+        item: `/api/maps/admin/items/${deleteTarget.id}/`,
+      };
+      const msgs = { layer: "حُذفت الطبقة", field: "حُذف الحقل", item: "حُذف العنصر" };
+      const ok = await del(paths[deleteTarget.kind], msgs[deleteTarget.kind]);
+      if (ok) setDeleteTarget(null);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   const createMap = async (e: React.FormEvent) => {
     e.preventDefault();
     const ok = await post("/api/maps/admin/maps/", { project: Number(mapForm.project), title: mapForm.title, visibility: mapForm.visibility }, "تم إنشاء الخريطة");
-    if (ok) { setMapForm({ project: "", title: "", visibility: "public" }); setCreateOpen(false); void loadMaps(); }
+    if (ok) { setMapForm({ project: "", title: "", visibility: "public" }); setCreateOpen(false); void loadMaps("silent"); }
   };
 
   const togglePublish = async (m: AdminMap) => {
     await post(`/api/maps/admin/maps/${m.id}/${m.published_at ? "unpublish" : "publish"}/`, {}, m.published_at ? "أُلغي النشر" : "تم النشر");
-    void loadMaps();
+    void loadMaps("silent");
   };
 
   if (loading) return <AdminShell><LoadingState title="جاري تحميل الخرائط…" /></AdminShell>;
@@ -176,6 +211,9 @@ export default function MapsAdmin() {
             <option value="mixed">مختلطة</option>
             <option value="private">خاصة</option>
           </Select>
+          {mapForm.visibility === "mixed" && (
+            <p className="text-xs text-brand-gray">خريطة عامة مع طبقات خاصة لا تظهر للعموم</p>
+          )}
           <div className="flex gap-2">
             <Button type="submit">إنشاء</Button>
             <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>إلغاء</Button>
@@ -190,6 +228,9 @@ export default function MapsAdmin() {
               <h2 className="text-lg font-bold text-primary">{selected.title}</h2>
               <Badge variant={selected.published_at ? "success" : "warning"}>{selected.published_at ? "منشورة" : "غير منشورة"}</Badge>
               <Badge>{arLabel(VISIBILITY_LABELS, selected.visibility)}</Badge>
+              {selected.visibility === "mixed" && (
+                <span className="text-xs text-brand-gray">خريطة عامة مع طبقات خاصة لا تظهر للعموم</span>
+              )}
             </div>
             <div className="flex gap-2">
               <Button variant="secondary" onClick={() => togglePublish(selected)}>
@@ -210,9 +251,10 @@ export default function MapsAdmin() {
           {tab === "layers" && (
             <div className="mt-4 space-y-2">
               {layers.map((l) => (
-                <div key={l.id} className="flex items-center gap-3 text-sm">
+                <div key={l.id} className="flex flex-wrap items-center gap-3 text-sm">
                   <strong>{l.name}</strong>
                   <Badge variant={l.visibility === "public" ? "success" : "warning"}>{l.visibility === "public" ? "عامة" : "خاصة"}</Badge>
+                  <Button type="button" variant="danger" size="sm" onClick={() => setDeleteTarget({ kind: "layer", id: l.id, label: l.name })}>حذف</Button>
                 </div>
               ))}
               <form className="mt-3 flex flex-wrap items-end gap-2"
@@ -242,6 +284,7 @@ export default function MapsAdmin() {
                   <Badge>{arLabel(FIELD_TYPE_LABELS, f.type)}</Badge>
                   {f.required && <Badge variant="warning">إلزامي</Badge>}
                   <Badge variant={f.is_public ? "success" : "danger"}>{f.is_public ? "عام" : "داخلي"}</Badge>
+                  <Button type="button" variant="danger" size="sm" onClick={() => setDeleteTarget({ kind: "field", id: f.id, label: f.label })}>حذف</Button>
                 </div>
               ))}
               <form className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-6"
@@ -289,6 +332,7 @@ export default function MapsAdmin() {
                       className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
                       الذهاب للموقع ↗
                     </a>
+                    <Button type="button" variant="danger" size="sm" onClick={() => setDeleteTarget({ kind: "item", id: i.id, label: i.name })}>حذف</Button>
                   </div>
                 ))}
                 {items.length === 0 && <p className="text-brand-gray">لا عناصر بعد.</p>}
@@ -357,6 +401,7 @@ export default function MapsAdmin() {
 
           {tab === "contributions" && (
             <div className="mt-4 space-y-2 text-sm">
+              <Alert tone="info" title="تعهدات الجمهور على عناصر الخريطة — اعتماد ثم تنفيذ" />
               {contributions.map((c) => (
                 <div key={c.id} className="flex flex-wrap items-center gap-2">
                   <strong>{c.name}</strong>
@@ -384,6 +429,18 @@ export default function MapsAdmin() {
           )}
         </Card>
       )}
+
+      <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="تأكيد الحذف">
+        <p className="mb-4 text-sm text-brand-gray">
+          حذف «{deleteTarget?.label}»؟ لا يمكن التراجع.
+        </p>
+        <div className="flex gap-2">
+          <Button type="button" variant="danger" disabled={deleteBusy} onClick={() => void confirmDelete()}>
+            {deleteBusy ? "جاري الحذف…" : "حذف"}
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => setDeleteTarget(null)}>إلغاء</Button>
+        </div>
+      </Modal>
     </AdminShell>
   );
 }

@@ -8,6 +8,7 @@ import { LoadingState, ErrorState, EmptyState } from "../../feedback/PageStates"
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
 import type { ProjectType } from "../projects/types";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
 const emptyForm = { name: "", order: 0 };
 
@@ -20,22 +21,25 @@ export default function ProjectTypesAdmin() {
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
-    setError(false);
+  const load = async (mode: AdminLoadMode = "initial") => {
+    const flip = shouldFlipPageLoading(mode);
+    if (flip) {
+      setLoading(true);
+      setError(false);
+    }
     try {
       const res = await authFetch("/api/platform/project-types/");
       if (!res.ok) throw new Error("fetch");
       const data = await res.json();
       setTypes(Array.isArray(data) ? data : data.results || []);
     } catch {
-      setError(true);
+      if (flip) setError(true);
     } finally {
-      setLoading(false);
+      if (flip) setLoading(false);
     }
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load("initial"); }, []);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +55,7 @@ export default function ProjectTypesAdmin() {
       } else {
         toast.success({ title: "تمت إضافة النوع" });
         setForm(emptyForm);
-        void load();
+        void load("silent");
       }
     } finally {
       setBusy(false);
@@ -63,14 +67,14 @@ export default function ProjectTypesAdmin() {
       method: "PATCH",
       body: JSON.stringify({ is_active: !t.is_active }),
     });
-    if (res.ok) { toast.success({ title: "تم التحديث" }); void load(); }
+    if (res.ok) { toast.success({ title: "تم التحديث" }); void load("silent"); }
     else toast.error({ title: "تعذّر التحديث" });
   };
 
   const remove = async (t: ProjectType) => {
     if (!window.confirm(`حذف النوع «${t.name}»؟ ستُزال إشارته من المشاريع.`)) return;
     const res = await authFetch(`/api/platform/project-types/${t.id}/`, { method: "DELETE" });
-    if (res.ok) { toast.success({ title: "تم الحذف" }); void load(); }
+    if (res.ok) { toast.success({ title: "تم الحذف" }); void load("silent"); }
     else toast.error({ title: "تعذّر الحذف" });
   };
 

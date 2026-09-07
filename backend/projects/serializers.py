@@ -39,6 +39,7 @@ class ProjectToolSerializer(serializers.ModelSerializer):
 class PublicProjectSerializer(serializers.ModelSerializer):
     tools = serializers.SerializerMethodField()
     tool_config = serializers.SerializerMethodField()
+    request_forms = serializers.SerializerMethodField()
     type_name = serializers.CharField(source="type.name", read_only=True, allow_null=True)
     type_slug = serializers.CharField(source="type.slug", read_only=True, allow_null=True)
 
@@ -48,6 +49,7 @@ class PublicProjectSerializer(serializers.ModelSerializer):
             "id", "name", "slug", "description", "brand_color", "cover_image",
             "donation_url", "donation_label",
             "start_date", "end_date", "status", "is_featured", "tools", "tool_config",
+            "request_forms",
             "type_name", "type_slug",
         ]
 
@@ -57,6 +59,12 @@ class PublicProjectSerializer(serializers.ModelSerializer):
     def get_tool_config(self, obj):
         # إعدادات الأدوات المفعّلة فقط (قيَم غير حسّاسة: مركز/مقياس/أعلام) — لعرض الهبوط
         return {t.tool_key: (t.config or {}) for t in obj.tools.all() if t.is_enabled}
+
+    def get_request_forms(self, obj):
+        return [
+            {"id": f.id, "title": f.title, "slug": f.slug}
+            for f in obj.request_forms.filter(is_active=True)
+        ]
 
 
 class ProjectMemberSerializer(serializers.ModelSerializer):

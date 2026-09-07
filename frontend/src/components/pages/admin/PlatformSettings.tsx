@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
@@ -13,23 +14,11 @@ import {
   usePlatformSettings,
   type DonorDataPolicy,
   type PublicPlatformSettings,
-  type RolesCanLogin,
 } from "../../../contexts/PlatformSettingsContext";
 import { authFetch } from "../../../lib/api";
 import { extractErrorDetail } from "../../../admin/userManagement";
 
 type FlagKey = "show_map" | "show_services" | "show_volunteering";
-
-const ROLE_LABELS: { key: keyof RolesCanLogin; label: string }[] = [
-  { key: "admin", label: "مشرف" },
-  { key: "manager", label: "مدير" },
-  { key: "employee", label: "موظف" },
-  { key: "user", label: "متطوّع (user)" },
-  { key: "donor", label: "متبرّع" },
-  { key: "supplier", label: "مورّد" },
-  { key: "representative", label: "مندوب" },
-  { key: "beneficiary", label: "مستفيد" },
-];
 
 interface StaticPageRow {
   id: number;
@@ -88,7 +77,6 @@ export default function PlatformSettingsPage() {
           show_map: form.show_map,
           show_services: form.show_services,
           show_volunteering: form.show_volunteering,
-          roles_can_login: form.roles_can_login,
           sponsorship_payments_enabled: form.sponsorship_payments_enabled,
           sponsorship_gps_documentation: form.sponsorship_gps_documentation,
           sponsorship_collect_donor_data: form.sponsorship_collect_donor_data,
@@ -209,22 +197,16 @@ export default function PlatformSettingsPage() {
             </div>
           </Card>
           <Card>
-            <h2 className="mb-3 text-lg font-bold text-primary">أدوار مسموح بدخولها</h2>
-            <div className="space-y-2">
-              {ROLE_LABELS.map(({ key, label }) => (
-                <Switch
-                  key={key}
-                  label={label}
-                  checked={Boolean(form.roles_can_login?.[key])}
-                  onChange={(v) =>
-                    setForm({
-                      ...form,
-                      roles_can_login: { ...form.roles_can_login, [key]: v },
-                    })
-                  }
-                />
-              ))}
-            </div>
+            <h2 className="mb-2 text-lg font-bold text-primary">تفعيل دخول الأدوار</h2>
+            <p className="mb-3 text-sm text-brand-gray">
+              إدارة الأدوار الثمانية وتفعيل تسجيل الدخول لكل دور من صفحة مخصّصة.
+            </p>
+            <Link
+              to="/Admin/settings/roles"
+              className="inline-flex items-center gap-1 text-sm font-bold text-primary hover:underline"
+            >
+              إدارة الأدوار وتفعيل الدخول →
+            </Link>
           </Card>
           <Button type="button" disabled={saving} onClick={() => void save()}>{saving ? "جاري الحفظ…" : "حفظ الإعدادات"}</Button>
         </div>

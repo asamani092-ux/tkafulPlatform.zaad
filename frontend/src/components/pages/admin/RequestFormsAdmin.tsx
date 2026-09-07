@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import QRCode from "qrcode";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
@@ -13,6 +14,7 @@ import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
 import { autoFieldKeyFromLabel, autoSlugFromLabel } from "../../../utils/autoSlug";
 import { labelAr } from "../../../i18n/labels";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
 type FieldType = "text" | "textarea" | "number" | "select" | "boolean" | "date";
 interface SchemaField { key: string; label: string; type: FieldType; required: boolean; options?: string[]; placeholder?: string }
@@ -29,7 +31,7 @@ const FIELD_TYPE_LABELS: Record<FieldType, string> = {
 };
 const SUB_STATUS: Record<string, string> = { PENDING: "قيد المراجعة", APPROVED: "مقبول", REJECTED: "مرفوض", DONE: "منجز" };
 
-/** نطاق الطلبات — إنشاء نموذج بنافذة عائمة؛ مفتاح الحقل تلقائي من التسمية. */
+/** نطاق الطلبات — إنشاء/تعديل نموذج بنافذة عائمة؛ مفتاح الحقل تلقائي من التسمية. */
 export default function RequestFormsAdmin() {
   const toast = useToast();
   const [tab, setTab] = useState("forms");
@@ -37,8 +39,11 @@ export default function RequestFormsAdmin() {
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<RForm | null>(null);
+  const [shareForm, setShareForm] = useState<RForm | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState("");
 
-  const [meta, setMeta] = useState({ title: "", slug: "", project: "", description: "" });
+  const [meta, setMeta] = useState({ title: "", slug: "", project: "", description: "", is_active: true });
   const [fields, setFields] = useState<SchemaField[]>([]);
   const [fieldDraft, setFieldDraft] = useState<{ label: string; type: FieldType; required: boolean; placeholder: string }>({ label: "", type: "text", required: false, placeholder: "" });
   const [optionsText, setOptionsText] = useState("");
@@ -52,8 +57,21 @@ export default function RequestFormsAdmin() {
     return m;
   }, [selected]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const shareUrl = shareForm ? `${window.location.origin}/forms/${shareForm.slug}` : "";
+
+  useEffect(() => {
+    if (!shareForm) {
+      setQrDataUrl("");
+      return;
+    }
+    void QRCode.toDataURL(shareUrl, { margin: 1, width: 200 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(""));
+  }, [shareForm, shareUrl]);
+
+  const load = useCallback(async (mode: AdminLoadMode = "initial") => {
+    const flip = shouldFlipPageLoading(mode);
+    if (flip) setLoading(true);
     try {
       const [fRes, pRes] = await Promise.all([
         authFetch("/api/admin/request-forms/"),
@@ -66,11 +84,45 @@ export default function RequestFormsAdmin() {
         setProjects(arr.map((p: { id: number; name: string }) => ({ id: p.id, name: p.name })));
       }
     } finally {
-      setLoading(false);
+      if (flip) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load("initial"); }, [load]);
+
+  const resetFormBuilder = () => {
+    setMeta({ title: "", slug: "", project: "", description: "", is_active: true });
+    setFields([]);
+    setFieldDraft({ label: "", type: "text", required: false, placeholder: "" });
+    setOptionsText("");
+  };
+
+  const openCreate = () => {
+    resetFormBuilder();
+    setEditing(null);
+    setCreateOpen(true);
+  };
+
+  const openEdit = (f: RForm) => {
+    setMeta({
+      title: f.title,
+      slug: f.slug,
+      project: f.project != null ? String(f.project) : "",
+      description: f.description || "",
+      is_active: f.is_active,
+    });
+    setFields([...f.fields_schema]);
+    setFieldDraft({ label: "", type: "text", required: false, placeholder: "" });
+    setOptionsText("");
+    setEditing(f);
+    setCreateOpen(true);
+  };
+
+  const closeFormModal = () => {
+    setCreateOpen(false);
+    setEditing(null);
+    resetFormBuilder();
+  };
 
   const addField = () => {
     if (!fieldDraft.label.trim()) { toast.error({ title: "التسمية مطلوبة" }); return; }
@@ -86,39 +138,42 @@ export default function RequestFormsAdmin() {
     setOptionsText("");
   };
 
-  const createForm = async (e: React.FormEvent) => {
+  const saveForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (fields.length === 0) { toast.error({ title: "أضِف حقلاً واحداً على الأقل" }); return; }
     const slug = meta.slug.trim() || autoSlugFromLabel(meta.title, "form");
-    const res = await authFetch("/api/admin/request-forms/", {
-      method: "POST",
-      body: JSON.stringify({
-        title: meta.title, slug, description: meta.description,
-        project: meta.project ? Number(meta.project) : null,
-        fields_schema: fields, is_active: true,
-      }),
+    const body = {
+      title: meta.title,
+      description: meta.description,
+      project: meta.project ? Number(meta.project) : null,
+      fields_schema: fields,
+      is_active: meta.is_active,
+    };
+    const url = editing ? `/api/admin/request-forms/${editing.id}/` : "/api/admin/request-forms/";
+    const res = await authFetch(url, {
+      method: editing ? "PATCH" : "POST",
+      body: JSON.stringify(editing ? body : { ...body, slug }),
     });
     if (res.ok) {
-      toast.success({ title: "تم إنشاء النموذج" });
-      setMeta({ title: "", slug: "", project: "", description: "" }); setFields([]);
-      setCreateOpen(false);
-      void load();
+      toast.success({ title: editing ? "تم تحديث النموذج" : "تم إنشاء النموذج" });
+      closeFormModal();
+      void load("silent");
     } else {
       const d = await res.json().catch(() => ({}));
-      const msg = d.slug?.[0] || d.fields_schema?.[0] || d.detail || "تعذّر الإنشاء";
+      const msg = d.slug?.[0] || d.fields_schema?.[0] || d.detail || "تعذّر الحفظ";
       toast.error({ title: typeof msg === "string" ? msg : JSON.stringify(msg) });
     }
   };
 
   const toggleActive = async (f: RForm) => {
     const res = await authFetch(`/api/admin/request-forms/${f.id}/`, { method: "PATCH", body: JSON.stringify({ is_active: !f.is_active }) });
-    if (res.ok) { toast.success({ title: f.is_active ? "أُلغي التفعيل" : "تم التفعيل" }); void load(); }
+    if (res.ok) { toast.success({ title: f.is_active ? "أُلغي التفعيل" : "تم التفعيل" }); void load("silent"); }
   };
 
   const removeForm = async (f: RForm) => {
     if (!window.confirm(`حذف النموذج «${f.title}» وكل طلباته؟`)) return;
     const res = await authFetch(`/api/admin/request-forms/${f.id}/`, { method: "DELETE" });
-    if (res.ok) { toast.success({ title: "تم الحذف" }); if (selected?.id === f.id) setSelected(null); void load(); }
+    if (res.ok) { toast.success({ title: "تم الحذف" }); if (selected?.id === f.id) setSelected(null); void load("silent"); }
   };
 
   const openSubmissions = async (f: RForm) => {
@@ -132,11 +187,20 @@ export default function RequestFormsAdmin() {
     if (res.ok && selected) { toast.success({ title: "تم تحديث الحالة" }); void openSubmissions(selected); }
   };
 
+  const copyShareUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success({ title: "تم نسخ الرابط" });
+    } catch {
+      toast.error({ title: "تعذّر النسخ" });
+    }
+  };
+
   return (
     <AdminShell>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-extrabold text-primary">نماذج الطلبات</h1>
-        {tab === "forms" && <Button type="button" onClick={() => setCreateOpen(true)}>إضافة نموذج</Button>}
+        {tab === "forms" && <Button type="button" onClick={openCreate}>إضافة نموذج</Button>}
       </div>
       <div className="mb-4">
         <Tabs active={tab} onChange={setTab} tabs={[
@@ -160,6 +224,8 @@ export default function RequestFormsAdmin() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button type="button" variant="secondary" size="sm" onClick={() => openSubmissions(f)}>التفاصيل ({f.submissions_count})</Button>
+                    <Button type="button" variant="secondary" size="sm" onClick={() => openEdit(f)}>تعديل</Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShareForm(f)}>مشاركة</Button>
                     <Button type="button" variant="ghost" size="sm" onClick={() => toggleActive(f)}>{f.is_active ? "تعطيل" : "تفعيل"}</Button>
                     <Button type="button" variant="danger" size="sm" onClick={() => removeForm(f)}>حذف</Button>
                   </div>
@@ -207,8 +273,8 @@ export default function RequestFormsAdmin() {
         </div>
       )}
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="إنشاء نموذج طلب" wide>
-        <form className="space-y-3" onSubmit={createForm}>
+      <Modal open={createOpen} onClose={closeFormModal} title={editing ? "تعديل نموذج طلب" : "إنشاء نموذج طلب"} wide>
+        <form className="space-y-3" onSubmit={saveForm}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input
               label="عنوان النموذج"
@@ -218,7 +284,11 @@ export default function RequestFormsAdmin() {
                 setMeta((m) => ({
                   ...m,
                   title,
-                  slug: m.slug && m.slug !== autoSlugFromLabel(m.title, "form") ? m.slug : autoSlugFromLabel(title, "form"),
+                  slug: editing
+                    ? m.slug
+                    : m.slug && m.slug !== autoSlugFromLabel(m.title, "form")
+                      ? m.slug
+                      : autoSlugFromLabel(title, "form"),
                 }));
               }}
               required
@@ -228,6 +298,11 @@ export default function RequestFormsAdmin() {
               {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
             <Input label="وصف مختصر" value={meta.description} onChange={(e) => setMeta({ ...meta, description: e.target.value })} />
+            {editing && (
+              <div className="flex items-end">
+                <Checkbox label="نشط" checked={meta.is_active} onChange={(e) => setMeta({ ...meta, is_active: e.target.checked })} />
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -262,10 +337,27 @@ export default function RequestFormsAdmin() {
           </div>
 
           <div className="flex gap-2">
-            <Button type="submit">حفظ النموذج</Button>
-            <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>إلغاء</Button>
+            <Button type="submit">{editing ? "حفظ التعديلات" : "حفظ النموذج"}</Button>
+            <Button type="button" variant="secondary" onClick={closeFormModal}>إلغاء</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={!!shareForm} onClose={() => setShareForm(null)} title="مشاركة النموذج">
+        {shareForm && (
+          <div className="space-y-4 text-center">
+            <p className="text-sm text-brand-gray">رابط عام بدون بيانات شخصية — يُشارك مع المستفيدين.</p>
+            <p className="break-all rounded-lg bg-surface-muted px-3 py-2 text-sm font-mono text-primary" dir="ltr">{shareUrl}</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button type="button" variant="secondary" onClick={() => void copyShareUrl()}>نسخ الرابط</Button>
+            </div>
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="QR" className="mx-auto rounded-lg border border-surface-border" width={200} height={200} />
+            ) : (
+              <p className="text-xs text-brand-gray">جاري إنشاء رمز QR…</p>
+            )}
+          </div>
+        )}
       </Modal>
     </AdminShell>
   );
