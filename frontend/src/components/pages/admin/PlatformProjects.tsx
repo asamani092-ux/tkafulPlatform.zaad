@@ -438,22 +438,10 @@ export default function PlatformProjects() {
         )}
       </div>
 
-      {projects.some((p) => p.tools.some((t) => t.tool_key === "sponsorships" && t.is_enabled)) && (
-        <Card className="mb-6">
-          <h2 className="mb-2 text-lg font-bold text-primary">فهرس مشاريع الكفالات</h2>
-          <ul className="space-y-2 text-sm">
-            {projects.filter((p) => p.tools.some((t) => t.tool_key === "sponsorships" && t.is_enabled)).map((p) => (
-              <li key={`sp-${p.id}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border py-2 last:border-0">
-                <span className="font-semibold text-primary">{p.name}</span>
-                <Link to={`/Admin/projects/${p.slug}/sponsorships`} className="font-bold text-primary hover:underline">إدارة الكفالات</Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-
       <div className="space-y-3">
-        {projects.map((p) => (
+        {projects.map((p) => {
+          const sponEnabled = p.tools.some((t) => t.tool_key === "sponsorships" && t.is_enabled);
+          return (
           <Card key={p.id}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
@@ -466,10 +454,21 @@ export default function PlatformProjects() {
                   {p.created_at ? new Date(p.created_at).toLocaleDateString("ar") : "—"}
                 </span>
               </div>
-              <Button type="button" variant="secondary" onClick={() => openEditWizard(p)}>التفاصيل</Button>
+              <div className="flex flex-wrap gap-2">
+                {sponEnabled && (
+                  <Link
+                    to={`/Admin/projects/${p.slug}/sponsorships`}
+                    className="inline-flex items-center rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm font-bold text-primary hover:underline"
+                  >
+                    إدارة الكفالات
+                  </Link>
+                )}
+                <Button type="button" variant="secondary" onClick={() => openEditWizard(p)}>التفاصيل</Button>
+              </div>
             </div>
           </Card>
-        ))}
+          );
+        })}
         {projects.length === 0 && <p className="text-brand-gray">لا مشاريع ضمن نطاقك.</p>}
       </div>
 
