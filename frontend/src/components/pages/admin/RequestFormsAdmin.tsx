@@ -13,6 +13,7 @@ import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
 import { autoFieldKeyFromLabel, autoSlugFromLabel } from "../../../utils/autoSlug";
 import { labelAr } from "../../../i18n/labels";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
 type FieldType = "text" | "textarea" | "number" | "select" | "boolean" | "date";
 interface SchemaField { key: string; label: string; type: FieldType; required: boolean; options?: string[]; placeholder?: string }
@@ -52,8 +53,9 @@ export default function RequestFormsAdmin() {
     return m;
   }, [selected]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (mode: AdminLoadMode = "initial") => {
+    const flip = shouldFlipPageLoading(mode);
+    if (flip) setLoading(true);
     try {
       const [fRes, pRes] = await Promise.all([
         authFetch("/api/admin/request-forms/"),
@@ -66,11 +68,11 @@ export default function RequestFormsAdmin() {
         setProjects(arr.map((p: { id: number; name: string }) => ({ id: p.id, name: p.name })));
       }
     } finally {
-      setLoading(false);
+      if (flip) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load("initial"); }, [load]);
 
   const addField = () => {
     if (!fieldDraft.label.trim()) { toast.error({ title: "التسمية مطلوبة" }); return; }
@@ -102,7 +104,7 @@ export default function RequestFormsAdmin() {
       toast.success({ title: "تم إنشاء النموذج" });
       setMeta({ title: "", slug: "", project: "", description: "" }); setFields([]);
       setCreateOpen(false);
-      void load();
+      void load("silent");
     } else {
       const d = await res.json().catch(() => ({}));
       const msg = d.slug?.[0] || d.fields_schema?.[0] || d.detail || "تعذّر الإنشاء";
@@ -112,13 +114,13 @@ export default function RequestFormsAdmin() {
 
   const toggleActive = async (f: RForm) => {
     const res = await authFetch(`/api/admin/request-forms/${f.id}/`, { method: "PATCH", body: JSON.stringify({ is_active: !f.is_active }) });
-    if (res.ok) { toast.success({ title: f.is_active ? "أُلغي التفعيل" : "تم التفعيل" }); void load(); }
+    if (res.ok) { toast.success({ title: f.is_active ? "أُلغي التفعيل" : "تم التفعيل" }); void load("silent"); }
   };
 
   const removeForm = async (f: RForm) => {
     if (!window.confirm(`حذف النموذج «${f.title}» وكل طلباته؟`)) return;
     const res = await authFetch(`/api/admin/request-forms/${f.id}/`, { method: "DELETE" });
-    if (res.ok) { toast.success({ title: "تم الحذف" }); if (selected?.id === f.id) setSelected(null); void load(); }
+    if (res.ok) { toast.success({ title: "تم الحذف" }); if (selected?.id === f.id) setSelected(null); void load("silent"); }
   };
 
   const openSubmissions = async (f: RForm) => {

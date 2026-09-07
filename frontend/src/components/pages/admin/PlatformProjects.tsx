@@ -12,6 +12,7 @@ import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
 import { labelAr, ROLE_AR } from "../../../i18n/labels";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 import ToolConfigFields from "../../admin/ToolConfigFields";
 import { Link } from "react-router-dom";
 import { TOOL_LABELS, STATUS_LABELS, LIFECYCLE_ACTION_LABELS, type ProjectType } from "../projects/types";
@@ -68,9 +69,12 @@ export default function PlatformProjects() {
   const [allowSuppliers, setAllowSuppliers] = useState<string[]>([]);
   const [allowReps, setAllowReps] = useState<string[]>([]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(false);
+  const load = useCallback(async (mode: AdminLoadMode = "initial") => {
+    const flip = shouldFlipPageLoading(mode);
+    if (flip) {
+      setLoading(true);
+      setError(false);
+    }
     try {
       const [projectsRes, meRes, typesRes, supRes, repRes] = await Promise.all([
         authFetch("/api/platform/projects/"),
@@ -101,13 +105,14 @@ export default function PlatformProjects() {
         })));
       }
     } catch {
-      setError(true);
+      if (flip) setError(true);
+      else toast.error({ title: "تعذّر تحديث القائمة" });
     } finally {
-      setLoading(false);
+      if (flip) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load("initial"); }, [load]);
 
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,7 +128,7 @@ export default function PlatformProjects() {
       toast.success({ title: "تم إنشاء المشروع" });
       setForm({ name: "", description: "", brand_color: "#8b1538", type: "" });
       setCreateOpen(false);
-      void load();
+      void load("silent");
     } else {
       const data = await res.json().catch(() => ({}));
       toast.error({ title: data.detail || data.name?.[0] || "تعذّر إنشاء المشروع" });
@@ -136,7 +141,7 @@ export default function PlatformProjects() {
       method: "PATCH",
       body: JSON.stringify({ type: typeId ? Number(typeId) : null }),
     });
-    if (res.ok) { toast.success({ title: "تم تحديث النوع" }); void load(); }
+    if (res.ok) { toast.success({ title: "تم تحديث النوع" }); void load("silent"); }
     else toast.error({ title: "تعذّر تحديث النوع" });
   };
 
@@ -153,7 +158,7 @@ export default function PlatformProjects() {
       method: "POST",
       body: JSON.stringify(body),
     });
-    if (res.ok) { toast.success({ title: "تم تحديث الأداة" }); setCfgEdit(null); void load(); return true; }
+    if (res.ok) { toast.success({ title: "تم تحديث الأداة" }); setCfgEdit(null); void load("silent"); return true; }
     const data = await res.json().catch(() => ({}));
     const msg = data.config?.[0] || data.config || data.detail || "تعذّر تحديث الأداة (صلاحية المشرف العام)";
     toast.error({ title: typeof msg === "string" ? msg : JSON.stringify(msg) });
@@ -185,7 +190,7 @@ export default function PlatformProjects() {
     });
     if (res.ok) {
       toast.success({ title: "تم حفظ رابط التبرع" });
-      void load();
+      void load("silent");
     } else {
       const data = await res.json().catch(() => ({}));
       toast.error({ title: data.donation_url?.[0] || "تعذّر الحفظ" });
@@ -202,7 +207,7 @@ export default function PlatformProjects() {
     });
     if (res.ok) {
       toast.success({ title: "تم حفظ نطاق الإسناد" });
-      void load();
+      void load("silent");
     } else {
       toast.error({ title: "تعذّر حفظ نطاق الإسناد" });
     }
@@ -218,7 +223,7 @@ export default function PlatformProjects() {
     });
     if (res.ok) {
       toast.success({ title: `تم ${label} المشروع` });
-      void load();
+      void load("silent");
     } else {
       const data = await res.json().catch(() => ({}));
       toast.error({ title: data.detail || `تعذّر ${label} المشروع` });
@@ -233,7 +238,7 @@ export default function PlatformProjects() {
     });
     if (res.ok) {
       toast.success({ title: project.is_featured ? "أُزيل من الرئيسية" : "أُضيف للرئيسية" });
-      void load();
+      void load("silent");
     } else {
       toast.error({ title: "تعذّر تحديث التمييز" });
     }
@@ -247,7 +252,7 @@ export default function PlatformProjects() {
     });
     if (res.ok) {
       toast.success({ title: "تم حفظ ترتيب العرض" });
-      void load();
+      void load("silent");
     } else {
       toast.error({ title: "تعذّر حفظ الترتيب" });
     }
@@ -276,7 +281,7 @@ export default function PlatformProjects() {
       });
       if (res.ok) ok += 1;
     }
-    if (ok > 0) { toast.success({ title: `أُضيف ${ok} عضواً` }); setMemberPick([]); void load(); }
+    if (ok > 0) { toast.success({ title: `أُضيف ${ok} عضواً` }); setMemberPick([]); void load("silent"); }
     else toast.error({ title: "تعذّرت إضافة الأعضاء" });
   };
 
@@ -285,7 +290,7 @@ export default function PlatformProjects() {
       method: "POST",
       body: JSON.stringify({ user_id: userId }),
     });
-    if (res.ok) { toast.success({ title: "تمت إزالة العضو" }); void load(); }
+    if (res.ok) { toast.success({ title: "تمت إزالة العضو" }); void load("silent"); }
     else toast.error({ title: "تعذّرت إزالة العضو" });
   };
 

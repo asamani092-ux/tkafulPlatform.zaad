@@ -16,6 +16,7 @@ import { externalMapUrl } from "../../../utils/mapsLink";
 import { optionLabel, optionValue } from "../projects/filters";
 import type { MapFieldDef } from "../projects/types";
 import { labelAr } from "../../../i18n/labels";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
 interface AdminMap {
   id: number; project: number; project_slug: string; project_name: string;
@@ -74,9 +75,12 @@ export default function MapsAdmin() {
 
   const selected = maps.find((m) => m.id === selectedId) || null;
 
-  const loadMaps = useCallback(async () => {
-    setLoading(true);
-    setError(false);
+  const loadMaps = useCallback(async (mode: AdminLoadMode = "initial") => {
+    const flip = shouldFlipPageLoading(mode);
+    if (flip) {
+      setLoading(true);
+      setError(false);
+    }
     try {
       const [mapsRes, meRes, projectsRes] = await Promise.all([
         authFetch("/api/maps/admin/maps/"),
@@ -90,9 +94,9 @@ export default function MapsAdmin() {
       if (projectsRes.ok) setProjects((await projectsRes.json()).map((p: { id: number; name: string }) => ({ id: p.id, name: p.name })));
       if (data.length && !data.some((m) => m.id === selectedId)) setSelectedId(data[0].id);
     } catch {
-      setError(true);
+      if (flip) setError(true);
     } finally {
-      setLoading(false);
+      if (flip) setLoading(false);
     }
   }, [selectedId]);
 
@@ -109,7 +113,7 @@ export default function MapsAdmin() {
     setContributions(c as AdminContribution[]);
   }, []);
 
-  useEffect(() => { void loadMaps(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => { void loadMaps("initial"); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   useEffect(() => { if (selectedId) void loadChildren(selectedId); }, [selectedId, loadChildren]);
 
   const post = async (path: string, body: unknown, okMsg: string) => {
@@ -130,12 +134,12 @@ export default function MapsAdmin() {
   const createMap = async (e: React.FormEvent) => {
     e.preventDefault();
     const ok = await post("/api/maps/admin/maps/", { project: Number(mapForm.project), title: mapForm.title, visibility: mapForm.visibility }, "تم إنشاء الخريطة");
-    if (ok) { setMapForm({ project: "", title: "", visibility: "public" }); setCreateOpen(false); void loadMaps(); }
+    if (ok) { setMapForm({ project: "", title: "", visibility: "public" }); setCreateOpen(false); void loadMaps("silent"); }
   };
 
   const togglePublish = async (m: AdminMap) => {
     await post(`/api/maps/admin/maps/${m.id}/${m.published_at ? "unpublish" : "publish"}/`, {}, m.published_at ? "أُلغي النشر" : "تم النشر");
-    void loadMaps();
+    void loadMaps("silent");
   };
 
   if (loading) return <AdminShell><LoadingState title="جاري تحميل الخرائط…" /></AdminShell>;

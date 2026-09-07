@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import DataTable from "../../ui/DataTable";
@@ -10,6 +10,7 @@ import { LoadingState, ErrorState, EmptyState } from "../../feedback/PageStates"
 import { authFetch } from "../../../lib/api";
 import { ACTION_AR, ACTION_OPTIONS, activityQuery, type ActivityFilters } from "../../../admin/activityLog";
 import { labelAr, formatActivityTarget } from "../../../i18n/labels";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
 interface Row {
   id: number;
@@ -39,9 +40,12 @@ export default function ActivityLogAdmin() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const load = async (p = page, f = applied) => {
-    setLoading(true);
-    setError(false);
+  const load = async (p = page, f = applied, mode: AdminLoadMode = "silent") => {
+    const flip = shouldFlipPageLoading(mode);
+    if (flip) {
+      setLoading(true);
+      setError(false);
+    }
     try {
       const res = await authFetch(`/api/activity-logs/?${activityQuery(f, p)}`);
       if (!res.ok) throw new Error("fetch");
@@ -49,14 +53,17 @@ export default function ActivityLogAdmin() {
       setRows(data.results || []);
       setCount(data.count || 0);
     } catch {
-      setError(true);
+      if (flip) setError(true);
     } finally {
-      setLoading(false);
+      if (flip) setLoading(false);
     }
   };
 
+  const initialRef = useRef(true);
   useEffect(() => {
-    void load(page, applied);
+    const mode = initialRef.current ? "initial" : "silent";
+    initialRef.current = false;
+    void load(page, applied, mode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, applied]);
 
