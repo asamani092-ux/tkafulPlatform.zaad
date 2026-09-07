@@ -12,7 +12,8 @@ import Modal from "../../ui/Modal";
 import { LoadingState, ErrorState, EmptyState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
-import { ROLE_AR, ROLE_OPTIONS, labelAr } from "../../../i18n/labels";
+import { ROLE_AR, labelAr } from "../../../i18n/labels";
+import { PLATFORM_ROLE_OPTIONS } from "../../../admin/roleOptions";
 import { extractErrorDetail, type AdminUserRow } from "../../../admin/userManagement";
 import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
@@ -204,7 +205,7 @@ export default function UsersAdmin() {
           />
           <Select label="الدور" value={role} onChange={(e) => { setRole(e.target.value); setPage(1); }}>
             <option value="">كل الأدوار</option>
-            {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {PLATFORM_ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
           <Select label="الحالة" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
             <option value="">الكل</option>
@@ -235,7 +236,7 @@ export default function UsersAdmin() {
           <Input label="البريد" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <Select label="الدور" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-            {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {PLATFORM_ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
           <Input label="كلمة المرور الأولية" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
           <Button type="button" disabled={busy} onClick={() => void saveAdd()}>{busy ? "جاري الحفظ…" : "إنشاء"}</Button>
@@ -247,7 +248,7 @@ export default function UsersAdmin() {
           <Input label="البريد" dir="ltr" value={form.email} disabled />
           <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <Select label="الدور" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-            {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {PLATFORM_ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
             <Checkbox label="نشط" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
           <Button type="button" disabled={busy} onClick={() => void saveEdit()}>{busy ? "جاري الحفظ…" : "حفظ"}</Button>
