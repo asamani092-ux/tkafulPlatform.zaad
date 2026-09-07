@@ -422,6 +422,7 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        """Scope payments to the acting donor (or all for admin). Never cross-donor."""
         u = self.request.user
         r = role(u)
         qs = Payment.objects.select_related("sponsorship")
@@ -430,6 +431,16 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
         if r == "donor":
             return qs.filter(sponsorship__donor=u)
         return qs.none()
+
+    def check_object_permissions(self, request, obj):
+        super().check_object_permissions(request, obj)
+        r = role(request.user)
+        if r == "admin":
+            return
+        if r == "donor" and obj.sponsorship.donor_id == request.user.id:
+            return
+        # Defense in depth: deny even if queryset scoping is bypassed.
+        self.permission_denied(request, message="غير مصرّح")
 
 
 # ============ Supplier / Representative profiles (admin manage) ============

@@ -132,6 +132,16 @@ class WaterSupplyProjectMigrationReverseTests(TransactionTestCase):
 # ---------------------------------------------------------------------------
 class SponsorshipIdorPhase2Tests(APITestCase):
     def setUp(self):
+        from core.models import PlatformSetting
+        from core.runtime_config import clear_runtime_config_cache
+
+        # Pay path is config-gated (sponsorship_payments_enabled; Zaad default=False).
+        # Enable so IDOR on PaymentViewSet is exercised against a real payment row.
+        s = PlatformSetting.load()
+        s.sponsorship_payments_enabled = True
+        s.save(update_fields=["sponsorship_payments_enabled"])
+        clear_runtime_config_cache()
+
         self.donor_a = make_user("ida@x.com", "donor")
         self.donor_b = make_user("idb@x.com", "donor")
         self.admin = make_user("idadm@x.com", "admin")
@@ -162,8 +172,11 @@ class SponsorshipIdorPhase2Tests(APITestCase):
             {"amount": "50", "method": "online"},
             format="json",
         )
-        self.assertEqual(pay.status_code, 201)
+        self.assertEqual(pay.status_code, 201, getattr(pay, "data", pay.content))
         payment_id = pay.data["payment_id"]
+        # Owner can read; peer donor must not (IDOR).
+        own = self.client.get(f"/api/saqya/payments/{payment_id}/")
+        self.assertEqual(own.status_code, 200)
         self.client.force_authenticate(self.donor_b)
         res = self.client.get(f"/api/saqya/payments/{payment_id}/")
         self.assertIn(res.status_code, (403, 404))
@@ -315,9 +328,19 @@ class PrivateMediaAndUploadPhase2Tests(APITestCase):
         self.assertEqual(res.status_code, 400)
 
     def test_gps_validators_unit_and_api(self):
+        from core.models import PlatformSetting
+        from core.runtime_config import clear_runtime_config_cache
+
         self.assertIsNotNone(validate_gps(91, 0))
         self.assertIsNotNone(validate_gps(0, 181))
         self.assertIsNone(validate_gps(24.7, 46.7))
+
+        # API path only validates GPS when sponsorship_gps_documentation is on.
+        s = PlatformSetting.load()
+        s.sponsorship_gps_documentation = True
+        s.save(update_fields=["sponsorship_gps_documentation"])
+        clear_runtime_config_cache()
+
         self.client.force_authenticate(self.rep)
         res = self.client.post(
             "/api/saqya/documentation/",
