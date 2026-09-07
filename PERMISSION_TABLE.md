@@ -130,4 +130,7 @@ Legend: ✅ allowed · 🚫 denied (401/403) · 🔎 scoped queryset · — n/a
 | `POST …/pay/` | 🚫 | 🚫 | ✅ إن المدفوعات On | ✅ إن On |
 | `GET /api/saqya/public-stats/` | ✅ (مموّه `<5`) | ✅ | ✅ | ✅ |
 | `PATCH /api/settings/` كتلة الكفالة/الأدوار | 🚫 | 🚫 | 🚫 | ✅ admin |
+| `roles_can_login` (RolesAdmin) | — | — | — | ✅ | تفعيل الدخول لكل دور؛ admin غير قابل للإيقاف |
+| `DELETE /api/maps/admin/{layers,fields,items}/:id/` | 🚫 | 🔎 | project staff (can_edit) | ✅ | حذف طبقة/حقل/عنصر ضمن نطاق المشروع |
+| `GET /api/public-forms/`, `POST …/submit/` | ✅ | ✅ | — | ✅ | قائمة بلا PII؛ الإرسالات IsAdmin فقط |
 | بوابات saqya Donor/Supplier/Rep | — | — | واجهة فقط إن الدور مسموح | ملفات تبقى في الشجرة |

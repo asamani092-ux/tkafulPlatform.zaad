@@ -36,9 +36,15 @@ const TOOL_AR: Record<string, string> = {
 };
 
 /** الصفحة الرئيسية — رأس فاتح وفق نظام الزاد المعتمد (لا هيرو مارون ممتلئ). */
+const HOME_INTRO_FALLBACK =
+  "منصّة واحدة للعمل الخيري والتطوعي — مشاريع، كفالات، خارطة أثر، وخدمات مجتمعية.";
+
 export default function Home() {
-  const { settings } = usePlatformSettings();
+  const { settings, pageBySlug } = usePlatformSettings();
   const brandName = displayPlatformName(settings.platform_name);
+  const homePage = pageBySlug("home");
+  const headline = homePage?.title || brandName;
+  const intro = homePage?.body || HOME_INTRO_FALLBACK;
   const [stats, setStats] = useState<Stats>({ beneficiaries: 0, potential_projects: 0, donations: 0 });
   const [platformProjects, setPlatformProjects] = useState<PlatformProjectCard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,10 +69,8 @@ export default function Home() {
     <div className="bg-surface-muted">
       <header className="border-b border-surface-border bg-surface px-4 py-14 text-center">
         <div className="mx-auto max-w-page">
-          <h1 className="text-4xl font-extrabold text-primary md:text-5xl">{brandName}</h1>
-          <p className="mt-3 text-lg text-brand-gray">
-            منصّة واحدة للعمل الخيري والتطوعي — مشاريع، كفالات، خارطة أثر، وخدمات مجتمعية.
-          </p>
+          <h1 className="text-4xl font-extrabold text-primary md:text-5xl">{headline}</h1>
+          <p className="mt-3 text-lg text-brand-gray">{intro}</p>
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {display.map((s) => (
               <KpiCard key={s.label} label={s.label} value={`${Number(s.value || 0).toLocaleString("en-US")} +`} />
