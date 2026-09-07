@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+import re
+
 from rest_framework import serializers
 
 # نوع كل مفتاح: "bool" | "int" | "number" | "str" | "latlng"
@@ -28,7 +30,7 @@ TOOL_CONFIG_SCHEMA: dict[str, dict[str, str]] = {
         "show_opportunities": "bool",
     },
     "services": {
-        "request_form": "str",  # "service" | "water_supply"
+        "request_form": "str",  # slug: legacy service|water_supply أو أي slug نموذج مخصّص
         "show_request_button": "bool",
     },
     "reports": {
@@ -99,8 +101,6 @@ TOOL_CONFIG_UI: dict[str, dict[str, dict]] = {
     },
 }
 
-_REQUEST_FORMS = {"service", "water_supply"}
-
 
 def _check_value(tool_key: str, key: str, kind: str, value):
     if kind == "bool":
@@ -119,8 +119,11 @@ def _check_value(tool_key: str, key: str, kind: str, value):
     elif kind == "str":
         if not isinstance(value, str):
             raise serializers.ValidationError({key: "قيمة نصية مطلوبة"})
-        if key == "request_form" and value not in _REQUEST_FORMS:
-            raise serializers.ValidationError({key: f"القيمة خارج الخيارات: {sorted(_REQUEST_FORMS)}"})
+        if key == "request_form":
+            if not value.strip():
+                raise serializers.ValidationError({key: "معرّف النموذج مطلوب (slug غير فارغ)"})
+            if not re.fullmatch(r"[\w\-]+", value):
+                raise serializers.ValidationError({key: "معرّف غير صالح — حروف وأرقام و _ و - فقط"})
     elif kind == "latlng":
         if (
             not isinstance(value, (list, tuple))

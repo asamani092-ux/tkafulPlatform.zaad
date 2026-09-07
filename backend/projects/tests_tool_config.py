@@ -26,6 +26,8 @@ class ToolConfigValidationUnitTests(APITestCase):
                          {"show_target_amount": True, "target_amount": 500})
         self.assertEqual(validate_tool_config("services", {"request_form": "water_supply"}),
                          {"request_form": "water_supply"})
+        self.assertEqual(validate_tool_config("services", {"request_form": "custom-form"}),
+                         {"request_form": "custom-form"})
         self.assertEqual(validate_tool_config("map", {}), {})
         self.assertEqual(validate_tool_config("map", None), {})
 
@@ -39,7 +41,8 @@ class ToolConfigValidationUnitTests(APITestCase):
             ("map", {"default_center": [200, 0]}),
             ("sponsorships", {"target_amount": -1}),
             ("sponsorships", {"show_target_amount": "yes"}),
-            ("services", {"request_form": "unknown"}),
+            ("services", {"request_form": ""}),
+            ("services", {"request_form": "bad slug!"}),
             ("reports", {"public": 1}),
         ]:
             with self.assertRaises(ValidationError, msg=f"{tool}:{cfg}"):
@@ -100,6 +103,33 @@ class ToolVisibilityTests(APITestCase):
         res = self.client.get("/api/platform/public/projects/vis-p/")
         self.assertNotIn("sponsorships", res.json()["tools"])
         self.assertNotIn("sponsorships", res.json().get("tool_config", {}))
+
+
+class RequestFormsPublicProjectTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        from services.models import RequestForm
+
+        self.project = Project.objects.create(name="نماذج", slug="forms-p", status="active", is_active=True)
+        ProjectTool.objects.update_or_create(
+            project=self.project, tool_key="services",
+            defaults={"is_enabled": True, "config": {}},
+        )
+        self.active_form = RequestForm.objects.create(
+            title="طلب ماء", slug="water-need", project=self.project, fields_schema=[], is_active=True,
+        )
+        RequestForm.objects.create(
+            title="معطّل", slug="off-form", project=self.project, fields_schema=[], is_active=False,
+        )
+
+    def test_public_detail_lists_active_linked_request_forms(self):
+        res = self.client.get("/api/platform/public/projects/forms-p/")
+        self.assertEqual(res.status_code, 200)
+        forms = res.json()["request_forms"]
+        self.assertEqual(len(forms), 1)
+        self.assertEqual(forms[0]["slug"], "water-need")
+        self.assertEqual(forms[0]["title"], "طلب ماء")
+        self.assertEqual(forms[0]["id"], self.active_form.id)
 
 
 class SponsorshipToolConfigExtendedTests(APITestCase):
