@@ -44,9 +44,16 @@ export default function ProjectLanding() {
   if (loading) return <LoadingState title="جاري تحميل المشروع…" />;
   if (error || !project) return <ErrorState title="المشروع غير موجود" message="تأكد من الرابط أو عُد للصفحة الرئيسية." />;
 
-  const linkCtx = { slug: project.slug, mapsCount: project.maps.length, toolConfig: project.tool_config };
+  const linkCtx = {
+    slug: project.slug,
+    mapsCount: project.maps.length,
+    toolConfig: project.tool_config,
+    requestForms: project.request_forms,
+  };
   const shownTools = visibleTools(project.tools, linkCtx);
   const showDonation = donationInContext(project.donation_url, project.tools, project.tool_config);
+  const showExtraForms =
+    shownTools.includes("services") && (project.request_forms?.length ?? 0) > 1;
 
   return (
     <div dir="rtl" className="bg-surface-muted">
@@ -103,6 +110,20 @@ export default function ProjectLanding() {
                 </Link>
               );
             })}
+            {showExtraForms &&
+              project.request_forms!.map((form) => (
+                <Link key={form.id} to={`/forms/${form.slug}`} className="block">
+                  <Card className="h-full">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="mb-1 text-lg font-bold text-primary">{form.title}</h3>
+                        <p className="text-xs text-brand-gray">نموذج طلب</p>
+                      </div>
+                      <LayoutGrid className="text-secondary" size={28} />
+                    </div>
+                  </Card>
+                </Link>
+              ))}
           </div>
         )}
       </section>

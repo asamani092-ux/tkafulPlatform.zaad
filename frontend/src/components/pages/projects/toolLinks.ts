@@ -3,10 +3,34 @@
  * دوال نقية قابلة للاختبار. التعقيد: O(T) لعدد الأدوات.
  */
 
-interface ToolLinkContext {
+export interface ToolLinkContext {
   slug: string;
   mapsCount: number;
   toolConfig?: Record<string, Record<string, unknown>>;
+  requestForms?: Array<{ slug: string; title: string }>;
+}
+
+function resolveServicesLink(ctx: ToolLinkContext): string {
+  const configured = ctx.toolConfig?.services?.request_form as string | undefined;
+  if (configured) {
+    if (configured === "water_supply") {
+      return `/services/water-supply?project=${ctx.slug}`;
+    }
+    if (configured === "service") {
+      return "/request-service";
+    }
+    return `/forms/${configured}`;
+  }
+
+  const forms = ctx.requestForms;
+  if (forms?.length) {
+    return `/forms/${forms[0].slug}`;
+  }
+
+  const legacy = ctx.slug === "saqya" ? "water_supply" : "service";
+  return legacy === "water_supply"
+    ? `/services/water-supply?project=${ctx.slug}`
+    : "/request-service";
 }
 
 export function resolveToolLink(tool: string, ctx: ToolLinkContext): string | null {
@@ -17,14 +41,8 @@ export function resolveToolLink(tool: string, ctx: ToolLinkContext): string | nu
       return `/projects/${ctx.slug}/sponsorships`;
     case "volunteering":
       return "/volunteers";
-    case "services": {
-      const form =
-        (ctx.toolConfig?.services?.request_form as string) ||
-        (ctx.slug === "saqya" ? "water_supply" : "service");
-      return form === "water_supply"
-        ? `/services/water-supply?project=${ctx.slug}`
-        : "/request-service";
-    }
+    case "services":
+      return resolveServicesLink(ctx);
     default:
       return null;
   }

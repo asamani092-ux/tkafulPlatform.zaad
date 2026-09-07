@@ -13,6 +13,30 @@ describe("project tool links", () => {
     expect(
       resolveToolLink("services", { ...base, toolConfig: { services: { request_form: "water_supply" } } }),
     ).toBe("/services/water-supply?project=p1");
+    expect(
+      resolveToolLink("services", { ...base, toolConfig: { services: { request_form: "service" } } }),
+    ).toBe("/request-service");
+    expect(
+      resolveToolLink("services", { ...base, toolConfig: { services: { request_form: "custom-form" } } }),
+    ).toBe("/forms/custom-form");
+  });
+
+  it("routes services by linked request forms when config absent", () => {
+    expect(
+      resolveToolLink("services", {
+        ...base,
+        requestForms: [{ slug: "need-water", title: "طلب ماء" }],
+      }),
+    ).toBe("/forms/need-water");
+    expect(
+      resolveToolLink("services", {
+        ...base,
+        requestForms: [
+          { slug: "form-a", title: "أ" },
+          { slug: "form-b", title: "ب" },
+        ],
+      }),
+    ).toBe("/forms/form-a");
   });
 
   it("defaults saqya services to water supply", () => {
@@ -35,9 +59,9 @@ describe("project tool links", () => {
     expect(donationInContext("https://x", ["map"])).toBe(false);
     expect(donationInContext("", ["sponsorships"])).toBe(false);
   });
-});
 
   it("hides donation when show_donation_cta is false", () => {
     expect(donationInContext("https://x", ["sponsorships"], { sponsorships: { show_donation_cta: false } })).toBe(false);
     expect(donationInContext("https://x", ["sponsorships"], { sponsorships: { show_donation_cta: true } })).toBe(true);
   });
+});
