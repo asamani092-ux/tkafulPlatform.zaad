@@ -70,7 +70,12 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         لوحة الإدارة
       </Link>
       <div className="mb-3 flex items-center justify-between gap-2 text-sm text-brand-gray">
-        <span>{user?.name || "المشرف"}</span>
+        <div className="min-w-0">
+          <div className="truncate font-semibold text-primary">{user?.name || "المشرف"}</div>
+          <Link to="/Admin/account/settings" className="text-xs font-bold text-primary hover:underline">
+            تفضيلات الإشعارات
+          </Link>
+        </div>
         <NotificationBell />
       </div>
 

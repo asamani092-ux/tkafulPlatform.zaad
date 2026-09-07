@@ -55,6 +55,7 @@ const BroadcastAdmin = lazy(() => import("./components/pages/admin/BroadcastAdmi
 const RolesAdmin = lazy(() => import("./components/pages/admin/RolesAdmin"));
 const ActivityLogAdmin = lazy(() => import("./components/pages/admin/ActivityLogAdmin"));
 const ProjectTypesAdmin = lazy(() => import("./components/pages/admin/ProjectTypesAdmin"));
+const AdminAccountSettings = lazy(() => import("./components/pages/admin/AdminAccountSettings"));
 const PublicStaticPage = lazy(() => import("./components/pages/PublicStaticPage"));
 // Dead-code-eliminated unless VITE_ENABLE_UAT === "true" (production builds omit the chunk).
 const UatPage = import.meta.env.VITE_ENABLE_UAT === "true"
@@ -153,6 +154,9 @@ function AppContent() {
 
           {/* 8. التقارير */}
           <Route path="/Admin/reports" element={<Lazy><ProtectedRoute requiredRole="admin"><Reports /></ProtectedRoute></Lazy>} />
+
+          {/* إعدادات حساب الإدارة (تفضيلات الإشعارات) — لأي مستخدم مصرّح بلوحة الإدارة */}
+          <Route path="/Admin/account/settings" element={<Lazy><ProtectedRoute requiredRole="staff"><AdminAccountSettings /></ProtectedRoute></Lazy>} />
 
           {/* 9. إعدادات المنصّة */}
           <Route path="/Admin/settings" element={<Lazy><ProtectedRoute requiredRole="admin"><PlatformSettingsPage /></ProtectedRoute></Lazy>} />

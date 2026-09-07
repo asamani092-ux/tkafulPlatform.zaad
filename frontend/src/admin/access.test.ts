@@ -55,4 +55,14 @@ describe("admin access", () => {
     const employee = buildAdminAccess("employee", false, []);
     expect(canAccessAdminPath("/Admin/staff", employee)).toBe(true);
   });
+
+  it("allows account notification prefs for PM and orgStaff without opening platform settings", () => {
+    expect(canAccessAdminPath("/Admin/account/settings", pm)).toBe(true);
+    expect(canAccessAdminPath("/Admin/settings", pm)).toBe(false);
+    const manager = buildAdminAccess("manager", false, []);
+    expect(canAccessAdminPath("/Admin/account/settings", manager)).toBe(true);
+    expect(canAccessAdminPath("/Admin/settings", manager)).toBe(false);
+    const stranger = buildAdminAccess("user", false, []);
+    expect(canAccessAdminPath("/Admin/account/settings", stranger)).toBe(false);
+  });
 });

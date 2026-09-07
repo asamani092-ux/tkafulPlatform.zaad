@@ -144,6 +144,7 @@ export const ACTIVE_LEGACY_REDIRECTS = LEGACY_ADMIN_REDIRECTS;
 export function domainForPath(pathname: string): AdminDomainId | "overview" {
   const p = pathname.toLowerCase();
   if (p === "/admin" || p === "/admin/") return "overview";
+  if (p.startsWith("/admin/account")) return "overview";
   if (p.startsWith("/admin/projects")) return "projects";
   if (p.startsWith("/admin/users")) return "users";
   if (p.startsWith("/admin/volunteers")) return "volunteers";

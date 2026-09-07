@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Bell, Info, CheckCircle2, AlertTriangle, Zap } from "lucide-react";
 import { authFetch } from "../../lib/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { notificationTypeLabel } from "../../admin/notifications";
+import { notificationSettingsPath } from "../../admin/notificationSettingsPath";
 
 interface Note {
   id: number;
@@ -24,11 +25,13 @@ function TypeIcon({ kind }: { kind: string }) {
 
 /** جرس الإشعارات — عدد غير المقروء + قائمة منسدلة. */
 export default function NotificationBell() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const loc = useLocation();
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState(0);
   const [items, setItems] = useState<Note[]>([]);
+  const prefsPath = notificationSettingsPath(user?.role, loc.pathname);
 
   const load = async () => {
     if (!isAuthenticated) return;
@@ -98,7 +101,7 @@ export default function NotificationBell() {
               </li>
             ))}
           </ul>
-          <Link to="/user/settings" className="mt-1 block px-2 py-1 text-xs font-bold text-primary" onClick={() => setOpen(false)}>تفضيلات الإشعارات</Link>
+          <Link to={prefsPath} className="mt-1 block px-2 py-1 text-xs font-bold text-primary" onClick={() => setOpen(false)}>تفضيلات الإشعارات</Link>
         </div>
       )}
     </div>

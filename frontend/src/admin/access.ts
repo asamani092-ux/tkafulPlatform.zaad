@@ -45,6 +45,15 @@ export function canAccessAdminPath(pathname: string, ctx: AdminAccessContext): b
     return ctx.userRole === "manager" || ctx.userRole === "employee";
   }
 
+  // إعدادات الحساب الشخصية (تفضيلات الإشعارات) لأي مستخدم دخل لوحة الإدارة.
+  if (p.startsWith("/admin/account")) {
+    return (
+      ctx.hasMemberships
+      || ctx.userRole === "manager"
+      || ctx.userRole === "employee"
+    );
+  }
+
   if (p === "/admin" || p === "/admin/") return false;
   if (p.startsWith("/admin/projects/create")) return false;
   if (p.startsWith("/admin/users")) return false;
