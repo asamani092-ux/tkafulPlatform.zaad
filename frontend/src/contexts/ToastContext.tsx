@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import Toast from '../components/feedback/Toast';
 // ملاحظة: Toast أُعيد بناؤه في المكتبة الجديدة على design-system (نفس واجهة الـ props).
@@ -27,6 +27,15 @@ export const useToast = () => {
     throw new Error('useToast must be used within a ToastProvider');
   }
   return context;
+};
+
+/** إجراءات التوست فقط — مرجع مستقر لا يتغيّر عند ظهور توست جديد (مناسب لاعتماديات useCallback). */
+export const useToastActions = () => {
+  const { success, error, info, removeToast } = useToast();
+  return useMemo(
+    () => ({ success, error, info, removeToast }),
+    [success, error, info, removeToast],
+  );
 };
 
 interface ToastProviderProps {
@@ -59,13 +68,11 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     addToast({ ...data, type: 'info' });
   }, [addToast]);
 
-  const value: ToastContextType = {
-    toasts,
-    success,
-    error,
-    info,
-    removeToast,
-  };
+  // تثبيت المرجع حتى لا يُعاد إنشاء load()/useEffect في صفحات الإدارة بعد كل توست (UX3B).
+  const value: ToastContextType = useMemo(
+    () => ({ toasts, success, error, info, removeToast }),
+    [toasts, success, error, info, removeToast],
+  );
 
   return (
     <ToastContext.Provider value={value}>

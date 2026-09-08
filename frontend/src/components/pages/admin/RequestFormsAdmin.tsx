@@ -88,7 +88,7 @@ export default function RequestFormsAdmin() {
     }
   }, []);
 
-  useEffect(() => { void load("initial"); }, [load]);
+  useEffect(() => { void load("initial"); }, []); // mount-once — load مستقر بـ []
 
   const resetFormBuilder = () => {
     setMeta({ title: "", slug: "", project: "", description: "", is_active: true });

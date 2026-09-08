@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
@@ -57,6 +57,8 @@ const WIZARD_STEPS = [
 /** إدارة مشاريع المنصّة — نطاق حسب الدور (super-admin يرى الكل). */
 export default function PlatformProjects() {
   const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   const [projects, setProjects] = useState<AdminProject[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -114,11 +116,11 @@ export default function PlatformProjects() {
       }
     } catch {
       if (flip) setError(true);
-      else toast.error({ title: "تعذّر تحديث القائمة" });
+      else toastRef.current.error({ title: "تعذّر تحديث القائمة" });
     } finally {
       if (flip) setLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => { void load("initial"); }, [load]);
 
