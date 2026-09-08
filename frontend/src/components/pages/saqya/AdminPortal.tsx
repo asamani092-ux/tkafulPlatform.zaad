@@ -14,6 +14,7 @@ import SaqyaMap from "./SaqyaMap";
 import type { MapPoint } from "./SaqyaMap";
 import SponsorshipTypesPanel from "./SponsorshipTypesPanel";
 import { EmptyState, LoadingState } from "../../feedback/PageStates";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
 interface Sponsorship { id: number; type: string; amount: string; status: string; donor_name: string; total_funded: number; }
 interface Order { id: number; sponsorship_type: string; status: string; supplier_name: string | null; representative_name: string | null; }
@@ -102,8 +103,9 @@ export default function AdminPortal({ projectSlug, embedded = false }: { project
     }
   };
 
-  const load = () => {
-    setLoading(true);
+  const load = (mode: AdminLoadMode = "silent") => {
+    const flip = shouldFlipPageLoading(mode);
+    if (flip) setLoading(true);
     Promise.all([
       j(`/api/saqya/dashboard/${scope}`).then((d) => d && setStats(d)),
       j(`/api/saqya/sponsorships/${scope}`).then((d) => d && setSponsorships(d.results || d)),
@@ -127,9 +129,9 @@ export default function AdminPortal({ projectSlug, embedded = false }: { project
             setAllowedSupplierIds(null);
             setAllowedRepIds(null);
           }),
-    ]).finally(() => setLoading(false));
+    ]).finally(() => { if (flip) setLoading(false); });
   };
-  useEffect(load, [scope]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load("initial"); }, [scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const spAct = async (id: number, a: "approve" | "reject") => {
     const res = await authFetch(`/api/saqya/sponsorships/${id}/${a}/`, {

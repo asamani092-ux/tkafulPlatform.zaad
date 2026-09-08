@@ -6,6 +6,7 @@ import Input from "../../ui/Input";
 import Textarea from "../../ui/Textarea";
 import Checkbox from "../../ui/Checkbox";
 import Switch from "../../ui/Switch";
+import Select from "../../ui/Select";
 import Button from "../../ui/Button";
 import Tabs from "../../ui/Tabs";
 import { LoadingState, ErrorState, EmptyState } from "../../feedback/PageStates";
@@ -177,23 +178,20 @@ export default function PlatformSettingsPage() {
                 checked={form.sponsorship_gps_documentation}
                 onChange={(v) => setForm({ ...form, sponsorship_gps_documentation: v })}
               />
-              <label className="block text-sm font-medium text-primary">
-                سياسة بيانات المتبرّع
-                <select
-                  className="mt-1 w-full rounded-lg border border-surface-border bg-white px-3 py-2"
-                  value={form.sponsorship_collect_donor_data}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      sponsorship_collect_donor_data: e.target.value as DonorDataPolicy,
-                    })
-                  }
-                >
-                  <option value="none">بدون بيانات</option>
-                  <option value="name_optional">اسم اختياري</option>
-                  <option value="full">بيانات كاملة</option>
-                </select>
-              </label>
+              <Select
+                label="سياسة بيانات المتبرّع"
+                value={form.sponsorship_collect_donor_data}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    sponsorship_collect_donor_data: e.target.value as DonorDataPolicy,
+                  })
+                }
+              >
+                <option value="none">بدون بيانات</option>
+                <option value="name_optional">اسم اختياري</option>
+                <option value="full">بيانات كاملة</option>
+              </Select>
             </div>
           </Card>
           <Card>

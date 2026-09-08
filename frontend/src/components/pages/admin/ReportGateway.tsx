@@ -48,7 +48,7 @@ export default function ReportGateway() {
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [projectSlug, setProjectSlug] = useState("");
   const [data, setData] = useState<ScopeData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     authFetch("/api/platform/projects/")
@@ -58,7 +58,7 @@ export default function ReportGateway() {
   }, []);
 
   const run = useCallback(async () => {
-    setLoading(true);
+    setGenerating(true);
     setData(null);
     const params = new URLSearchParams({ type: scope });
     if (scope === "project" && projectSlug) params.set("project", projectSlug);
@@ -66,7 +66,7 @@ export default function ReportGateway() {
       const res = await authFetch(`/api/reports/scope/?${params.toString()}`);
       if (res.ok) setData(await res.json());
     } finally {
-      setLoading(false);
+      setGenerating(false);
     }
   }, [scope, projectSlug]);
 
@@ -96,8 +96,8 @@ export default function ReportGateway() {
               </Select>
             </div>
           )}
-          <Button type="button" onClick={() => void run()} disabled={!canRun || loading}>
-            {loading ? "جاري التوليد…" : "توليد التقرير"}
+          <Button type="button" onClick={() => void run()} disabled={!canRun || generating}>
+            {generating ? "جاري التوليد…" : "توليد التقرير"}
           </Button>
           {data && data.rows.length > 0 && (
             <>
@@ -114,7 +114,7 @@ export default function ReportGateway() {
         </Alert>
       </Card>
 
-      {loading && <LoadingState title="جاري توليد التقرير…" />}
+      {generating && <LoadingState title="جاري توليد التقرير…" />}
 
       {data && (
         <Card className="print-area">

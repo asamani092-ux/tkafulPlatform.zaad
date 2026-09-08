@@ -12,6 +12,7 @@ import Select from "../../ui/Select";
 import Tabs from "../../ui/Tabs";
 import Modal from "../../ui/Modal";
 import { LoadingState } from "../../feedback/PageStates";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
 type TabKey = "volunteers" | "applications" | "joins";
 
@@ -52,8 +53,9 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
   const [editId, setEditId] = useState<number | null>(null);
   const [formOpen, setFormOpen] = useState(false);
 
-  const loadVolunteers = useCallback(() => {
-    setLoadingVols(true);
+  const loadVolunteers = useCallback((mode: AdminLoadMode = "silent") => {
+    const flip = shouldFlipPageLoading(mode);
+    if (flip) setLoadingVols(true);
     const params = new URLSearchParams();
     if (q.trim()) params.set("q", q.trim());
     if (activeFilter) params.set("is_active", activeFilter);
@@ -62,7 +64,7 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
     authFetch(`/api/volunteers/${qs}`).then((r) => (r.ok ? r.json() : null))
       .then((d) => setVolunteers(d?.results || []))
       .catch(() => {})
-      .finally(() => setLoadingVols(false));
+      .finally(() => { if (flip) setLoadingVols(false); });
   }, [q, activeFilter]);
 
   const [apps, setApps] = useState<Application[]>([]);
@@ -80,7 +82,7 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
 
   useEffect(() => {
     if (!access) return;
-    if (tab === "volunteers") loadVolunteers();
+    if (tab === "volunteers") loadVolunteers(volunteers.length ? "silent" : "initial");
     if (tab === "applications") loadApps(appStatus);
     if (tab === "joins") loadJoins();
   }, [access, tab, appStatus, loadVolunteers, loadApps, loadJoins]);

@@ -7,6 +7,7 @@ import Badge from "../../ui/Badge";
 import Modal from "../../ui/Modal";
 import Checkbox from "../../ui/Checkbox";
 import { LoadingState, EmptyState } from "../../feedback/PageStates";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
 import FieldSchemaBuilder, {
@@ -39,8 +40,9 @@ export default function SponsorshipTypesPanel({ projectSlug }: { projectSlug: st
   const [isActive, setIsActive] = useState(true);
   const [fields, setFields] = useState<SchemaField[]>([]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (mode: AdminLoadMode = "silent") => {
+    const flip = shouldFlipPageLoading(mode);
+    if (flip) setLoading(true);
     try {
       const res = await authFetch(
         `/api/saqya/sponsorship-types/?project=${encodeURIComponent(projectSlug)}`,
@@ -50,12 +52,12 @@ export default function SponsorshipTypesPanel({ projectSlug }: { projectSlug: st
         setItems(d.results || d);
       }
     } finally {
-      setLoading(false);
+      if (flip) setLoading(false);
     }
   }, [projectSlug]);
 
   useEffect(() => {
-    void load();
+    void load("initial");
   }, [load]);
 
   const resetForm = () => {

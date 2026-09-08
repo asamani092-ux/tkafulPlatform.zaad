@@ -9,6 +9,7 @@ import { usePlatformSettings, type RolesCanLogin } from "../../../contexts/Platf
 import { authFetch } from "../../../lib/api";
 import { extractErrorDetail } from "../../../admin/userManagement";
 import { type CapabilityRow, type RoleRow } from "../../../admin/rolesMatrix";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
 interface Catalog {
   roles: RoleRow[];
@@ -25,9 +26,12 @@ export default function RolesAdmin() {
   const [error, setError] = useState(false);
   const [savingRole, setSavingRole] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(false);
+  const load = useCallback(async (mode: AdminLoadMode = "initial") => {
+    const flip = shouldFlipPageLoading(mode);
+    if (flip) {
+      setLoading(true);
+      setError(false);
+    }
     try {
       const [rolesRes, settingsRes] = await Promise.all([
         authFetch("/api/roles/"),
@@ -38,14 +42,14 @@ export default function RolesAdmin() {
       setCatalog(rolesData as Catalog);
       setRolesCanLogin(settingsData.roles_can_login as RolesCanLogin);
     } catch {
-      setError(true);
+      if (flip) setError(true);
     } finally {
-      setLoading(false);
+      if (flip) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void load();
+    void load("initial");
   }, [load]);
 
   const toggleLogin = async (roleId: keyof RolesCanLogin, next: boolean) => {
