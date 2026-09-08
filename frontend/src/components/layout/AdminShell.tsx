@@ -18,8 +18,10 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const { loading, access } = useMembershipsContext();
   const { isGlobalAdmin } = access;
   const activeDomain = domainForPath(loc.pathname);
-  // آخر نطاق مفتوح يُحفظ في المتصفح؛ النطاق النشط يُفتح تلقائياً. O(1) قراءة/كتابة.
+  // عند /Admin (نظرة عامة): كل النطاقات مطوية — لا نستعيد «الإعدادات» العالقة من localStorage.
+  // في صفحة نطاق: يُفتح ذلك النطاق فقط. O(1) قراءة/كتابة.
   const [openDomain, setOpenDomain] = useState<string>(() => {
+    if (!activeDomain || activeDomain === "overview") return "";
     try {
       return localStorage.getItem(OPEN_DOMAIN_KEY) || activeDomain;
     } catch {
@@ -33,7 +35,8 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const selectDomain = (id: string) => {
     setOpenDomain(id);
     try {
-      localStorage.setItem(OPEN_DOMAIN_KEY, id);
+      if (id) localStorage.setItem(OPEN_DOMAIN_KEY, id);
+      else localStorage.removeItem(OPEN_DOMAIN_KEY);
     } catch {
       /* تجاهل — وضع خاص أو مساحة ممتلئة */
     }
@@ -43,9 +46,10 @@ export default function AdminShell({ children }: { children: ReactNode }) {
     setDrawerOpen(false);
   }, [loc.pathname]);
 
-  // فتح النطاق النشط تلقائياً عند التنقل إليه (إن لم يكن نظرة عامة).
+  // نظرة عامة → طي الكل؛ صفحة نطاق → فتح ذلك النطاق فقط (اتساق التوسيع/الطي).
   useEffect(() => {
     if (activeDomain && activeDomain !== "overview") selectDomain(activeDomain);
+    else if (activeDomain === "overview") setOpenDomain("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDomain]);
 

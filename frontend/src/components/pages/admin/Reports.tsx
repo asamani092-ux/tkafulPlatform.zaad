@@ -8,6 +8,8 @@ import Button from "../../ui/Button";
 import Tabs from "../../ui/Tabs";
 import ReportGateway from "./ReportGateway";
 import { LoadingState } from "../../feedback/PageStates";
+import { downloadArabicPdf } from "../../../utils/arabicPdf";
+import { labelAr } from "../../../i18n/labels";
 
 interface Report { id: number; title: string; total_projects: number; total_volunteers: number; total_tasks: number; generated_at: string }
 interface ReportData {
@@ -45,6 +47,7 @@ export default function Reports() {
 
   const [reports, setReports] = useState<Report[]>([]);
   const [generating, setGenerating] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [detail, setDetail] = useState<{ meta: Report; data: ReportData } | null>(null);
 
   const [perf, setPerf] = useState<PerfRow[] | null>(null);
@@ -141,7 +144,25 @@ export default function Reports() {
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-lg font-bold text-primary">{detail.meta.title}</h2>
                 <div className="flex flex-wrap gap-2 no-print">
-                  <Button type="button" variant="secondary" size="sm" onClick={() => window.print()}>طباعة / PDF</Button>
+                  <Button type="button" variant="secondary" size="sm" disabled={pdfBusy} onClick={() => void (async () => {
+                    if (!detail) return;
+                    setPdfBusy(true);
+                    try {
+                      const summary = detail.data.summary
+                        ? Object.entries(detail.data.summary).filter(([k]) => SUMMARY_LABELS[k]).map(([k, v]) => ({ label: SUMMARY_LABELS[k], value: v as string | number }))
+                        : undefined;
+                      const projRows = (detail.data.projects?.list || []).map((row) => Object.values(row).slice(0, 4).map((v) => String(v ?? "—")));
+                      const cols = detail.data.projects?.list?.[0] ? Object.keys(detail.data.projects.list[0]).slice(0, 4).map((k) => labelAr({}, k) || k) : ["قيمة"];
+                      await downloadArabicPdf({
+                        fileName: `report_${detail.meta.id}.pdf`,
+                        title: detail.meta.title,
+                        subtitle: `تاريخ التوليد: ${new Date(detail.meta.generated_at).toLocaleString("ar")}`,
+                        summary,
+                        columns: cols.length ? cols : ["بيان"],
+                        rows: projRows.length ? projRows : [["لا صفوف تفصيلية — راجع الملخص أعلاه"]],
+                      });
+                    } finally { setPdfBusy(false); }
+                  })()}>{pdfBusy ? "جاري PDF…" : "تنزيل PDF عربي"}</Button>
                   {detail.data.volunteers?.list && detail.data.volunteers.list.length > 0 && (
                     <Button type="button" variant="ghost" size="sm" onClick={() => downloadCsv(`volunteers_${detail.meta.id}.csv`, detail.data.volunteers!.list!)}>تنزيل المتطوعين (CSV)</Button>
                   )}
