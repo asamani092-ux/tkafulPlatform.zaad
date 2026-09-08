@@ -179,8 +179,21 @@ export default function MapsAdmin() {
   return (
     <AdminShell>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-extrabold text-primary">الخرائط</h1>
+        <div>
+          <h1 className="text-2xl font-extrabold text-primary">الخرائط</h1>
+          <p className="mt-1 text-xs text-brand-gray">أنشئ خريطة للمشروع، أدر الطبقات والعناصر والحقول، اضبط الظهور، ثم انشر. التعهدات = مساهمات الجمهور على الخريطة.</p>
+        </div>
         {isSuperAdmin && <Button type="button" onClick={() => setCreateOpen(true)}>إضافة خريطة</Button>}
+      </div>
+
+      <div className="mb-4">
+        <Alert tone="info" title="خيارات الظهور للخريطة">
+          <ul className="mt-1 list-disc space-y-1 pe-4 text-xs">
+            <li><strong>عامة</strong>: الخريطة ظاهرة للزوار.</li>
+            <li><strong>مختلطة</strong>: خريطة عامة مع طبقات خاصة لا تظهر للعموم.</li>
+            <li><strong>خاصة</strong>: للإدارة فقط.</li>
+          </ul>
+        </Alert>
       </div>
 
       <div className="mb-4 space-y-3">
@@ -206,13 +219,20 @@ export default function MapsAdmin() {
             {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </Select>
           <Input label="العنوان" value={mapForm.title} onChange={(e) => setMapForm({ ...mapForm, title: e.target.value })} required />
-          <Select label="الظهور" value={mapForm.visibility} onChange={(e) => setMapForm({ ...mapForm, visibility: e.target.value })}>
-            <option value="public">عامة</option>
-            <option value="mixed">مختلطة</option>
-            <option value="private">خاصة</option>
+          <Select
+            label="الظهور"
+            value={mapForm.visibility}
+            onChange={(e) => setMapForm({ ...mapForm, visibility: e.target.value })}
+            hint="عامة: الكل يرى الخريطة. مختلطة: خريطة عامة مع طبقات خاصة لا تظهر للعموم. خاصة: للإدارة فقط."
+          >
+            <option value="public">عامة — ظاهرة للزوار</option>
+            <option value="mixed">مختلطة — عامة مع طبقات خاصة مخفية عن العموم</option>
+            <option value="private">خاصة — للإدارة فقط</option>
           </Select>
           {mapForm.visibility === "mixed" && (
-            <p className="text-xs text-brand-gray">خريطة عامة مع طبقات خاصة لا تظهر للعموم</p>
+            <Alert tone="info" title="معنى «مختلطة»">
+              خريطة عامة مع طبقات خاصة لا تظهر للعموم. الطبقات العامة تبقى ظاهرة للزوار.
+            </Alert>
           )}
           <div className="flex gap-2">
             <Button type="submit">إنشاء</Button>
@@ -229,7 +249,7 @@ export default function MapsAdmin() {
               <Badge variant={selected.published_at ? "success" : "warning"}>{selected.published_at ? "منشورة" : "غير منشورة"}</Badge>
               <Badge>{arLabel(VISIBILITY_LABELS, selected.visibility)}</Badge>
               {selected.visibility === "mixed" && (
-                <span className="text-xs text-brand-gray">خريطة عامة مع طبقات خاصة لا تظهر للعموم</span>
+                <span className="text-xs text-brand-gray">مختلطة = خريطة عامة مع طبقات خاصة لا تظهر للعموم</span>
               )}
             </div>
             <div className="flex gap-2">
@@ -240,38 +260,59 @@ export default function MapsAdmin() {
             </div>
           </div>
 
-          <p className="mb-2 text-xs text-brand-gray">الأساسي: طبقات ثم عناصر ثم نشر. المتقدّم: حقول مخصّصة وتعهدات.</p>
+          <Alert tone="info" title="مسار العمل (بدون تخمين)">
+            <ol className="mt-1 list-decimal space-y-1 pe-4 text-xs">
+              <li><strong>الطبقات</strong>: صنّف المحتوى (عامة تظهر للزوار / خاصة داخلية فقط).</li>
+              <li><strong>العناصر</strong>: أضف مواقع على طبقة (يدوياً أو رفع CSV).</li>
+              <li><strong>الحقول</strong> (اختياري): بيانات إضافية لكل عنصر.</li>
+              <li><strong>الظهور ثم النشر</strong>: راجع مختلطة/عامة/خاصة ثم انشر للعموم.</li>
+              <li><strong>التعهدات</strong>: مساهمات/تعهدات الجمهور الظاهرة على الخريطة (اعتماد → تنفيذ).</li>
+            </ol>
+          </Alert>
           <Tabs active={tab} onChange={setTab} tabs={[
-            { key: "layers", label: `١) الطبقات (${layers.length})` },
-            { key: "items", label: `٢) العناصر (${items.length})` },
-            { key: "fields", label: `متقدّم: الحقول (${fields.length})` },
-            { key: "contributions", label: `متقدّم: التعهدات (${contributions.length})` },
+            { key: "layers", label: `١) إدارة الطبقات (${layers.length})` },
+            { key: "items", label: `٢) إضافة/إدارة العناصر (${items.length})` },
+            { key: "fields", label: `٣) إدارة الحقول (${fields.length})` },
+            { key: "contributions", label: `٤) التعهدات العامة (${contributions.length})` },
           ]} />
 
           {tab === "layers" && (
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-brand-gray">الطبقة مجموعة عناصر. «عامة» تظهر للزوار؛ «خاصة» للإدارة فقط (مهمة عندما تكون الخريطة مختلطة).</p>
+              {layers.length === 0 && <p className="text-sm text-brand-gray">لا طبقات بعد — أضف طبقة قبل إضافة عناصر.</p>}
               {layers.map((l) => (
-                <div key={l.id} className="flex flex-wrap items-center gap-3 text-sm">
-                  <strong>{l.name}</strong>
+                <div key={l.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-surface-border p-3 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-primary">{l.name}</div>
+                    <div className="text-xs text-brand-gray">ظهور الطبقة للزوار إن كانت عامة</div>
+                  </div>
                   <Badge variant={l.visibility === "public" ? "success" : "warning"}>{l.visibility === "public" ? "عامة" : "خاصة"}</Badge>
                   <Button type="button" variant="danger" size="sm" onClick={() => setDeleteTarget({ kind: "layer", id: l.id, label: l.name })}>حذف</Button>
                 </div>
               ))}
-              <form className="mt-3 flex flex-wrap items-end gap-2"
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  const ok = await post("/api/maps/admin/layers/", { map: selected.id, name: layerForm.name, visibility: layerForm.visibility, order: layers.length }, "أُضيفت الطبقة");
-                  if (ok) setLayerForm({ name: "", visibility: "public" });
-                }}>
-                <div className="w-44"><Input label="اسم الطبقة" value={layerForm.name} onChange={(e) => setLayerForm({ ...layerForm, name: e.target.value })} required /></div>
-                <div className="w-32">
-                  <Select label="الظهور" value={layerForm.visibility} onChange={(e) => setLayerForm({ ...layerForm, visibility: e.target.value })}>
-                    <option value="public">عامة</option>
-                    <option value="private">خاصة</option>
-                  </Select>
-                </div>
-                <Button type="submit" variant="secondary">إضافة طبقة</Button>
-              </form>
+              <Card className="bg-surface-muted">
+                <h3 className="mb-2 text-sm font-bold text-primary">إضافة طبقة</h3>
+                <form className="flex flex-wrap items-end gap-2"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const ok = await post("/api/maps/admin/layers/", { map: selected.id, name: layerForm.name, visibility: layerForm.visibility, order: layers.length }, "أُضيفت الطبقة");
+                    if (ok) setLayerForm({ name: "", visibility: "public" });
+                  }}>
+                  <div className="w-44"><Input label="اسم الطبقة" value={layerForm.name} onChange={(e) => setLayerForm({ ...layerForm, name: e.target.value })} required /></div>
+                  <div className="w-48">
+                    <Select
+                      label="ظهور الطبقة"
+                      value={layerForm.visibility}
+                      onChange={(e) => setLayerForm({ ...layerForm, visibility: e.target.value })}
+                      hint="خاصة = لا تظهر للعموم حتى لو نُشرت الخريطة"
+                    >
+                      <option value="public">عامة</option>
+                      <option value="private">خاصة</option>
+                    </Select>
+                  </div>
+                  <Button type="submit" variant="secondary">إضافة طبقة</Button>
+                </form>
+              </Card>
             </div>
           )}
 
@@ -401,7 +442,9 @@ export default function MapsAdmin() {
 
           {tab === "contributions" && (
             <div className="mt-4 space-y-2 text-sm">
-              <Alert tone="info" title="تعهدات الجمهور على عناصر الخريطة — اعتماد ثم تنفيذ" />
+              <Alert tone="info" title="التعهدات = مساهمات/تعهدات الجمهور الظاهرة على الخريطة">
+                تعهد عام مرتبط بعنصر (كمية/فئة). المسار: بانتظار ← اعتماد ← تنفيذ. ليست طبقات ولا حقولاً.
+              </Alert>
               {contributions.map((c) => (
                 <div key={c.id} className="flex flex-wrap items-center gap-2">
                   <strong>{c.name}</strong>

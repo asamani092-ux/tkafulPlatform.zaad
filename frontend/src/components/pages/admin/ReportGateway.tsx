@@ -6,6 +6,7 @@ import Select from "../../ui/Select";
 import Alert from "../../ui/Alert";
 import { LoadingState, EmptyState } from "../../feedback/PageStates";
 import { downloadCsv } from "../../../utils/csv";
+import { downloadArabicPdf } from "../../../utils/arabicPdf";
 import { labelAr } from "../../../i18n/labels";
 
 type Scope = "platform" | "project" | "volunteers" | "sponsorships";
@@ -41,7 +42,7 @@ const SUMMARY_LABELS: Record<string, string> = {
 
 /**
  * بوّابة تقارير موحّدة (UX2 P4 · 3.9): نطاق قابل للاختيار + عرض على الشاشة
- * + تصدير CSV + طباعة PDF عربية عبر محرّك المتصفّح (تشكيل صحيح، RTL).
+ * + تصدير CSV + تنزيل PDF عربي قابل للتحديد (نص حقيقي RTL — ليس لقطة شاشة).
  */
 export default function ReportGateway() {
   const [scope, setScope] = useState<Scope>("platform");
@@ -49,6 +50,7 @@ export default function ReportGateway() {
   const [projectSlug, setProjectSlug] = useState("");
   const [data, setData] = useState<ScopeData | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
     authFetch("/api/platform/projects/")
@@ -73,6 +75,30 @@ export default function ReportGateway() {
   const exportCsv = () => {
     if (!data || data.rows.length === 0) return;
     downloadCsv(`${data.scope}_report.csv`, data.rows, data.columns);
+  };
+
+  const exportPdf = async () => {
+    if (!data || data.rows.length === 0) return;
+    setPdfBusy(true);
+    try {
+      const summary = data.summary
+        ? Object.entries(data.summary)
+            .filter(([k]) => SUMMARY_LABELS[k])
+            .map(([k, v]) => ({ label: SUMMARY_LABELS[k], value: v }))
+        : undefined;
+      await downloadArabicPdf({
+        fileName: `${data.scope}_report.pdf`,
+        title: data.title,
+        subtitle: `نطاق: ${SCOPE_LABELS[scope]}`,
+        summary,
+        columns: data.columns.map((c) => labelAr(COL_LABELS, c)),
+        rows: data.rows.map((row) =>
+          data.columns.map((c) => (c === "completion_rate" ? `${row[c]}%` : String(row[c] ?? "—"))),
+        ),
+      });
+    } finally {
+      setPdfBusy(false);
+    }
   };
 
   const canRun = scope !== "project" || !!projectSlug;
@@ -102,14 +128,15 @@ export default function ReportGateway() {
           {data && data.rows.length > 0 && (
             <>
               <Button type="button" variant="secondary" onClick={exportCsv}>تنزيل CSV</Button>
-              <Button type="button" variant="ghost" onClick={() => window.print()}>طباعة / PDF</Button>
+              <Button type="button" variant="ghost" disabled={pdfBusy} onClick={() => void exportPdf()}>
+                {pdfBusy ? "جاري تجهيز PDF…" : "تنزيل PDF عربي"}
+              </Button>
             </>
           )}
         </div>
         <Alert tone="info">
           <span className="text-xs">
-            «طباعة / PDF» تستخدم محرّك المتصفّح فيظهر النص العربي متّصلاً وصحيحاً (RTL).
-            اختر «حفظ كـ PDF» من نافذة الطباعة.
+            «تنزيل PDF عربي» يُنتج ملفاً بنص عربي قابل للتحديد والنسخ (RTL + تشكيل حروف)، وليس صورة/لقطة شاشة.
           </span>
         </Alert>
       </Card>
