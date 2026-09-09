@@ -31,7 +31,9 @@ function itemColor(item: PublicMapItem, detail: PublicMapDetail): string {
   return detail.project.brand_color || "#8b1538";
 }
 
-/** عارض الخرائط العام — يرسم عناصر الطبقات العامة لخريطة أو أكثر (leaflet). */
+/** عارض الخرائط العام — يرسم عناصر الطبقات العامة لخريطة أو أكثر (leaflet).
+ * مركز العرض = أول نقطة ظاهرة؛ وإلا افتراضي الرياض. لا يعتمد على إعدادات معالج المشروع.
+ */
 export default function GenericMapView({ maps, visibleItems, selectedItemId, onSelectItem }: Props) {
   const first = visibleItems[0];
   const center: [number, number] = first ? [first.lat, first.lng] : [24.7136, 46.6753];

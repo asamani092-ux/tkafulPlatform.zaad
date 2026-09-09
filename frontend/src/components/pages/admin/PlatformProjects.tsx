@@ -40,6 +40,14 @@ const STATUS_BADGE: Record<string, "success" | "warning" | "danger" | "primary">
 };
 
 const ALL_TOOLS = Object.keys(TOOL_LABELS);
+/** شرح قصير تحت اسم كل أداة — بدون مصطلحات تقنية. */
+const TOOL_HINTS: Record<string, string> = {
+  map: "عرض مواقع المشروع على خريطة عامة. المركز يُؤخذ تلقائياً من أول نقطة تُضاف في إدارة الخرائط.",
+  sponsorships: "كفالات وتبرّعات مرتبطة بالمشروع.",
+  volunteering: "فرص ومهام التطوع لهذا المشروع.",
+  services: "نماذج طلبات الخدمة المرتبطة بالمشروع.",
+  reports: "تقارير وإحصاءات المشروع.",
+};
 const MEMBER_ROLES = [
   { value: "project_admin", label: "مدير مشروع" },
   { value: "project_editor", label: "محرر" },
@@ -70,6 +78,8 @@ export default function PlatformProjects() {
   const [wizardProjectId, setWizardProjectId] = useState<number | null>(null);
   const [basicsSaving, setBasicsSaving] = useState(false);
   const [toolDrafts, setToolDrafts] = useState<Record<string, Record<string, unknown>>>({});
+  /** مفتاح الأداة قيد الطلب — يمنع النقر المزدوج ويُظهر حالة الانتظار. */
+  const [toolBusyKey, setToolBusyKey] = useState<string | null>(null);
   // مُنتقي الأعضاء: كل المستخدمين (بلا قيد دور) قابل للبحث — قرار العميل.
   const [allUsers, setAllUsers] = useState<Array<{ id: number; name: string; email: string }>>([]);
   const [memberPick, setMemberPick] = useState<string[]>([]);
@@ -227,33 +237,103 @@ export default function PlatformProjects() {
     if (wizardStep > 1) setWizardStep((wizardStep - 1) as 1 | 2 | 3);
   };
 
+  /** تحديث تفاؤلي لقائمة أدوات مشروع داخل state — O(أدوات المشروع). */
+  const patchToolLocal = (
+    projectId: number,
+    toolKey: string,
+    enable: boolean,
+    config?: Record<string, unknown>,
+    serverTool?: AdminTool,
+  ) => {
+    setProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== projectId) return p;
+        const tools = [...p.tools];
+        const idx = tools.findIndex((t) => t.tool_key === toolKey);
+        if (idx >= 0) {
+          tools[idx] = {
+            ...tools[idx],
+            ...(serverTool || {}),
+            tool_key: toolKey,
+            is_enabled: enable,
+            config: config ?? serverTool?.config ?? tools[idx].config ?? {},
+          };
+        } else {
+          tools.push(
+            serverTool || {
+              id: -Date.now(),
+              tool_key: toolKey,
+              is_enabled: enable,
+              config: config ?? {},
+            },
+          );
+        }
+        return { ...p, tools };
+      }),
+    );
+  };
+
   const setTool = async (
     project: AdminProject,
     toolKey: string,
     enable: boolean,
     config?: Record<string, unknown>,
   ) => {
+    if (toolBusyKey) return false;
     const existing = project.tools.find((t) => t.tool_key === toolKey);
-    const body: Record<string, unknown> = { tool_key: toolKey, is_enabled: enable };
-    body.config = config ?? existing?.config ?? {};
-    const res = await authFetch(`/api/platform/projects/${project.id}/set_tool/`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      toast.success({ title: "تم تحديث الأداة" });
-      setToolDrafts((prev) => {
-        const next = { ...prev };
-        delete next[toolKey];
-        return next;
+    // الخريطة: لا نرسل إعدادات مركز/تكبير من المعالج — المركز من أول نقطة في إدارة الخرائط.
+    const payloadConfig =
+      toolKey === "map" && config === undefined
+        ? (existing?.config && Object.keys(existing.config).length ? existing.config : {})
+        : (config ?? existing?.config ?? {});
+    const snapshot = project.tools;
+    const label = labelAr(TOOL_LABELS, toolKey, UNKNOWN_AR);
+
+    setToolBusyKey(toolKey);
+    patchToolLocal(project.id, toolKey, enable, payloadConfig);
+
+    try {
+      const res = await authFetch(`/api/platform/projects/${project.id}/set_tool/`, {
+        method: "POST",
+        body: JSON.stringify({
+          tool_key: toolKey,
+          is_enabled: enable,
+          config: payloadConfig,
+        }),
       });
-      void load("silent");
-      return true;
+      if (res.ok) {
+        const data = (await res.json().catch(() => null)) as AdminTool | null;
+        if (data?.tool_key) {
+          patchToolLocal(project.id, toolKey, !!data.is_enabled, data.config, data);
+        }
+        toast.success({
+          title: enable ? `تم تفعيل «${label}»` : `تم تعطيل «${label}»`,
+        });
+        setToolDrafts((prev) => {
+          const next = { ...prev };
+          delete next[toolKey];
+          return next;
+        });
+        void load("silent");
+        return true;
+      }
+      // تراجع تفاؤلي عند الفشل
+      setProjects((prev) =>
+        prev.map((p) => (p.id === project.id ? { ...p, tools: snapshot } : p)),
+      );
+      const data = await res.json().catch(() => ({}));
+      const msg = data.config?.[0] || data.config || data.detail || "تعذّر تحديث الأداة (صلاحية المشرف العام)";
+      toast.error({ title: typeof msg === "string" ? msg : JSON.stringify(msg) });
+      return false;
+    } catch {
+      setProjects((prev) =>
+        prev.map((p) => (p.id === project.id ? { ...p, tools: snapshot } : p)),
+      );
+      toast.error({ title: "تعذّر الاتصال أثناء تحديث الأداة" });
+      return false;
+    } finally {
+      setToolBusyKey(null);
     }
-    const data = await res.json().catch(() => ({}));
-    const msg = data.config?.[0] || data.config || data.detail || "تعذّر تحديث الأداة (صلاحية المشرف العام)";
-    toast.error({ title: typeof msg === "string" ? msg : JSON.stringify(msg) });
-    return false;
   };
 
   const saveToolConfig = async (project: AdminProject, toolKey: string, config: Record<string, unknown>) => {
@@ -583,15 +663,25 @@ export default function PlatformProjects() {
               const tool = wizardProject.tools.find((t) => t.tool_key === toolKey);
               const enabled = !!tool?.is_enabled;
               const draft = toolDrafts[toolKey] ?? tool?.config ?? {};
+              const busy = toolBusyKey === toolKey;
+              const hint = TOOL_HINTS[toolKey];
               return (
                 <div key={toolKey} className="rounded-lg border border-surface-border p-3">
                   <Switch
                     label={labelAr(TOOL_LABELS, toolKey, UNKNOWN_AR)}
+                    hint={busy ? "جاري الحفظ…" : hint}
                     checked={enabled}
-                    disabled={!isSuperAdmin}
+                    disabled={!isSuperAdmin || !!toolBusyKey}
                     onChange={(checked) => { if (isSuperAdmin) void setTool(wizardProject, toolKey, checked); }}
                   />
-                  {enabled && isSuperAdmin && (
+                  {enabled && isSuperAdmin && toolKey === "map" && (
+                    <p className="mt-3 border-t border-surface-border pt-3 text-xs text-brand-gray">
+                      لا إعدادات هنا. بعد التفعيل أضف نقاط المواقع من{" "}
+                      <Link to="/Admin/maps" className="font-bold text-primary hover:underline">إدارة الخرائط</Link>
+                      — يُضبط مركز العرض تلقائياً من أول نقطة.
+                    </p>
+                  )}
+                  {enabled && isSuperAdmin && toolKey !== "map" && (
                     <div className="mt-3 border-t border-surface-border pt-3">
                       <p className="mb-2 text-xs font-bold text-brand-gray">إعدادات {labelAr(TOOL_LABELS, toolKey, UNKNOWN_AR)}</p>
                       <ToolConfigFields
@@ -600,7 +690,12 @@ export default function PlatformProjects() {
                         onChange={(config) => setToolDrafts((prev) => ({ ...prev, [toolKey]: config }))}
                       />
                       <div className="mt-2">
-                        <Button type="button" variant="secondary" onClick={() => void saveToolConfig(wizardProject, toolKey, draft)}>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={!!toolBusyKey}
+                          onClick={() => void saveToolConfig(wizardProject, toolKey, draft)}
+                        >
                           حفظ الإعدادات
                         </Button>
                       </div>

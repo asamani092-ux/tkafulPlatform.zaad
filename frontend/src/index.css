@@ -501,11 +501,13 @@ body {
   position: fixed;
   inset-block-start: var(--space-4);
   inset-inline-start: var(--space-4);
+  /* فوق المودال واللوحات — توكن التصميم --z-toast (1600) > --z-modal (1400) */
   z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   pointer-events: none;
+  max-width: min(24rem, calc(100vw - 2rem));
 }
 .zad-toast-stack > * { pointer-events: auto; }
 
