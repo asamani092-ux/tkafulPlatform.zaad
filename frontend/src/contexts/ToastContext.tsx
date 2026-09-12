@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import Toast from '../components/feedback/Toast';
 // ملاحظة: Toast أُعيد بناؤه في المكتبة الجديدة على design-system (نفس واجهة الـ props).
@@ -77,20 +78,24 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      {/* Toast Container */}
-      <div className="fixed top-4 right-4 z-40 space-y-2" dir="rtl">
-        {toasts.map((toast) => (
-          <Toast
-            key={toast.id}
-            id={toast.id}
-            type={toast.type}
-            title={toast.title}
-            description={toast.description}
-            duration={toast.duration}
-            onClose={removeToast}
-          />
-        ))}
-      </div>
+      {/* بوابة إلى body: رسائل النجاح/الخطأ خارج النموذج العائم وفوقه (--z-toast > --z-modal) */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <div className="zad-toast-stack" dir="rtl" aria-live="polite" aria-relevant="additions">
+            {toasts.map((toast) => (
+              <Toast
+                key={toast.id}
+                id={toast.id}
+                type={toast.type}
+                title={toast.title}
+                description={toast.description}
+                duration={toast.duration}
+                onClose={removeToast}
+              />
+            ))}
+          </div>,
+          document.body,
+        )}
     </ToastContext.Provider>
   );
 };
