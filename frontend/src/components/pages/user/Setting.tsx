@@ -6,6 +6,8 @@ import UserShell from "../../layout/UserShell";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
 import Button from "../../ui/Button";
+import Switch from "../../ui/Switch";
+import { LoadingState, EmptyState } from "../../feedback/PageStates";
 import { EVENT_AR } from "../../../admin/notifications";
 
 interface Pref {
@@ -19,23 +21,52 @@ export default function UserSettings() {
   const [confirm, setConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [prefs, setPrefs] = useState<Pref[]>([]);
+  const [prefsLoading, setPrefsLoading] = useState(true);
+  const [prefsError, setPrefsError] = useState(false);
+  const [savingType, setSavingType] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    setPrefsLoading(true);
+    setPrefsError(false);
     authFetch("/api/notifications/preferences/")
-      .then((r) => (r.ok ? r.json() : { results: [] }))
-      .then((data) => setPrefs(data.results || []))
-      .catch(() => {});
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("prefs"))))
+      .then((data) => {
+        if (!cancelled) setPrefs(data.results || []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPrefs([]);
+          setPrefsError(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPrefsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const togglePref = async (event_type: string, enabled: boolean) => {
     setPrefs((prev) => prev.map((p) => (p.event_type === event_type ? { ...p, enabled } : p)));
-    const res = await authFetch("/api/notifications/preferences/", {
-      method: "PUT",
-      body: JSON.stringify({ event_type, enabled }),
-    });
-    if (!res.ok) {
+    setSavingType(event_type);
+    try {
+      const res = await authFetch("/api/notifications/preferences/", {
+        method: "PUT",
+        body: JSON.stringify({ event_type, enabled }),
+      });
+      if (!res.ok) {
+        setPrefs((prev) => prev.map((p) => (p.event_type === event_type ? { ...p, enabled: !enabled } : p)));
+        error({ title: "تعذّر حفظ التفضيل" });
+        return;
+      }
+      success({ title: enabled ? "تم تفعيل الإشعار" : "تم كتم الإشعار" });
+    } catch {
       setPrefs((prev) => prev.map((p) => (p.event_type === event_type ? { ...p, enabled: !enabled } : p)));
-      error({ title: "تعذّر حفظ التفضيل" });
+      error({ title: "خطأ في الاتصال" });
+    } finally {
+      setSavingType(null);
     }
   };
 
@@ -70,22 +101,28 @@ export default function UserSettings() {
       <h1 className="mb-4 text-2xl font-bold text-primary">الإعدادات</h1>
       <Card className="mb-4">
         <h2 className="mb-4 text-lg font-bold text-primary">تفضيلات الإشعارات</h2>
-        <p className="mb-3 text-sm text-brand-gray">عطّل الفئة لكتم إشعاراتها داخل المنصّة.</p>
-        <ul className="space-y-2">
-          {prefs.map((p) => (
-            <li key={p.event_type}>
-              <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-surface-border p-3">
-                <span className="font-bold text-primary">{EVENT_AR[p.event_type] || p.event_type}</span>
-                <input
-                  type="checkbox"
-                  className="h-5 w-5 accent-[var(--tmkeen-primary)]"
+        <p className="mb-3 text-sm text-brand-gray">عطّل الفئة لكتم إشعاراتها داخل المنصّة. الإعداد يخص حسابك فقط.</p>
+        {prefsLoading && <LoadingState title="جاري تحميل التفضيلات…" />}
+        {!prefsLoading && prefsError && (
+          <EmptyState title="تعذّر تحميل التفضيلات" message="تحقّق من الاتصال ثم أعد فتح الصفحة." />
+        )}
+        {!prefsLoading && !prefsError && prefs.length === 0 && (
+          <EmptyState title="لا توجد فئات إشعار" message="لم تُعرَّف فئات إشعار بعد." />
+        )}
+        {!prefsLoading && !prefsError && prefs.length > 0 && (
+          <ul className="space-y-2">
+            {prefs.map((p) => (
+              <li key={p.event_type}>
+                <Switch
+                  label={EVENT_AR[p.event_type] || p.event_type}
                   checked={p.enabled}
-                  onChange={(e) => void togglePref(p.event_type, e.target.checked)}
+                  disabled={savingType === p.event_type}
+                  onChange={(value) => void togglePref(p.event_type, value)}
                 />
-              </label>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
       <Card>
         <h2 className="mb-4 text-lg font-bold text-primary">تغيير كلمة المرور</h2>

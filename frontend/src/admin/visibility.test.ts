@@ -22,4 +22,24 @@ describe("visibleAdminDomains", () => {
     });
     expect(visible.map((d) => d.id)).toEqual(["projects", "maps"]);
   });
+
+  it("shows staff domain for orgStaff manager without project memberships", () => {
+    const visible = visibleAdminDomains(ADMIN_DOMAINS, {
+      isGlobalAdmin: false,
+      userRole: "manager",
+      projectTools: new Set(),
+      hasMemberships: false,
+    });
+    expect(visible.map((d) => d.id)).toEqual(["staff"]);
+  });
+
+  it("shows staff + project-scoped domains for orgStaff with memberships", () => {
+    const visible = visibleAdminDomains(ADMIN_DOMAINS, {
+      isGlobalAdmin: false,
+      userRole: "employee",
+      projectTools: new Set(["map"]),
+      hasMemberships: true,
+    });
+    expect(visible.map((d) => d.id)).toEqual(["projects", "maps", "staff"]);
+  });
 });

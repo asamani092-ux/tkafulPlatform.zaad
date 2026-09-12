@@ -15,6 +15,7 @@ interface DomainCounts {
   volunteers: number | null;
   requests: number | null;
   maps: number | null;
+  staff: number | null;
   reports: number | null;
   settings: number | null;
 }
@@ -69,6 +70,7 @@ export default function AdminMain() {
               ? (requests || 0) + (suggestions || 0)
               : null,
             maps,
+            staff: null,
             reports: null,
             settings: null,
           });

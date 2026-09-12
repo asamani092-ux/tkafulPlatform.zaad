@@ -1,5 +1,5 @@
 /**
- * Phase B — مصادر حقيقة واحدة لنطاقات لوحة الإدارة السبعة
+ * Phase B — مصادر حقيقة واحدة لنطاقات لوحة الإدارة (بما فيها الكادر مستقلاً عن التقارير)
  * ومساراتها القانونية + تحويلات المسارات القديمة.
  */
 
@@ -10,6 +10,7 @@ export type AdminDomainId =
   | "volunteers"
   | "requests"
   | "maps"
+  | "staff"
   | "reports"
   | "settings";
 
@@ -83,15 +84,23 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     ],
   },
   {
+    id: "staff",
+    label: "الكادر",
+    to: "/Admin/staff",
+    blurb: "أداء الكادر التشغيلي وتغذية الأقسام والموظفين والمهام — نطاق مستقل عن التقارير",
+    links: [
+      { to: "/Admin/staff", label: "أداء الكادر", staffVisible: true },
+      { to: "/Admin/staff/manage", label: "تغذية الكادر", staffVisible: true },
+    ],
+  },
+  {
     id: "reports",
     label: "التقارير",
     to: "/Admin/reports",
-    blurb: "تقارير المنصّة + أداء الكادر التشغيلي (أقسام/موظفون/مهام) — منفصل عن «المستخدمون»",
+    blurb: "تقارير المنصّة والأداء والتقدّم — منفصل عن نطاق الكادر التشغيلي",
     superAdminOnly: true,
     links: [
       { to: "/Admin/reports", label: "التقارير" },
-      { to: "/Admin/staff", label: "أداء الكادر" },
-      { to: "/Admin/staff/manage", label: "تغذية الكادر" },
     ],
   },
   {
@@ -149,8 +158,8 @@ export function domainForPath(pathname: string): AdminDomainId | "overview" {
   if (p.startsWith("/admin/volunteers")) return "volunteers";
   if (p.startsWith("/admin/requests")) return "requests";
   if (p.startsWith("/admin/maps") || p === "/admin/map") return "maps";
-  // الكادر صار تحت نطاق التقارير (توحيد)
-  if (p.startsWith("/admin/staff") || p.startsWith("/admin/executive") || p.startsWith("/admin/reports")) return "reports";
+  if (p.startsWith("/admin/staff") || p.startsWith("/admin/executive")) return "staff";
+  if (p.startsWith("/admin/reports")) return "reports";
   if (p.startsWith("/admin/settings")) return "settings";
   return "overview";
 }
