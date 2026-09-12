@@ -9,6 +9,9 @@ import Tabs from "../../ui/Tabs";
 import ReportGateway from "./ReportGateway";
 import { LoadingState } from "../../feedback/PageStates";
 import { downloadArabicPdf } from "../../../utils/arabicPdf";
+import { downloadExcel, sheetsByColumn } from "../../../utils/excelExport";
+import { usePlatformSettings } from "../../../contexts/PlatformSettingsContext";
+import { displayLogoUrl, displayPlatformName } from "../../../admin/publicNav";
 import { labelAr } from "../../../i18n/labels";
 
 interface Report { id: number; title: string; total_projects: number; total_volunteers: number; total_tasks: number; generated_at: string }
@@ -41,6 +44,9 @@ const SUMMARY_LABELS: Record<string, string> = {
 };
 
 export default function Reports() {
+  const { settings } = usePlatformSettings();
+  const logoUrl = displayLogoUrl(settings.logo_url);
+  const platformName = displayPlatformName(settings.platform_name);
   const { access } = useAuth();
   const { success, error } = useToast();
   const [tab, setTab] = useState("gateway");
@@ -160,14 +166,27 @@ export default function Reports() {
                         summary,
                         columns: cols.length ? cols : ["بيان"],
                         rows: projRows.length ? projRows : [["لا صفوف تفصيلية — راجع الملخص أعلاه"]],
+                        logoUrl,
+                        platformName,
                       });
                     } finally { setPdfBusy(false); }
                   })()}>{pdfBusy ? "جاري PDF…" : "تنزيل PDF عربي"}</Button>
                   {detail.data.volunteers?.list && detail.data.volunteers.list.length > 0 && (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => downloadCsv(`volunteers_${detail.meta.id}.csv`, detail.data.volunteers!.list!)}>تنزيل المتطوعين (CSV)</Button>
+                    <>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => downloadCsv(`volunteers_${detail.meta.id}.csv`, detail.data.volunteers!.list!)}>تنزيل المتطوعين (CSV)</Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => downloadExcel(`volunteers_${detail.meta.id}.xlsx`, [{ name: "المتطوعون", rows: detail.data.volunteers!.list! }])}>تنزيل المتطوعين (Excel)</Button>
+                    </>
                   )}
                   {detail.data.projects?.list && detail.data.projects.list.length > 0 && (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => downloadCsv(`projects_${detail.meta.id}.csv`, detail.data.projects!.list!)}>تنزيل المشاريع (CSV)</Button>
+                    <>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => downloadCsv(`projects_${detail.meta.id}.csv`, detail.data.projects!.list!)}>تنزيل المشاريع (CSV)</Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => {
+                        const rows = detail.data.projects!.list!;
+                        const projectKey = Object.keys(rows[0] || {}).find((k) => /name|project|اسم|مشروع/i.test(k)) || Object.keys(rows[0] || {})[0];
+                        const sheets = projectKey ? [{ name: "الكل", rows }, ...sheetsByColumn(rows, projectKey)] : [{ name: "المشاريع", rows }];
+                        downloadExcel(`projects_${detail.meta.id}.xlsx`, sheets);
+                      }}>تنزيل المشاريع (Excel)</Button>
+                    </>
                   )}
                   <Button type="button" variant="ghost" size="sm" onClick={() => setDetail(null)}>إغلاق</Button>
                 </div>
@@ -206,7 +225,12 @@ export default function Reports() {
         <Card>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-bold text-primary">أداء المتطوعين</h2>
-            {perf && perf.length > 0 && <Button type="button" variant="ghost" size="sm" onClick={() => downloadCsv("volunteers_performance.csv", perf as unknown as Array<Record<string, unknown>>)}>تنزيل CSV</Button>}
+            {perf && perf.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={() => downloadCsv("volunteers_performance.csv", perf as unknown as Array<Record<string, unknown>>)}>تنزيل CSV</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => downloadExcel("volunteers_performance.xlsx", [{ name: "أداء المتطوعين", rows: perf as unknown as Array<Record<string, unknown>> }])}>تنزيل Excel</Button>
+              </div>
+            )}
           </div>
           {perf === null ? <LoadingState title="جاري التحميل…" /> : (
             <div className="overflow-x-auto">
@@ -230,7 +254,12 @@ export default function Reports() {
         <Card>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-bold text-primary">تقدّم المشاريع</h2>
-            {progress && progress.length > 0 && <Button type="button" variant="ghost" size="sm" onClick={() => downloadCsv("projects_progress.csv", progress as unknown as Array<Record<string, unknown>>)}>تنزيل CSV</Button>}
+            {progress && progress.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={() => downloadCsv("projects_progress.csv", progress as unknown as Array<Record<string, unknown>>)}>تنزيل CSV</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => downloadExcel("projects_progress.xlsx", [{ name: "تقدّم المشاريع", rows: progress as unknown as Array<Record<string, unknown>> }])}>تنزيل Excel</Button>
+              </div>
+            )}
           </div>
           {progress === null ? <LoadingState title="جاري التحميل…" /> : (
             <div className="space-y-2">
