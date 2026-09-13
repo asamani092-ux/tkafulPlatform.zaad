@@ -101,7 +101,7 @@ export default function UserSettings() {
       <h1 className="mb-4 text-2xl font-bold text-primary">الإعدادات</h1>
       <Card className="mb-4">
         <h2 className="mb-4 text-lg font-bold text-primary">تفضيلات الإشعارات</h2>
-        <p className="mb-3 text-sm text-brand-gray">عطّل الفئة لكتم إشعاراتها داخل المنصّة. الإعداد يخص حسابك فقط.</p>
+        <p className="mb-3 text-sm text-brand-gray">عطّل الفئة لكتم إشعاراتها داخل المنصّة فقط (لا بريد ولا رسائل نصية). الإعداد يخص حسابك.</p>
         {prefsLoading && <LoadingState title="جاري تحميل التفضيلات…" />}
         {!prefsLoading && prefsError && (
           <EmptyState title="تعذّر تحميل التفضيلات" message="تحقّق من الاتصال ثم أعد فتح الصفحة." />

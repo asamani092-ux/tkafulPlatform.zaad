@@ -100,3 +100,19 @@ class RequestFormFlowTests(APITestCase):
         }, format="json")
         self.assertEqual(upd.status_code, 200, upd.data)
         self.assertEqual(RequestSubmission.objects.get(id=sid).status, "APPROVED")
+
+    def test_duplicate_title_gets_unique_slug(self):
+        self.client.force_authenticate(self.admin)
+        payload = {
+            "project": self.project.id,
+            "title": "طلب سقيا",
+            "slug": "water-need",
+            "fields_schema": self.schema,
+            "is_active": True,
+        }
+        r1 = self.client.post("/api/admin/request-forms/", payload, format="json")
+        self.assertEqual(r1.status_code, 201, r1.data)
+        r2 = self.client.post("/api/admin/request-forms/", {**payload, "slug": "water-need"}, format="json")
+        self.assertEqual(r2.status_code, 201, r2.data)
+        self.assertNotEqual(r1.data["slug"], r2.data["slug"])
+        self.assertTrue(r2.data["slug"].startswith("water-need"))

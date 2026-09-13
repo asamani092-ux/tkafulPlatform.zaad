@@ -284,7 +284,7 @@ export default function MapsAdmin() {
                 <div key={l.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-surface-border p-3 text-sm">
                   <div className="min-w-0 flex-1">
                     <div className="font-bold text-primary">{l.name}</div>
-                    <div className="text-xs text-brand-gray">ظهور الطبقة للزوار إن كانت عامة</div>
+                    <div className="text-xs text-brand-gray">{l.visibility === "public" ? "ظاهرة للزوار (عامة)" : "مخفية عن الزوار (خاصة)"}</div>
                   </div>
                   <Badge variant={l.visibility === "public" ? "success" : "warning"}>{l.visibility === "public" ? "عامة" : "خاصة"}</Badge>
                   <Button type="button" variant="danger" size="sm" onClick={() => setDeleteTarget({ kind: "layer", id: l.id, label: l.name })}>حذف</Button>
@@ -292,25 +292,23 @@ export default function MapsAdmin() {
               ))}
               <Card className="bg-surface-muted">
                 <h3 className="mb-2 text-sm font-bold text-primary">إضافة طبقة</h3>
-                <form className="flex flex-wrap items-end gap-2"
+                <form className="grid grid-cols-1 gap-3 sm:grid-cols-2"
                   onSubmit={async (e) => {
                     e.preventDefault();
                     const ok = await post("/api/maps/admin/layers/", { map: selected.id, name: layerForm.name, visibility: layerForm.visibility, order: layers.length }, "أُضيفت الطبقة");
                     if (ok) setLayerForm({ name: "", visibility: "public" });
                   }}>
-                  <div className="w-44"><Input label="اسم الطبقة" value={layerForm.name} onChange={(e) => setLayerForm({ ...layerForm, name: e.target.value })} required /></div>
-                  <div className="w-48">
-                    <Select
-                      label="ظهور الطبقة"
-                      value={layerForm.visibility}
-                      onChange={(e) => setLayerForm({ ...layerForm, visibility: e.target.value })}
-                      hint="خاصة = لا تظهر للعموم حتى لو نُشرت الخريطة"
-                    >
-                      <option value="public">عامة</option>
-                      <option value="private">خاصة</option>
-                    </Select>
-                  </div>
-                  <Button type="submit" variant="secondary">إضافة طبقة</Button>
+                  <Input label="اسم الطبقة" value={layerForm.name} onChange={(e) => setLayerForm({ ...layerForm, name: e.target.value })} required />
+                  <Select
+                    label="ظهور الطبقة"
+                    value={layerForm.visibility}
+                    onChange={(e) => setLayerForm({ ...layerForm, visibility: e.target.value })}
+                    hint="خاصة = لا تظهر للعموم حتى لو نُشرت الخريطة"
+                  >
+                    <option value="public">عامة</option>
+                    <option value="private">خاصة</option>
+                  </Select>
+                  <div className="sm:col-span-2"><Button type="submit" variant="secondary">إضافة طبقة</Button></div>
                 </form>
               </Card>
             </div>
@@ -328,7 +326,8 @@ export default function MapsAdmin() {
                   <Button type="button" variant="danger" size="sm" onClick={() => setDeleteTarget({ kind: "field", id: f.id, label: f.label })}>حذف</Button>
                 </div>
               ))}
-              <form className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-6"
+              <p className="mt-3 text-xs text-brand-gray">طريقة الإضافة: أدخل التسمية → اختر النوع → (خيارات إن لزم) → حدّد إلزامي/عام → إضافة. مفتاح الحقل يُشتق تلقائياً من التسمية.</p>
+              <form className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
                 onSubmit={async (e) => {
                   e.preventDefault();
                   const options = fieldForm.type === "select"
@@ -532,7 +531,7 @@ function BulkUploadItems({ mapId, onDone }: { mapId: number; onDone: () => void 
 
   return (
     <div className="mt-4 rounded-lg border border-surface-border p-3">
-      <h3 className="mb-2 text-sm font-bold text-primary">رفع مواقع بالجملة (Excel/CSV)</h3>
+      <h3 className="mb-2 text-sm font-bold text-primary">رفع مواقع بالجملة (CSV)</h3>
       <p className="mb-2 text-xs text-brand-gray">
         نزّل القالب، عبّئ الأعمدة (الاسم، الإحداثيات، الطبقة)، ثم ارفعه. عمود «الإحداثيات» يقبل
         رابط خرائط Google أو إحداثيات خام مثل <code dir="ltr">24.71, 46.67</code>.

@@ -160,7 +160,11 @@ export default function RequestFormsAdmin() {
       void load("silent");
     } else {
       const d = await res.json().catch(() => ({}));
-      const msg = d.slug?.[0] || d.fields_schema?.[0] || d.detail || "تعذّر الحفظ";
+      const rawSlug = d.slug?.[0];
+      const slugMsg = typeof rawSlug === "string" && /already exists|unique|موجود/i.test(rawSlug)
+        ? "المعرّف (slug) مستخدم مسبقاً — غيّر العنوان أو أعد المحاولة"
+        : rawSlug;
+      const msg = slugMsg || d.fields_schema?.[0] || d.detail || "تعذّر الحفظ";
       toast.error({ title: typeof msg === "string" ? msg : JSON.stringify(msg) });
     }
   };
@@ -319,6 +323,7 @@ export default function RequestFormsAdmin() {
                 ))}
                 {fields.length === 0 && <p className="text-xs text-brand-gray">لا حقول بعد — أضف حقلاً واحداً على الأقل.</p>}
               </div>
+              <p className="mb-2 text-xs text-brand-gray">طريقة الإضافة: أدخل التسمية → اختر النوع → (خيارات إن لزم) → إلزامي → إضافة. مفتاح الحقل يُشتق تلقائياً ولا يُعرض.</p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Input label="تسمية الحقل (عربية)" value={fieldDraft.label} onChange={(e) => setFieldDraft({ ...fieldDraft, label: e.target.value })} />
                 <Select label="النوع" value={fieldDraft.type} onChange={(e) => setFieldDraft({ ...fieldDraft, type: e.target.value as FieldType })}>

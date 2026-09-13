@@ -7,7 +7,10 @@ import Alert from "../../ui/Alert";
 import { LoadingState, EmptyState } from "../../feedback/PageStates";
 import { downloadCsv } from "../../../utils/csv";
 import { downloadArabicPdf } from "../../../utils/arabicPdf";
+import { downloadExcel, sheetsByColumn } from "../../../utils/excelExport";
 import { labelAr } from "../../../i18n/labels";
+import { usePlatformSettings } from "../../../contexts/PlatformSettingsContext";
+import { displayLogoUrl, displayPlatformName } from "../../../admin/publicNav";
 
 type Scope = "platform" | "project" | "volunteers" | "sponsorships";
 
@@ -42,9 +45,12 @@ const SUMMARY_LABELS: Record<string, string> = {
 
 /**
  * بوّابة تقارير موحّدة (UX2 P4 · 3.9): نطاق قابل للاختيار + عرض على الشاشة
- * + تصدير CSV + تنزيل PDF عربي قابل للتحديد (نص حقيقي RTL — ليس لقطة شاشة).
+ * + تصدير CSV/Excel + تنزيل PDF عربي عبر DOM بهوية المنصة.
  */
 export default function ReportGateway() {
+  const { settings } = usePlatformSettings();
+  const logoUrl = displayLogoUrl(settings.logo_url);
+  const platformName = displayPlatformName(settings.platform_name);
   const [scope, setScope] = useState<Scope>("platform");
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [projectSlug, setProjectSlug] = useState("");
@@ -77,6 +83,24 @@ export default function ReportGateway() {
     downloadCsv(`${data.scope}_report.csv`, data.rows, data.columns);
   };
 
+  const exportExcel = () => {
+    if (!data || data.rows.length === 0) return;
+    const arCols = data.columns.map((c) => labelAr(COL_LABELS, c));
+    const rows = data.rows.map((row) => {
+      const out: Record<string, unknown> = {};
+      data.columns.forEach((c, i) => {
+        out[arCols[i]] = c === "completion_rate" ? `${row[c]}%` : (row[c] ?? "");
+      });
+      return out;
+    });
+    const projectLabel = labelAr(COL_LABELS, "project");
+    const hasProject = data.columns.includes("project") && rows.some((r) => String(r[projectLabel] ?? "").trim());
+    const sheets = hasProject
+      ? [{ name: "الكل", rows, columns: arCols }, ...sheetsByColumn(rows, projectLabel, arCols)]
+      : [{ name: SCOPE_LABELS[scope], rows, columns: arCols }];
+    downloadExcel(`${data.scope}_report.xlsx`, sheets);
+  };
+
   const exportPdf = async () => {
     if (!data || data.rows.length === 0) return;
     setPdfBusy(true);
@@ -95,6 +119,8 @@ export default function ReportGateway() {
         rows: data.rows.map((row) =>
           data.columns.map((c) => (c === "completion_rate" ? `${row[c]}%` : String(row[c] ?? "—"))),
         ),
+        logoUrl,
+        platformName,
       });
     } finally {
       setPdfBusy(false);
@@ -127,6 +153,7 @@ export default function ReportGateway() {
           </Button>
           {data && data.rows.length > 0 && (
             <>
+              <Button type="button" variant="secondary" onClick={exportExcel}>تنزيل Excel</Button>
               <Button type="button" variant="secondary" onClick={exportCsv}>تنزيل CSV</Button>
               <Button type="button" variant="ghost" disabled={pdfBusy} onClick={() => void exportPdf()}>
                 {pdfBusy ? "جاري تجهيز PDF…" : "تنزيل PDF عربي"}
@@ -136,7 +163,7 @@ export default function ReportGateway() {
         </div>
         <Alert tone="info">
           <span className="text-xs">
-            «تنزيل PDF عربي» يُنتج ملفاً بنص عربي قابل للتحديد والنسخ (RTL + تشكيل حروف)، وليس صورة/لقطة شاشة.
+            PDF يُصدَّر من قالب عربي بهوية المنصة (شعار وتصميم). Excel يوزّع الأعمدة ويقسّم إلى أوراق حسب المشروع عند توفره.
           </span>
         </Alert>
       </Card>

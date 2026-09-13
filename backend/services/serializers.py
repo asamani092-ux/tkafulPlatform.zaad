@@ -118,6 +118,8 @@ class RequestFormSerializer(serializers.ModelSerializer):
             'description', 'fields_schema', 'is_active', 'submissions_count', 'created_at',
         ]
         read_only_fields = ['created_at', 'project_name', 'project_slug', 'submissions_count']
+        # الفرادة تُعالَج في create() لتوليد لاحقة تلقائية بدل خطأ DRF الإنجليزي
+        extra_kwargs = {'slug': {'validators': [], 'required': False, 'allow_blank': True}}
 
     def get_submissions_count(self, obj):
         return obj.submissions.count()
@@ -139,6 +141,25 @@ class RequestFormSerializer(serializers.ModelSerializer):
             if ftype not in FORM_FIELD_TYPES:
                 raise serializers.ValidationError(f"نوع حقل غير مدعوم: {ftype}")
         return value
+
+
+    def create(self, validated_data):
+        """اشتقاق slug فريد من العنوان/المدخل؛ تجنّب SYSTEM_SLUGS. O(k) للمحاولات."""
+        from django.utils.text import slugify
+        from projects.slug_utils import unique_slug_from_name
+        from .legacy_forms import SYSTEM_SLUGS
+        from .models import RequestForm as RF
+
+        title = validated_data.get("title") or "form"
+        raw = (validated_data.get("slug") or "").strip()
+        base = slugify(raw or title, allow_unicode=True).strip("-") or "form"
+        if base in SYSTEM_SLUGS:
+            base = f"{base}-form"
+        candidate = unique_slug_from_name(RF, base)
+        if candidate in SYSTEM_SLUGS:
+            candidate = unique_slug_from_name(RF, f"{base}-x")
+        validated_data["slug"] = candidate
+        return super().create(validated_data)
 
 
 class RequestSubmissionSerializer(serializers.ModelSerializer):
