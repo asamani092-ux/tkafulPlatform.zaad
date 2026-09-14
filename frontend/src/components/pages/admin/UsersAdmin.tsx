@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Badge from "../../ui/Badge";
@@ -16,6 +16,7 @@ import { ROLE_AR, labelAr } from "../../../i18n/labels";
 import { PLATFORM_ROLE_OPTIONS } from "../../../admin/roleOptions";
 import { extractErrorDetail, type AdminUserRow } from "../../../admin/userManagement";
 import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
+import { usePlatformSettings } from "../../../contexts/PlatformSettingsContext";
 
 interface Paginated {
   count: number;
@@ -28,6 +29,11 @@ const emptyForm = { email: "", name: "", role: "user", password: "", is_active: 
 
 export default function UsersAdmin() {
   const toast = useToast();
+  const { settings } = usePlatformSettings();
+  const assignableRoles = useMemo(
+    () => PLATFORM_ROLE_OPTIONS.filter((o) => settings.roles_can_login[o.value as keyof typeof settings.roles_can_login] !== false),
+    [settings.roles_can_login],
+  );
   const [rows, setRows] = useState<AdminUserRow[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -236,7 +242,7 @@ export default function UsersAdmin() {
           <Input label="البريد" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <Select label="الدور" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-            {PLATFORM_ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {assignableRoles.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
           <Input label="كلمة المرور الأولية" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
           <Button type="button" disabled={busy} onClick={() => void saveAdd()}>{busy ? "جاري الحفظ…" : "إنشاء"}</Button>
@@ -248,7 +254,7 @@ export default function UsersAdmin() {
           <Input label="البريد" dir="ltr" value={form.email} disabled />
           <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <Select label="الدور" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-            {PLATFORM_ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {assignableRoles.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
             <Checkbox label="نشط" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
           <Button type="button" disabled={busy} onClick={() => void saveEdit()}>{busy ? "جاري الحفظ…" : "حفظ"}</Button>

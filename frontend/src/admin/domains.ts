@@ -32,7 +32,10 @@ export interface AdminDomain {
   superAdminOnly?: boolean;
 }
 
-/** الشريط الجانبي المنظّم بنطاقات العمل */
+/**
+ * ترتيب الشريط (نظرة عامة رابط منفصل في AdminShell):
+ * المشاريع → الطلبات → الخرائط → التقارير → إدارة المتطوعين → المستخدمون → الكادر → الإعدادات
+ */
 export const ADMIN_DOMAINS: AdminDomain[] = [
   {
     id: "projects",
@@ -41,27 +44,6 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     blurb: "قائمة المشاريع والأدوات وروابط التبرع والإنشاء",
     links: [
       { to: "/Admin/projects", label: "كل المشاريع", staffVisible: true },
-    ],
-  },
-  {
-    id: "users",
-    label: "المستخدمون",
-    to: "/Admin/users",
-    blurb: "حسابات المنصّة والأدوار (مستخدم/مشرف/متبرّع…) — ليست أقسام الكادر التشغيلية",
-    superAdminOnly: true,
-    links: [
-      { to: "/Admin/users", label: "إدارة المستخدمين" },
-    ],
-  },
-  {
-    id: "volunteers",
-    label: "المتطوعون",
-    to: "/Admin/volunteers",
-    blurb: "إدارة المتطوعين وطلبات المشاريع وطلبات الانضمام",
-    superAdminOnly: true,
-    links: [
-      // تبويبات الصفحة الداخلية تغني عن روابط فرعية مكررة في الشريط
-      { to: "/Admin/volunteers", label: "المتطوعون" },
     ],
   },
   {
@@ -84,16 +66,6 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     ],
   },
   {
-    id: "staff",
-    label: "الكادر",
-    to: "/Admin/staff",
-    blurb: "أداء الكادر التشغيلي وتغذية الأقسام والموظفين والمهام — نطاق مستقل عن التقارير",
-    links: [
-      { to: "/Admin/staff", label: "أداء الكادر", staffVisible: true },
-      { to: "/Admin/staff/manage", label: "تغذية الكادر", staffVisible: true },
-    ],
-  },
-  {
     id: "reports",
     label: "التقارير",
     to: "/Admin/reports",
@@ -104,6 +76,38 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     ],
   },
   {
+    id: "volunteers",
+    label: "إدارة المتطوعين",
+    to: "/Admin/volunteers",
+    blurb: "إدارة المتطوعين وطلبات المشاريع وطلبات الانضمام",
+    superAdminOnly: true,
+    links: [
+      { to: "/Admin/volunteers", label: "المتطوعون" },
+      { to: "/Admin/volunteers/applications", label: "طلبات المشاريع" },
+      { to: "/Admin/volunteers/join-requests", label: "طلبات الانضمام" },
+    ],
+  },
+  {
+    id: "users",
+    label: "المستخدمون",
+    to: "/Admin/users",
+    blurb: "حسابات المنصّة والأدوار (مستخدم/مشرف/متبرّع…) — ليست أقسام الكادر التشغيلية",
+    superAdminOnly: true,
+    links: [
+      { to: "/Admin/users", label: "إدارة المستخدمين" },
+    ],
+  },
+  {
+    id: "staff",
+    label: "الكادر",
+    to: "/Admin/staff",
+    blurb: "أداء الكادر التشغيلي وتغذية الأقسام والموظفين والمهام — نطاق مستقل عن التقارير",
+    links: [
+      { to: "/Admin/staff", label: "أداء الكادر", staffVisible: true },
+      { to: "/Admin/staff/manage", label: "تغذية الكادر", staffVisible: true },
+    ],
+  },
+  {
     id: "settings",
     label: "الإعدادات",
     to: "/Admin/settings",
@@ -111,7 +115,6 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     superAdminOnly: true,
     links: [
       { to: "/Admin/settings", label: "إعدادات المنصّة" },
-      { to: "/Admin/settings/broadcast", label: "بث إشعار" },
       { to: "/Admin/settings/roles", label: "الأدوار" },
       { to: "/Admin/settings/activity", label: "سجل النشاط" },
       { to: "/Admin/settings/project-types", label: "أنواع المشاريع" },
@@ -125,7 +128,6 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
  */
 export const LEGACY_ADMIN_REDIRECTS: Array<{ from: string; to: string }> = [
   { from: "/Admin/map", to: "/Admin/maps" },
-  // إنشاء المشروع صار داخل /Admin/projects — الرابط القديم يُبقى توافقياً
   { from: "/Admin/projects/create", to: "/Admin/projects" },
   { from: "/Admin/tasks", to: "/Admin/projects" },
   { from: "/Admin/ideas", to: "/Admin/requests/forms" },
@@ -136,7 +138,6 @@ export const LEGACY_ADMIN_REDIRECTS: Array<{ from: string; to: string }> = [
   { from: "/Admin/requests/water-supply", to: "/Admin/requests/forms" },
   { from: "/Admin/requests/suggestions", to: "/Admin/requests/forms" },
   { from: "/Admin/join-requests", to: "/Admin/volunteers/join-requests" },
-  // الكفالات صارت أداة داخل بطاقة المشروع — النطاق المنفصل يُحوّل توافقياً
   { from: "/Admin/sponsorships", to: "/Admin/projects" },
   { from: "/Admin/executive", to: "/Admin/staff" },
   { from: "/Admin/executive/manage", to: "/Admin/staff/manage" },
@@ -144,6 +145,7 @@ export const LEGACY_ADMIN_REDIRECTS: Array<{ from: string; to: string }> = [
   { from: "/executive/manage", to: "/Admin/staff/manage" },
   { from: "/admin/signin", to: "/signin" },
   { from: "/saqya", to: "/projects/saqya" },
+  { from: "/Admin/settings/broadcast", to: "/Admin/settings" },
 ];
 
 /** مسارات التحويل المسجّلة في الراوتر */
