@@ -1,7 +1,12 @@
-# UAT — نموذج تقييم القبول لكل الأدوات
+# UAT — نموذج تقييم القبول (ثلاث مراحل تجربة)
 
-> فرع: `refactor/project-first-architecture` · التقرير المرجعي الكامل: `FINAL_REPORT.md` · القرارات: `DECISIONS.md`
-> التقييم: ✅ ناجح / ⚠️ ملاحظة / ❌ فشل — مع تدوين الملاحظة والمتصفح والدور المستخدم.
+> **إجابات أسئلة المرحلة 1:** `docs/UAT_PHASE1_ANSWERS.md` · القرارات: `DECISIONS.md`  
+> التقييم: ✅ ناجح / ⚠️ ملاحظة / ❌ فشل — النموذج التفاعلي: **http://localhost:3400/uat** (يتطلب `VITE_ENABLE_UAT=true`)
+
+**تقسيم التجربة**
+1. الموقع العام والدخول
+2. بوابة المتطوّع ولوحة الإدارة (+ التحويلات القديمة)
+3. أدوات التشغيل (كفالات + خرائط) وسلامة البيانات
 
 ---
 
@@ -11,100 +16,146 @@
 # الباك إند
 cd backend
 ./venv/bin/python manage.py migrate
-./venv/bin/python manage.py create_admin            # admin@takaful.com / admin123
-./venv/bin/python manage.py import_excel_data       # 13 مشروع تطوع + 2289 متطوعاً
-./venv/bin/python manage.py seed_impact_map         # يشغّل sync_impact_map_to_maps تلقائياً
-./venv/bin/python manage.py check_migration_integrity --expect migrated   # يجب: "لا اختلالات"
+./venv/bin/python manage.py create_admin
+./venv/bin/python manage.py import_excel_data
+./venv/bin/python manage.py seed_impact_map
+./venv/bin/python manage.py check_migration_integrity --expect migrated
 ./venv/bin/python manage.py runserver 0.0.0.0:8000
 
-# الواجهة (طرفية ثانية)
-cd frontend && npm run dev                          # http://localhost:3000 (وليس 127.0.0.1)
+# الواجهة — منفذ التجربة 3400 + تفعيل نموذج UAT
+cd frontend
+echo 'VITE_ENABLE_UAT=true' > .env.development.local
+npm run dev -- --port 3400 --host localhost
+# افتح: http://localhost:3400  و  http://localhost:3400/uat
 ```
 
-حسابات أدوار إضافية للتجربة (donor / supplier / representative / project_admin):
+تأكد أن `backend/.env` يتضمن CORS للمنفذ 3400:
+
+```
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:3400,http://127.0.0.1:3400
+```
+
+حسابات الأدوار:
 
 ```bash
 cd backend && ./venv/bin/python manage.py shell -c "
 from django.contrib.auth.models import User
 from projects.models import Project, ProjectMember
-for u, r in [('uat_donor','donor'), ('uat_supplier','supplier'), ('uat_rep','representative'), ('uat_pm','user')]:
+for u, r in [('uat_donor','donor'), ('uat_supplier','supplier'), ('uat_rep','representative'), ('uat_pm','user'), ('uat_vol','user')]:
     user, _ = User.objects.get_or_create(username=u, defaults={'email': f'{u}@takaful.com'})
     user.set_password('Uat12345!'); user.email = f'{u}@takaful.com'; user.save()
     user.profile.role = r; user.profile.is_approved = True; user.profile.save()
 pm = User.objects.get(username='uat_pm')
 p = Project.objects.get(slug='tafaqqadhum')
 ProjectMember.objects.update_or_create(project=p, user=pm, defaults={'role': 'project_admin'})
-print('UAT users ready — password: Uat12345!')
+print('UAT users ready — password: Uat12345!  volunteer: uat_vol@takaful.com')
 "
 ```
 
-> الدخول دائماً **بالبريد الإلكتروني** (وليس اسم المستخدم أو الجوال).
+> الدخول **بالبريد الإلكتروني** فقط.
 
 ---
 
-## 1) الزائر العام (بدون دخول)
+## 1) الموقع العام
 
 | # | السيناريو | المتوقع | التقييم | ملاحظات |
 |---|---|---|---|---|
-| 1.1 | فتح `/` | قسم «مشاريع المنصّة» يعرض 3 مشاريع بألوان هويتها + الخدمات والإحصاءات | | |
-| 1.2 | فتح `/projects/saqya` و`/projects/tafaqqadhum` و`/projects/takaful-athar` | صفحة هبوط لكل مشروع: الهوية + الأدوات المفعّلة فقط | | |
-| 1.3 | فتح `/map` | المجمّع الموحّد: كل الطبقات العامة + فلترة «كل المشاريع/تفقدهم» | | |
-| 1.4 | فتح `/projects/tafaqqadhum/map` | 20 عنصراً (12 منطقة + 8 منافذ)، فلاتر ديناميكية (النوع/الأولوية/نوع المنفذ/المنتج) | | |
-| 1.5 | النقر على عنصر في الخريطة | بطاقة تفاصيل **بدون** «ساعات العمل (داخلي)» و«الأسر المستهدفة (داخلي)» | | |
-| 1.6 | إرسال تعهد من الخريطة (اسم + 05XXXXXXXX + كمية) | «تم استلام تعهدكم بنجاح» وحالته pending | | |
-| 1.7 | فتح `/saqya` القديم | تحويل تلقائي إلى `/projects/saqya/sponsorships` | | |
-| 1.8 | نموذج سقيا المسجد `/services/water-supply` والاقتراحات `/suggest` | تعمل كما قبل إعادة الهيكلة | | |
+| 1.1 | `/` على :3400 | مقدّمة + مشاريع + أثر + خدمات؛ تبرع فقط مع donation_url | | |
+| 1.2 | Navbar العام | الرئيسية/المشاريع/الخدمات/المتطوعون/الخرائط/من نحن — ≤2 نقرات | | |
+| 1.3 | `/projects` | قائمة المنصّة + روابط الهبوط + CTA تبرع مشروط | | |
+| 1.4 | صفحات `/projects/:slug` | أدوات مفعّلة فقط + تبرع مشروط | | |
+| 1.5 | `/map` | مجمّع عام واحد | | |
+| 1.6 | `/projects/tafaqqadhum/map` | خريطة المشروع فقط | | |
+| 1.7 | تعهد من الخريطة | pending بنجاح | | |
+| 1.8 | `/saqya` | → `/projects/saqya/sponsorships` | | |
+| 1.9 | `/services/water-supply?project=saqya` | نموذج مرتبط بالمشروع | | |
+| 1.10 | `/suggest` و`/request-service` | تعمل | | |
 
-## 2) أداة الكفالات (sponsorships)
-
-| # | السيناريو | الدور | المتوقع | التقييم | ملاحظات |
-|---|---|---|---|---|---|
-| 2.1 | إنشاء كفالة | uat_donor | تُنشأ بحالة pending | | |
-| 2.2 | اعتماد الكفالة → إسناد الطلب لمورّد ومندوب | admin | Order ينتقل pending→assigned | | |
-| 2.3 | تحضير → جاهز | uat_supplier | إشعار للمندوب | | |
-| 2.4 | تسليم + رفع توثيق بملف وGPS | uat_rep | يُرفع في مسار خاص ولا يُفتح إلا لمصرّح | | |
-| 2.5 | دفع جزئي ثم محاولة دفع يتجاوز المتبقي | uat_donor | الثاني يُرفض «المبلغ يتجاوز المتبقّي» | | |
-| 2.6 | اكتمال التمويل | — | الحالة تنتقل تلقائياً إلى in_progress | | |
-
-## 3) أداة الخرائط (maps) — الأدمن
+## 2) الدخول والتوجيه
 
 | # | السيناريو | الدور | المتوقع | التقييم | ملاحظات |
 |---|---|---|---|---|---|
-| 3.1 | `/Admin/maps`: إنشاء خريطة جديدة لمشروع | admin | تُنشأ (المشرف العام فقط) | | |
-| 3.2 | نفس المحاولة | uat_pm | مرفوضة 403 (provisioning للمشرف العام) | | |
-| 3.3 | إضافة طبقة خاصة + حقل `select` بخيارات + حقل غير عام | admin/uat_pm | تظهر في الأدمن ولا تظهر للعامة | | |
-| 3.4 | إضافة عنصر من النموذج الديناميكي بقيمة select خارج الخيارات | — | رفض 400 برسالة عربية | | |
-| 3.5 | اعتماد → تنفيذ تعهد (من 1.6) | uat_pm | الحالة تتغير والملخص العام يعكسها (مع إخفاء <5) | | |
-| 3.6 | نشر/إلغاء نشر الخريطة | admin | تختفي/تظهر في `/map` العام | | |
+| 2.1 | `/signin` | admin | → `/Admin` نظرة عامة | | |
+| 2.2 | `/signin` | uat_pm | → `/Admin/projects` | | |
+| 2.3 | مستخدم عادي | — | → `/user/main` | | |
+| 2.4 | `/admin/signin` | — | → `/signin` | | |
+| 2.5 | تسجيل جديد + JWT | — | بلا كسر | | |
 
-## 4) لوحة الأدمن الموحّدة (role-scoped)
-
-| # | السيناريو | الدور | المتوقع | التقييم | ملاحظات |
-|---|---|---|---|---|---|
-| 4.1 | `/Admin/projects` | admin | كل المشاريع + إنشاء مشروع + تفعيل أدوات + إدارة أعضاء | | |
-| 4.2 | `/Admin/projects` | uat_pm (دخول عبر `/signin`) | مشروع «تفقدهم» فقط، بلا تبويبات المنصّة القديمة | | |
-| 4.3 | `/Admin/maps` | uat_pm | خرائط «تفقدهم» فقط | | |
-| 4.4 | `/Admin` و`/Admin/management` … | uat_pm | غير مرئية/403 (للمشرف العام فقط) | | |
-| 4.5 | `/Admin/map` القديم | admin | تحويل تلقائي إلى `/Admin/maps` | | |
-
-## 5) أدوات التطوع والخدمات والتقارير (بلا تغيير سلوكي)
+## 3) بوابة المتطوّع (مرحلة التجربة 2)
 
 | # | السيناريو | المتوقع | التقييم | ملاحظات |
 |---|---|---|---|---|
-| 5.1 | طلبات الانضمام/التطوع والقبول والمهام (`/Admin/*`, `/user/*`) | كما قبل إعادة الهيكلة | | |
-| 5.2 | طلب خدمة عام + إدارتها | كما قبل | | |
-| 5.3 | توليد تقرير شامل من `/Admin/reports` | يعمل | | |
-| 5.4 | اللوحة التنفيذية `/executive` | تعمل | | |
-| 5.5 | تسجيل مستخدم جديد + دخول/خروج JWT | بلا أي تغيير | | |
+| 8.1 | `/user/settings` بطاقات تحديث البيانات وكلمة المرور | فتح نافذة عائمة لكل بطاقة وحفظ ناجح بدون تفضيلات إشعارات | | |
+| 8.2 | `/user/tasks` و`/user/personal-info` و`/user/settings` | تعمل داخل UserShell | | |
+| 8.3 | `/Admin` بحساب متطوّع | رفض أو تحويل | | |
 
-## 6) سلامة البيانات (يُنفَّذ في نهاية الجلسة)
+## 4) نطاقات الإدارة (ثمانية بما فيها الكادر)
 
-```bash
-cd backend && ./venv/bin/python manage.py check_migration_integrity --expect migrated
-```
+| # | السيناريو | الدور | المتوقع | التقييم | ملاحظات |
+|---|---|---|---|---|---|
+| 3.1 | `/Admin` | admin | 8 بطاقات KPI (الكادر نطاق مستقل) | | |
+| 3.2 | الشريط الجانبي | admin | أسماء النطاقات العربية الموحّدة | | |
+| 3.3 | `/Admin/projects` | admin | أدوات + donation_url | | |
+| 3.4 | `/Admin/volunteers*` | admin | متطوعون/تطوع/انضمام | | |
+| 3.5 | `/Admin/requests*` | admin | خدمات/سقيا/اقتراحات | | |
+| 3.6 | `/Admin/sponsorships` | admin | محور الكفالات | | |
+| 3.7 | `/Admin/maps` | admin | إدارة الخرائط فقط هنا | | |
+| 3.8 | `/Admin/staff*` | admin | نطاق «الكادر» مستقل في الشريط + داخل AdminShell | | |
+| 3.9 | `/Admin/reports` | admin | التقارير | | |
+| 3.10 | صلاحيات uat_pm | uat_pm | نطاقه فقط؛ 403 لغيرها | | |
 
-المتوقع: `سلامة البيانات مؤكدة — لا اختلالات`. أي اختلال = ❌ فوري وإيقاف التجربة.
+## 5) تحويلات المسارات القديمة
+
+| # | من | إلى | التقييم | ملاحظات |
+|---|---|---|---|---|
+| 4.1 | `/Admin/map` | `/Admin/maps` | | |
+| 4.2 | `/Admin/tasks` | `/Admin/projects/create` | | |
+| 4.3 | `/Admin/ideas` | `/Admin/requests/suggestions` | | |
+| 4.4 | `/Admin/applications` | `/Admin/volunteers/applications` | | |
+| 4.5 | `/Admin/management` | `/Admin/volunteers` | | |
+| 4.6 | `/Admin/service-requests` | `/Admin/requests` | | |
+| 4.7 | `/Admin/executive` و`/executive` | `/Admin/staff` | | |
+| 4.8 | `…/manage` التنفيذي | `/Admin/staff/manage` | | |
+| 4.9 | `/saqya` | `/projects/saqya/sponsorships` | | |
+
+## 6) الكفالات (مرحلة التجربة 3)
+
+| # | السيناريو | الدور | المتوقع | التقييم | ملاحظات |
+|---|---|---|---|---|---|
+| 5.1 | إنشاء كفالة | uat_donor | pending | | |
+| 5.2 | اعتماد → إسناد | admin | assigned | | |
+| 5.3 | تحضير → جاهز | uat_supplier | إشعار مندوب | | |
+| 5.4 | تسليم + توثيق | uat_rep | ملف خاص | | |
+| 5.5 | دفع يتجاوز المتبقي | uat_donor | رفض | | |
+| 5.6 | اكتمال التمويل | — | in_progress | | |
+| 5.7 | CTA تبرع من donation_url | — | يظهر/يُخفى حسب الإعداد | | |
+
+## 7) الخرائط (إدارة من `/Admin/maps`)
+
+| # | السيناريو | الدور | المتوقع | التقييم | ملاحظات |
+|---|---|---|---|---|---|
+| 6.1 | إنشاء خريطة | admin | تُنشأ | | |
+| 6.2 | إنشاء خريطة | uat_pm | 403 | | |
+| 6.3 | طبقة/حقول خاصة | admin/uat_pm | أدمن فقط | | |
+| 6.4 | select غير صالح | — | 400 عربي | | |
+| 6.5 | اعتماد تعهد | uat_pm | ملخص + إخفاء &lt;5 | | |
+| 6.6 | نشر/إلغاء | admin | يظهر في `/map` | | |
+
+## 8) سلامة البيانات
+
+| # | السيناريو | المتوقع | التقييم | ملاحظات |
+|---|---|---|---|---|
+| 7.1 | `check_migration_integrity --expect migrated` | لا اختلالات | | |
 
 ---
 
-**الحكم النهائي**: ☐ قبول ☐ قبول بملاحظات ☐ رفض · التوقيع: ________ · التاريخ: ________
+## حسابات سريعة
+
+| البريد | كلمة المرور | الدور |
+|---|---|---|
+| admin@takaful.com | admin123 | مشرف → `/Admin` |
+| uat_pm@takaful.com | Uat12345! | مدير تفقدهم → `/Admin/projects` |
+| uat_vol@takaful.com | Uat12345! | متطوّع → `/user/main` |
+| uat_donor@takaful.com | Uat12345! | متبرّع |
+| uat_supplier@takaful.com | Uat12345! | مورّد |
+| uat_rep@takaful.com | Uat12345! | مندوب |

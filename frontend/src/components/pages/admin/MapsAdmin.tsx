@@ -5,12 +5,18 @@ import Button from "../../ui/Button";
 import Input from "../../ui/Input";
 import Select from "../../ui/Select";
 import Badge from "../../ui/Badge";
+import Checkbox from "../../ui/Checkbox";
 import Tabs from "../../ui/Tabs";
+import Modal from "../../ui/Modal";
+import Alert from "../../ui/Alert";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
+import { externalMapUrl } from "../../../utils/mapsLink";
 import { optionLabel, optionValue } from "../projects/filters";
 import type { MapFieldDef } from "../projects/types";
+import { labelAr } from "../../../i18n/labels";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
 interface AdminMap {
   id: number; project: number; project_slug: string; project_name: string;
@@ -30,6 +36,21 @@ interface AdminProjectOption { id: number; name: string }
 
 const FIELD_TYPES = ["text", "number", "select", "boolean", "date"] as const;
 
+// تعريب العرض فقط — قيم الـ API تبقى كما هي. O(1) لكل بحث.
+const FIELD_TYPE_LABELS: Record<string, string> = {
+  text: "نص", number: "رقم", select: "قائمة اختيار", boolean: "نعم/لا", date: "تاريخ",
+};
+const VISIBILITY_LABELS: Record<string, string> = {
+  public: "عامة", mixed: "مختلطة", private: "خاصة",
+};
+const ITEM_STATUS_LABELS: Record<string, string> = {
+  active: "نشط", inactive: "غير نشط", draft: "مسودة",
+};
+const CONTRIB_STATUS_LABELS: Record<string, string> = {
+  pending: "بانتظار الاعتماد", approved: "معتمد", fulfilled: "منفّذ", cancelled: "ملغى",
+};
+const arLabel = (map: Record<string, string>, key: string) => labelAr(map, key);
+
 /** إدارة نظام الخرائط المتعددة — نطاق حسب عضوية المشروع. */
 export default function MapsAdmin() {
   const toast = useToast();
@@ -47,15 +68,21 @@ export default function MapsAdmin() {
   const [contributions, setContributions] = useState<AdminContribution[]>([]);
 
   const [mapForm, setMapForm] = useState({ project: "", title: "", visibility: "public" });
+  const [createOpen, setCreateOpen] = useState(false);
   const [layerForm, setLayerForm] = useState({ name: "", visibility: "public" });
   const [fieldForm, setFieldForm] = useState({ key: "", label: "", type: "text", required: false, is_public: true, options: "" });
   const [itemForm, setItemForm] = useState<{ layer: string; name: string; lat: string; lng: string; data: Record<string, string> }>({ layer: "", name: "", lat: "", lng: "", data: {} });
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: "layer" | "field" | "item"; id: number; label: string } | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const selected = maps.find((m) => m.id === selectedId) || null;
 
-  const loadMaps = useCallback(async () => {
-    setLoading(true);
-    setError(false);
+  const loadMaps = useCallback(async (mode: AdminLoadMode = "initial") => {
+    const flip = shouldFlipPageLoading(mode);
+    if (flip) {
+      setLoading(true);
+      setError(false);
+    }
     try {
       const [mapsRes, meRes, projectsRes] = await Promise.all([
         authFetch("/api/maps/admin/maps/"),
@@ -69,9 +96,9 @@ export default function MapsAdmin() {
       if (projectsRes.ok) setProjects((await projectsRes.json()).map((p: { id: number; name: string }) => ({ id: p.id, name: p.name })));
       if (data.length && !data.some((m) => m.id === selectedId)) setSelectedId(data[0].id);
     } catch {
-      setError(true);
+      if (flip) setError(true);
     } finally {
-      setLoading(false);
+      if (flip) setLoading(false);
     }
   }, [selectedId]);
 
@@ -88,7 +115,7 @@ export default function MapsAdmin() {
     setContributions(c as AdminContribution[]);
   }, []);
 
-  useEffect(() => { void loadMaps(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => { void loadMaps("initial"); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   useEffect(() => { if (selectedId) void loadChildren(selectedId); }, [selectedId, loadChildren]);
 
   const post = async (path: string, body: unknown, okMsg: string) => {
@@ -106,15 +133,44 @@ export default function MapsAdmin() {
     return false;
   };
 
+  const del = async (path: string, okMsg: string) => {
+    const res = await authFetch(path, { method: "DELETE" });
+    if (res.ok) {
+      toast.success({ title: okMsg });
+      if (selectedId) void loadChildren(selectedId);
+      return true;
+    }
+    const data = await res.json().catch(() => ({}));
+    toast.error({ title: data.detail || "تعذّر الحذف" });
+    return false;
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    try {
+      const paths = {
+        layer: `/api/maps/admin/layers/${deleteTarget.id}/`,
+        field: `/api/maps/admin/fields/${deleteTarget.id}/`,
+        item: `/api/maps/admin/items/${deleteTarget.id}/`,
+      };
+      const msgs = { layer: "حُذفت الطبقة", field: "حُذف الحقل", item: "حُذف العنصر" };
+      const ok = await del(paths[deleteTarget.kind], msgs[deleteTarget.kind]);
+      if (ok) setDeleteTarget(null);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   const createMap = async (e: React.FormEvent) => {
     e.preventDefault();
     const ok = await post("/api/maps/admin/maps/", { project: Number(mapForm.project), title: mapForm.title, visibility: mapForm.visibility }, "تم إنشاء الخريطة");
-    if (ok) { setMapForm({ project: "", title: "", visibility: "public" }); void loadMaps(); }
+    if (ok) { setMapForm({ project: "", title: "", visibility: "public" }); setCreateOpen(false); void loadMaps("silent"); }
   };
 
   const togglePublish = async (m: AdminMap) => {
     await post(`/api/maps/admin/maps/${m.id}/${m.published_at ? "unpublish" : "publish"}/`, {}, m.published_at ? "أُلغي النشر" : "تم النشر");
-    void loadMaps();
+    void loadMaps("silent");
   };
 
   if (loading) return <AdminShell><LoadingState title="جاري تحميل الخرائط…" /></AdminShell>;
@@ -122,37 +178,68 @@ export default function MapsAdmin() {
 
   return (
     <AdminShell>
-      <h1 className="mb-4 text-2xl font-extrabold text-primary">إدارة الخرائط</h1>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-extrabold text-primary">الخرائط</h1>
+          <p className="mt-1 text-xs text-brand-gray">أنشئ خريطة للمشروع، أدر الطبقات والعناصر والحقول، اضبط الظهور، ثم انشر. التعهدات = مساهمات الجمهور على الخريطة.</p>
+        </div>
+        {isSuperAdmin && <Button type="button" onClick={() => setCreateOpen(true)}>إضافة خريطة</Button>}
+      </div>
 
-      {isSuperAdmin && (
-        <Card className="mb-4">
-          <h2 className="mb-2 text-lg font-bold text-primary">إنشاء خريطة (provisioning — المشرف العام)</h2>
-          <form className="grid grid-cols-1 gap-3 sm:grid-cols-4" onSubmit={createMap}>
-            <Select label="المشروع" value={mapForm.project} onChange={(e) => setMapForm({ ...mapForm, project: e.target.value })} required>
-              <option value="">اختر…</option>
-              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </Select>
-            <Input label="العنوان" value={mapForm.title} onChange={(e) => setMapForm({ ...mapForm, title: e.target.value })} required />
-            <Select label="الظهور" value={mapForm.visibility} onChange={(e) => setMapForm({ ...mapForm, visibility: e.target.value })}>
-              <option value="public">عامة</option>
-              <option value="mixed">مختلطة</option>
-              <option value="private">خاصة</option>
-            </Select>
-            <div className="flex items-end"><Button type="submit">إنشاء</Button></div>
-          </form>
-        </Card>
-      )}
+      <div className="mb-4">
+        <Alert tone="info" title="خيارات الظهور للخريطة">
+          <ul className="mt-1 list-disc space-y-1 pe-4 text-xs">
+            <li><strong>عامة</strong>: الخريطة ظاهرة للزوار.</li>
+            <li><strong>مختلطة</strong>: خريطة عامة مع طبقات خاصة لا تظهر للعموم.</li>
+            <li><strong>خاصة</strong>: للإدارة فقط.</li>
+          </ul>
+        </Alert>
+      </div>
 
-      <div className="mb-3 flex flex-wrap gap-2">
+      <div className="mb-4 space-y-3">
         {maps.map((m) => (
-          <button key={m.id} type="button"
-            className={`rounded-full px-3 py-1 text-xs font-bold${m.id === selectedId ? " bg-primary text-white" : " bg-surface border border-surface-border"}`}
-            onClick={() => setSelectedId(m.id)}>
-            {m.title} — {m.project_name}
-          </button>
+          <Card key={m.id}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <h3 className="truncate text-base font-bold text-primary">{m.title}</h3>
+                <Badge variant={m.published_at ? "success" : "danger"}>{m.published_at ? "نشط" : "غير نشط"}</Badge>
+                <span className="text-xs text-brand-gray">{m.project_name}</span>
+              </div>
+              <Button type="button" variant="secondary" onClick={() => setSelectedId(m.id)}>التفاصيل</Button>
+            </div>
+          </Card>
         ))}
         {maps.length === 0 && <p className="text-brand-gray">لا خرائط ضمن نطاقك.</p>}
       </div>
+
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="إنشاء خريطة">
+        <form className="grid grid-cols-1 gap-3" onSubmit={createMap}>
+          <Select label="المشروع" value={mapForm.project} onChange={(e) => setMapForm({ ...mapForm, project: e.target.value })} required>
+            <option value="">اختر…</option>
+            {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </Select>
+          <Input label="العنوان" value={mapForm.title} onChange={(e) => setMapForm({ ...mapForm, title: e.target.value })} required />
+          <Select
+            label="الظهور"
+            value={mapForm.visibility}
+            onChange={(e) => setMapForm({ ...mapForm, visibility: e.target.value })}
+            hint="عامة: الكل يرى الخريطة. مختلطة: خريطة عامة مع طبقات خاصة لا تظهر للعموم. خاصة: للإدارة فقط."
+          >
+            <option value="public">عامة — ظاهرة للزوار</option>
+            <option value="mixed">مختلطة — عامة مع طبقات خاصة مخفية عن العموم</option>
+            <option value="private">خاصة — للإدارة فقط</option>
+          </Select>
+          {mapForm.visibility === "mixed" && (
+            <Alert tone="info" title="معنى «مختلطة»">
+              خريطة عامة مع طبقات خاصة لا تظهر للعموم. الطبقات العامة تبقى ظاهرة للزوار.
+            </Alert>
+          )}
+          <div className="flex gap-2">
+            <Button type="submit">إنشاء</Button>
+            <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>إلغاء</Button>
+          </div>
+        </form>
+      </Modal>
 
       {selected && (
         <Card>
@@ -160,43 +247,70 @@ export default function MapsAdmin() {
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-primary">{selected.title}</h2>
               <Badge variant={selected.published_at ? "success" : "warning"}>{selected.published_at ? "منشورة" : "غير منشورة"}</Badge>
-              <Badge>{selected.visibility}</Badge>
+              <Badge>{arLabel(VISIBILITY_LABELS, selected.visibility)}</Badge>
+              {selected.visibility === "mixed" && (
+                <span className="text-xs text-brand-gray">مختلطة = خريطة عامة مع طبقات خاصة لا تظهر للعموم</span>
+              )}
             </div>
-            <Button variant="secondary" onClick={() => togglePublish(selected)}>
-              {selected.published_at ? "إلغاء النشر" : "نشر"}
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => togglePublish(selected)}>
+                {selected.published_at ? "إلغاء النشر" : "نشر"}
+              </Button>
+              <Button variant="secondary" onClick={() => setSelectedId(null)}>إغلاق</Button>
+            </div>
           </div>
 
+          <Alert tone="info" title="مسار العمل (بدون تخمين)">
+            <ol className="mt-1 list-decimal space-y-1 pe-4 text-xs">
+              <li><strong>الطبقات</strong>: صنّف المحتوى (عامة تظهر للزوار / خاصة داخلية فقط).</li>
+              <li><strong>العناصر</strong>: أضف مواقع على طبقة (يدوياً أو رفع CSV).</li>
+              <li><strong>الحقول</strong> (اختياري): بيانات إضافية لكل عنصر.</li>
+              <li><strong>الظهور ثم النشر</strong>: راجع مختلطة/عامة/خاصة ثم انشر للعموم.</li>
+              <li><strong>التعهدات</strong>: مساهمات/تعهدات الجمهور الظاهرة على الخريطة (اعتماد → تنفيذ).</li>
+            </ol>
+          </Alert>
           <Tabs active={tab} onChange={setTab} tabs={[
-            { key: "layers", label: `الطبقات (${layers.length})` },
-            { key: "fields", label: `الحقول (${fields.length})` },
-            { key: "items", label: `العناصر (${items.length})` },
-            { key: "contributions", label: `التعهدات (${contributions.length})` },
+            { key: "layers", label: `١) إدارة الطبقات (${layers.length})` },
+            { key: "items", label: `٢) إضافة/إدارة العناصر (${items.length})` },
+            { key: "fields", label: `٣) إدارة الحقول (${fields.length})` },
+            { key: "contributions", label: `٤) التعهدات العامة (${contributions.length})` },
           ]} />
 
           {tab === "layers" && (
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-brand-gray">الطبقة مجموعة عناصر. «عامة» تظهر للزوار؛ «خاصة» للإدارة فقط (مهمة عندما تكون الخريطة مختلطة).</p>
+              {layers.length === 0 && <p className="text-sm text-brand-gray">لا طبقات بعد — أضف طبقة قبل إضافة عناصر.</p>}
               {layers.map((l) => (
-                <div key={l.id} className="flex items-center gap-3 text-sm">
-                  <strong>{l.name}</strong>
+                <div key={l.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-surface-border p-3 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-primary">{l.name}</div>
+                    <div className="text-xs text-brand-gray">{l.visibility === "public" ? "ظاهرة للزوار (عامة)" : "مخفية عن الزوار (خاصة)"}</div>
+                  </div>
                   <Badge variant={l.visibility === "public" ? "success" : "warning"}>{l.visibility === "public" ? "عامة" : "خاصة"}</Badge>
+                  <Button type="button" variant="danger" size="sm" onClick={() => setDeleteTarget({ kind: "layer", id: l.id, label: l.name })}>حذف</Button>
                 </div>
               ))}
-              <form className="mt-3 flex flex-wrap items-end gap-2"
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  const ok = await post("/api/maps/admin/layers/", { map: selected.id, name: layerForm.name, visibility: layerForm.visibility, order: layers.length }, "أُضيفت الطبقة");
-                  if (ok) setLayerForm({ name: "", visibility: "public" });
-                }}>
-                <div className="w-44"><Input label="اسم الطبقة" value={layerForm.name} onChange={(e) => setLayerForm({ ...layerForm, name: e.target.value })} required /></div>
-                <div className="w-32">
-                  <Select label="الظهور" value={layerForm.visibility} onChange={(e) => setLayerForm({ ...layerForm, visibility: e.target.value })}>
+              <Card className="bg-surface-muted">
+                <h3 className="mb-2 text-sm font-bold text-primary">إضافة طبقة</h3>
+                <form className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const ok = await post("/api/maps/admin/layers/", { map: selected.id, name: layerForm.name, visibility: layerForm.visibility, order: layers.length }, "أُضيفت الطبقة");
+                    if (ok) setLayerForm({ name: "", visibility: "public" });
+                  }}>
+                  <Input label="اسم الطبقة" value={layerForm.name} onChange={(e) => setLayerForm({ ...layerForm, name: e.target.value })} required />
+                  <Select
+                    label="ظهور الطبقة"
+                    value={layerForm.visibility}
+                    onChange={(e) => setLayerForm({ ...layerForm, visibility: e.target.value })}
+                    hint="خاصة = لا تظهر للعموم حتى لو نُشرت الخريطة"
+                  >
                     <option value="public">عامة</option>
                     <option value="private">خاصة</option>
                   </Select>
-                </div>
-                <Button type="submit" variant="secondary">إضافة طبقة</Button>
-              </form>
+                  <div className="sm:col-span-2"><Button type="submit" variant="secondary">إضافة طبقة</Button></div>
+                </form>
+              </Card>
             </div>
           )}
 
@@ -205,13 +319,15 @@ export default function MapsAdmin() {
               {fields.map((f) => (
                 <div key={f.id} className="flex flex-wrap items-center gap-2 text-sm">
                   <strong>{f.label}</strong>
-                  <code className="text-xs text-brand-gray" dir="ltr">{f.key}</code>
-                  <Badge>{f.type}</Badge>
+                  
+                  <Badge>{arLabel(FIELD_TYPE_LABELS, f.type)}</Badge>
                   {f.required && <Badge variant="warning">إلزامي</Badge>}
                   <Badge variant={f.is_public ? "success" : "danger"}>{f.is_public ? "عام" : "داخلي"}</Badge>
+                  <Button type="button" variant="danger" size="sm" onClick={() => setDeleteTarget({ kind: "field", id: f.id, label: f.label })}>حذف</Button>
                 </div>
               ))}
-              <form className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-6"
+              <p className="mt-3 text-xs text-brand-gray">طريقة الإضافة: أدخل التسمية → اختر النوع → (خيارات إن لزم) → حدّد إلزامي/عام → إضافة. مفتاح الحقل يُشتق تلقائياً من التسمية.</p>
+              <form className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
                 onSubmit={async (e) => {
                   e.preventDefault();
                   const options = fieldForm.type === "select"
@@ -223,17 +339,20 @@ export default function MapsAdmin() {
                   }, "أُضيف الحقل");
                   if (ok) setFieldForm({ key: "", label: "", type: "text", required: false, is_public: true, options: "" });
                 }}>
-                <Input label="المفتاح (لاتيني)" value={fieldForm.key} onChange={(e) => setFieldForm({ ...fieldForm, key: e.target.value })} dir="ltr" required />
-                <Input label="التسمية" value={fieldForm.label} onChange={(e) => setFieldForm({ ...fieldForm, label: e.target.value })} required />
+                <Input label="التسمية" value={fieldForm.label} onChange={(e) => setFieldForm({
+                  ...fieldForm,
+                  label: e.target.value,
+                  key: fieldForm.key && fieldForm.key !== fieldForm.label.replace(/\s+/g, "_") ? fieldForm.key : e.target.value.trim().replace(/\s+/g, "_").replace(/[^\w\u0600-\u06FF_]/g, "").toLowerCase(),
+                })} required />
                 <Select label="النوع" value={fieldForm.type} onChange={(e) => setFieldForm({ ...fieldForm, type: e.target.value })}>
-                  {FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {FIELD_TYPES.map((t) => <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>)}
                 </Select>
                 {fieldForm.type === "select" && (
                   <Input label="الخيارات (مفصولة بفواصل)" value={fieldForm.options} onChange={(e) => setFieldForm({ ...fieldForm, options: e.target.value })} />
                 )}
-                <div className="flex items-end gap-3 text-sm">
-                  <label className="flex items-center gap-1"><input type="checkbox" checked={fieldForm.required} onChange={(e) => setFieldForm({ ...fieldForm, required: e.target.checked })} /> إلزامي</label>
-                  <label className="flex items-center gap-1"><input type="checkbox" checked={fieldForm.is_public} onChange={(e) => setFieldForm({ ...fieldForm, is_public: e.target.checked })} /> عام</label>
+                <div className="flex flex-wrap items-end gap-3 text-sm">
+                  <Checkbox label="إلزامي" checked={fieldForm.required} onChange={(e) => setFieldForm({ ...fieldForm, required: e.target.checked })} />
+                  <Checkbox label="عام" checked={fieldForm.is_public} onChange={(e) => setFieldForm({ ...fieldForm, is_public: e.target.checked })} />
                 </div>
                 <div className="flex items-end"><Button type="submit" variant="secondary">إضافة حقل</Button></div>
               </form>
@@ -248,11 +367,18 @@ export default function MapsAdmin() {
                     <strong>{i.name}</strong>
                     <span className="text-xs text-brand-gray">({i.layer_name})</span>
                     <span className="text-xs text-brand-gray" dir="ltr">{i.lat.toFixed(4)}, {i.lng.toFixed(4)}</span>
-                    <Badge variant={i.status === "active" ? "success" : "warning"}>{i.status}</Badge>
+                    <Badge variant={i.status === "active" ? "success" : "warning"}>{arLabel(ITEM_STATUS_LABELS, i.status)}</Badge>
+                    <a href={externalMapUrl(i.lat, i.lng)} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
+                      الذهاب للموقع ↗
+                    </a>
+                    <Button type="button" variant="danger" size="sm" onClick={() => setDeleteTarget({ kind: "item", id: i.id, label: i.name })}>حذف</Button>
                   </div>
                 ))}
                 {items.length === 0 && <p className="text-brand-gray">لا عناصر بعد.</p>}
               </div>
+
+              <BulkUploadItems mapId={selected.id} onDone={() => void loadChildren(selected.id)} />
 
               {/* نموذج إدخال ديناميكي مبني على مخطط MapItemField */}
               <h3 className="mb-2 text-sm font-bold text-primary">إضافة عنصر (نموذج ديناميكي من مخطط الخريطة)</h3>
@@ -279,8 +405,8 @@ export default function MapsAdmin() {
                 </Select>
                 <Input label="الاسم" value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} required />
                 <div className="grid grid-cols-2 gap-2">
-                  <Input label="Lat" value={itemForm.lat} onChange={(e) => setItemForm({ ...itemForm, lat: e.target.value })} dir="ltr" required />
-                  <Input label="Lng" value={itemForm.lng} onChange={(e) => setItemForm({ ...itemForm, lng: e.target.value })} dir="ltr" required />
+                  <Input label="خط العرض" value={itemForm.lat} onChange={(e) => setItemForm({ ...itemForm, lat: e.target.value })} dir="ltr" required />
+                  <Input label="خط الطول" value={itemForm.lng} onChange={(e) => setItemForm({ ...itemForm, lng: e.target.value })} dir="ltr" required />
                 </div>
                 {fields.map((f) => {
                   const value = itemForm.data[f.key] ?? "";
@@ -315,6 +441,9 @@ export default function MapsAdmin() {
 
           {tab === "contributions" && (
             <div className="mt-4 space-y-2 text-sm">
+              <Alert tone="info" title="التعهدات = مساهمات/تعهدات الجمهور الظاهرة على الخريطة">
+                تعهد عام مرتبط بعنصر (كمية/فئة). المسار: بانتظار ← اعتماد ← تنفيذ. ليست طبقات ولا حقولاً.
+              </Alert>
               {contributions.map((c) => (
                 <div key={c.id} className="flex flex-wrap items-center gap-2">
                   <strong>{c.name}</strong>
@@ -322,18 +451,18 @@ export default function MapsAdmin() {
                   {c.item_name && <span className="text-xs text-brand-gray">{c.item_name}</span>}
                   {c.category && <Badge>{c.category}</Badge>}
                   <span>× {c.quantity}</span>
-                  <Badge variant={c.status === "fulfilled" ? "success" : c.status === "cancelled" ? "danger" : "warning"}>{c.status}</Badge>
+                  <Badge variant={c.status === "fulfilled" ? "success" : c.status === "cancelled" ? "danger" : "warning"}>{arLabel(CONTRIB_STATUS_LABELS, c.status)}</Badge>
                   {c.status === "pending" && (
                     <>
-                      <button type="button" className="text-xs font-bold text-green-700 hover:underline"
-                        onClick={() => post(`/api/maps/admin/contributions/${c.id}/approve/`, {}, "تم الاعتماد")}>اعتماد</button>
-                      <button type="button" className="text-xs font-bold text-red-600 hover:underline"
-                        onClick={() => post(`/api/maps/admin/contributions/${c.id}/cancel/`, {}, "تم الإلغاء")}>إلغاء</button>
+                      <Button type="button" variant="secondary" size="sm"
+                        onClick={() => post(`/api/maps/admin/contributions/${c.id}/approve/`, {}, "تم الاعتماد")}>اعتماد</Button>
+                      <Button type="button" variant="danger" size="sm"
+                        onClick={() => post(`/api/maps/admin/contributions/${c.id}/cancel/`, {}, "تم الإلغاء")}>إلغاء</Button>
                     </>
                   )}
                   {c.status === "approved" && (
-                    <button type="button" className="text-xs font-bold text-primary hover:underline"
-                      onClick={() => post(`/api/maps/admin/contributions/${c.id}/fulfill/`, {}, "تم التنفيذ")}>تنفيذ</button>
+                    <Button type="button" variant="ghost" size="sm"
+                      onClick={() => post(`/api/maps/admin/contributions/${c.id}/fulfill/`, {}, "تم التنفيذ")}>تنفيذ</Button>
                   )}
                 </div>
               ))}
@@ -342,6 +471,96 @@ export default function MapsAdmin() {
           )}
         </Card>
       )}
+
+      <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="تأكيد الحذف">
+        <p className="mb-4 text-sm text-brand-gray">
+          حذف «{deleteTarget?.label}»؟ لا يمكن التراجع.
+        </p>
+        <div className="flex gap-2">
+          <Button type="button" variant="danger" disabled={deleteBusy} onClick={() => void confirmDelete()}>
+            {deleteBusy ? "جاري الحذف…" : "حذف"}
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => setDeleteTarget(null)}>إلغاء</Button>
+        </div>
+      </Modal>
     </AdminShell>
+  );
+}
+
+/**
+ * رفع مواقع بالجملة عبر CSV (UX2 P4 · 3.7).
+ * الإحداثيات تُقبل بأي صيغة (رابط Google/خام) وتُطبَّع على الخادم.
+ */
+function BulkUploadItems({ mapId, onDone }: { mapId: number; onDone: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ created: number; errors: Array<{ row: number; reason: string }> } | null>(null);
+
+  const upload = async (file: File) => {
+    setBusy(true);
+    setResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("map", String(mapId));
+      fd.append("file", file);
+      const res = await authFetch("/api/maps/admin/items/bulk_upload/", { method: "POST", body: fd });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data) {
+        setResult(data);
+        toast.success({ title: `أُضيف ${data.created} موقعاً`, description: data.errors.length ? `${data.errors.length} صفوف بها أخطاء` : undefined });
+        onDone();
+      } else {
+        toast.error({ title: data?.detail || "تعذّر الرفع" });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const downloadTemplate = async () => {
+    const res = await authFetch(`/api/maps/admin/items/template/?map=${mapId}`);
+    if (!res.ok) { toast.error({ title: "تعذّر تنزيل القالب" }); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "map_items_template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="mt-4 rounded-lg border border-surface-border p-3">
+      <h3 className="mb-2 text-sm font-bold text-primary">رفع مواقع بالجملة (CSV)</h3>
+      <p className="mb-2 text-xs text-brand-gray">
+        نزّل القالب، عبّئ الأعمدة (الاسم، الإحداثيات، الطبقة)، ثم ارفعه. عمود «الإحداثيات» يقبل
+        رابط خرائط Google أو إحداثيات خام مثل <code dir="ltr">24.71, 46.67</code>.
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="button" variant="secondary" size="sm" onClick={() => void downloadTemplate()}>تنزيل القالب</Button>
+        <label className="btn-primary btn-sm" style={{ cursor: busy ? "not-allowed" : "pointer" }}>
+          {busy ? "جاري الرفع…" : "اختيار ملف CSV"}
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            className="sr-only"
+            disabled={busy}
+            aria-label="رفع ملف مواقع CSV"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ""; }}
+          />
+        </label>
+      </div>
+      {result && result.errors.length > 0 && (
+        <div className="mt-3">
+          <Alert tone="warning" title={`${result.errors.length} صفوف لم تُضَف`}>
+            <ul className="mt-1 max-h-32 list-disc space-y-0.5 overflow-y-auto pe-4 text-xs">
+              {result.errors.slice(0, 20).map((er, i) => (
+                <li key={i}>الصف {er.row}: {er.reason}</li>
+              ))}
+            </ul>
+          </Alert>
+        </div>
+      )}
+    </div>
   );
 }

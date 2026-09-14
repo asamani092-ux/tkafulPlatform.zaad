@@ -38,7 +38,7 @@ export default function ProjectIdeas() {
 
   return (
     <AdminShell>
-      <h1 className="mb-4 text-2xl font-bold text-primary">أفكار المشاريع (الاقتراحات)</h1>
+      <h1 className="mb-4 text-2xl font-bold text-primary">الاقتراحات</h1>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {items.length === 0 ? <Card><p className="text-center text-sm text-brand-gray">لا توجد اقتراحات.</p></Card> :
           items.map((s) => (

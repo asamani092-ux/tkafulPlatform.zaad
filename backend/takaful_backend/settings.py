@@ -64,6 +64,8 @@ INSTALLED_APPS = [
     "maps",          # نظام الخرائط المتعددة
     "sponsorships",  # الكفالات (منقولة من saqya — D-02)
     "volunteering",  # التطوع (منقول من takaful_app — D-02)
+    "services",      # الخدمات (Phase A4)
+    "reporting",     # التقارير والإحصائيات (Phase A4)
 ]
 
 
@@ -166,6 +168,9 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@alzad.org")
 
 EXTERNAL_STORE_URL = os.environ.get("EXTERNAL_STORE_URL", "")
 
+# Internal UAT evaluation form status API — off by default; never set in production.
+UAT_ENABLED = os.environ.get("UAT_ENABLED", "False").lower() in ("1", "true", "yes")
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ===========================
 
@@ -230,6 +235,7 @@ REST_FRAMEWORK = {
         "user": "240/min",
         "auth": "10/min",      # تسجيل/دخول
         "public_write": "20/min",  # النماذج العامة (اقتراح/طلب خدمة/سقيا)
+        "broadcast": "10/hour",    # بث إشعارات المشرف
     },
 }
 

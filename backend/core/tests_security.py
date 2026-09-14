@@ -10,7 +10,7 @@ from django.db import connection
 from django.test import TransactionTestCase, override_settings
 from rest_framework.test import APITestCase
 
-from saqya.models import Sponsorship, Order, Invoice, Documentation, Payment
+from sponsorships.models import Sponsorship, Order, Invoice, Documentation, Payment
 
 
 def make_user(email, role):
@@ -109,6 +109,14 @@ class PrivateMediaSecurityTests(APITestCase):
 class ConcurrentPaymentTests(TransactionTestCase):
     def setUp(self):
         from rest_framework.test import APIClient
+        from core.models import PlatformSetting
+        from core.runtime_config import clear_runtime_config_cache
+
+        s = PlatformSetting.load()
+        s.sponsorship_payments_enabled = True
+        s.save()
+        clear_runtime_config_cache()
+
         self.client = APIClient()
         self.donor = make_user("pay@x.com", "donor")
         self.client.force_authenticate(self.donor)
@@ -195,6 +203,16 @@ class UploadValidationTests(APITestCase):
         self.assertEqual(res.status_code, 400)
 
     def test_reject_invalid_gps(self):
+        # GPS validation is config-gated (sponsorship_gps_documentation).
+        # Zaad default=False strips coords; when enabled, invalid GPS must 400.
+        from core.models import PlatformSetting
+        from core.runtime_config import clear_runtime_config_cache
+
+        s = PlatformSetting.load()
+        s.sponsorship_gps_documentation = True
+        s.save(update_fields=["sponsorship_gps_documentation"])
+        clear_runtime_config_cache()
+
         self.client.force_authenticate(self.rep)
         f = SimpleUploadedFile("p.jpg", b"x", content_type="image/jpeg")
         res = self.client.post("/api/saqya/documentation/", {

@@ -7,7 +7,9 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from django.db import transaction
 from accounts.models import Profile
-from volunteering.models import Project
+from volunteering import project_helpers
+from volunteering.models import VolunteeringProfile
+from projects.models import Project
 import openpyxl
 from datetime import datetime
 
@@ -146,30 +148,37 @@ class Command(BaseCommand):
 
             project_type = row[col_indices.get('category', 1)] if 'category' in col_indices else None
 
-            project_data = {
-                'desc': str(row[col_indices.get('desc', 2)] or '').strip(),
+            profile_data = {
                 'category': self.get_category(project_type),
                 'donation_amount': self.parse_decimal(row[col_indices.get('donation_amount', 3)] if 'donation_amount' in col_indices else 0),
                 'location': str(row[col_indices.get('location', 4)] or '').strip() if 'location' in col_indices else '',
-                'start_date': self.parse_date(row[col_indices.get('start_date', 5)] if 'start_date' in col_indices else None),
-                'end_date': self.parse_date(row[col_indices.get('end_date', 6)] if 'end_date' in col_indices else None),
                 'implementation_requirements': str(row[col_indices.get('implementation_requirements', 7)] or '').strip() if 'implementation_requirements' in col_indices else '',
                 'project_goals': str(row[col_indices.get('project_goals', 8)] or '').strip() if 'project_goals' in col_indices else '',
-                'status': 'ACTIVE',
+                'volunteer_status': 'ACTIVE',
             }
+            desc = str(row[col_indices.get('desc', 2)] or '').strip()
+            start_date = self.parse_date(row[col_indices.get('start_date', 5)] if 'start_date' in col_indices else None)
+            end_date = self.parse_date(row[col_indices.get('end_date', 6)] if 'end_date' in col_indices else None)
 
-            # Check if project exists
-            project, created = Project.objects.update_or_create(
-                title=title,
-                defaults=project_data
-            )
-
-            if created:
-                created_count += 1
-                self.stdout.write(f'  Created project: {title}')
-            else:
+            platform = Project.objects.filter(name=title).first()
+            if platform and VolunteeringProfile.objects.filter(project=platform).exists():
+                profile = platform.volunteering_profile
+                platform.description = desc
+                platform.start_date = start_date
+                platform.end_date = end_date
+                platform.save()
+                for k, v in profile_data.items():
+                    setattr(profile, k, v)
+                profile.save()
                 updated_count += 1
                 self.stdout.write(f'  Updated project: {title}')
+            else:
+                project_helpers.create_volunteering_project(
+                    title=title, desc=desc, start_date=start_date, end_date=end_date,
+                    **profile_data,
+                )
+                created_count += 1
+                self.stdout.write(f'  Created project: {title}')
 
         self.stdout.write(self.style.SUCCESS(
             f'Projects: {created_count} created, {updated_count} updated'

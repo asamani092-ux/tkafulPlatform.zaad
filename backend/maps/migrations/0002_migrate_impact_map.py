@@ -12,7 +12,7 @@
 """
 from django.db import migrations
 
-from maps.sync import MAP_TITLE, PROJECT_SLUG, sync_impact_map_to_maps
+from maps.migrations._impact_map_sync import MAP_TITLE, PROJECT_SLUG, sync_impact_map_to_maps
 
 
 def forward(apps, schema_editor):

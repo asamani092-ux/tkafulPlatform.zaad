@@ -44,8 +44,12 @@ export default function Suggest() {
                 className="input-field" style={{ resize: "none" }} placeholder="اكتب اقتراحك هنا…" required />
             </div>
             <Input type="email" dir="ltr" label="بريدك الإلكتروني" placeholder="example@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            <Button type="submit" className="w-full">إرسال</Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" className="flex-1">إرسال</Button>
+              <Button type="button" variant="secondary" onClick={() => { setSuggestion(""); setEmail(""); }}>مسح الحقول</Button>
+            </div>
           </form>
+          <p className="mt-3 text-xs text-brand-gray">لا يُعدّل الاقتراح بعد الإرسال — يُراجع من /Admin/requests/suggestions.</p>
         </Card>
       </main>
     </div>

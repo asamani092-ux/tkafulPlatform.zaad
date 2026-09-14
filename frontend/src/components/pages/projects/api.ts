@@ -30,34 +30,3 @@ export const fetchPublicMapDetail = (mapId: number) =>
 
 export const fetchPublicMapSummary = (mapId: number) =>
   getJson<MapSummaryInfo>(`/api/maps/public/${mapId}/summary/`);
-
-export async function submitMapContribution(
-  mapId: number,
-  payload: {
-    item?: number | null;
-    category?: string;
-    name: string;
-    phone: string;
-    mode: string;
-    quantity: number;
-    note?: string;
-  },
-): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/maps/public/${mapId}/contributions/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const msg =
-        data.phone?.[0] || data.quantity?.[0] || data.item?.[0] || data.detail ||
-        "تعذّر إرسال التعهد";
-      return { ok: false, error: typeof msg === "string" ? msg : JSON.stringify(msg) };
-    }
-    return { ok: true };
-  } catch {
-    return { ok: false, error: "تعذّر الاتصال بالخادم" };
-  }
-}

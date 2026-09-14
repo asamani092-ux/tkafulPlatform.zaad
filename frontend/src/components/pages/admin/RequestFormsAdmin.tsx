@@ -1,0 +1,413 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import QRCode from "qrcode";
+import AdminShell from "../../layout/AdminShell";
+import Card from "../../ui/Card";
+import Button from "../../ui/Button";
+import Input from "../../ui/Input";
+import Select from "../../ui/Select";
+import Badge from "../../ui/Badge";
+import Checkbox from "../../ui/Checkbox";
+import Tabs from "../../ui/Tabs";
+import Modal from "../../ui/Modal";
+import { LoadingState } from "../../feedback/PageStates";
+import { useToast } from "../../../contexts/ToastContext";
+import { authFetch } from "../../../lib/api";
+import { autoFieldKeyFromLabel, autoSlugFromLabel } from "../../../utils/autoSlug";
+import { labelAr } from "../../../i18n/labels";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
+
+type FieldType = "text" | "textarea" | "number" | "select" | "boolean" | "date";
+interface SchemaField { key: string; label: string; type: FieldType; required: boolean; options?: string[]; placeholder?: string }
+interface RForm {
+  id: number; project: number | null; project_name: string | null; title: string; slug: string;
+  description: string; fields_schema: SchemaField[]; is_active: boolean; submissions_count: number;
+  created_at?: string;
+}
+interface Submission { id: number; form: number; form_title: string; project_name: string | null; data: Record<string, unknown>; status: string; admin_notes: string; created_at: string }
+interface ProjectOption { id: number; name: string }
+
+const FIELD_TYPE_LABELS: Record<FieldType, string> = {
+  text: "نص", textarea: "نص طويل", number: "رقم", select: "قائمة اختيار", boolean: "نعم/لا", date: "تاريخ",
+};
+const SUB_STATUS: Record<string, string> = { PENDING: "قيد المراجعة", APPROVED: "مقبول", REJECTED: "مرفوض", DONE: "منجز" };
+
+/** نطاق الطلبات — إنشاء/تعديل نموذج بنافذة عائمة؛ مفتاح الحقل تلقائي من التسمية. */
+export default function RequestFormsAdmin() {
+  const toast = useToast();
+  const [tab, setTab] = useState("forms");
+  const [forms, setForms] = useState<RForm[]>([]);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<RForm | null>(null);
+  const [shareForm, setShareForm] = useState<RForm | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState("");
+
+  const [meta, setMeta] = useState({ title: "", slug: "", project: "", description: "", is_active: true });
+  const [fields, setFields] = useState<SchemaField[]>([]);
+  const [fieldDraft, setFieldDraft] = useState<{ label: string; type: FieldType; required: boolean; placeholder: string }>({ label: "", type: "text", required: false, placeholder: "" });
+  const [optionsText, setOptionsText] = useState("");
+
+  const [selected, setSelected] = useState<RForm | null>(null);
+  const [subs, setSubs] = useState<Submission[]>([]);
+
+  const labelMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const f of selected?.fields_schema || []) m[f.key] = f.label || "حقل";
+    return m;
+  }, [selected]);
+
+  const shareUrl = shareForm ? `${window.location.origin}/forms/${shareForm.slug}` : "";
+
+  useEffect(() => {
+    if (!shareForm) {
+      setQrDataUrl("");
+      return;
+    }
+    void QRCode.toDataURL(shareUrl, { margin: 1, width: 200 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(""));
+  }, [shareForm, shareUrl]);
+
+  const load = useCallback(async (mode: AdminLoadMode = "initial") => {
+    const flip = shouldFlipPageLoading(mode);
+    if (flip) setLoading(true);
+    try {
+      const [fRes, pRes] = await Promise.all([
+        authFetch("/api/admin/request-forms/"),
+        authFetch("/api/platform/projects/"),
+      ]);
+      setForms(fRes.ok ? await fRes.json() : []);
+      if (pRes.ok) {
+        const pd = await pRes.json();
+        const arr = Array.isArray(pd) ? pd : pd.results || [];
+        setProjects(arr.map((p: { id: number; name: string }) => ({ id: p.id, name: p.name })));
+      }
+    } finally {
+      if (flip) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load("initial"); }, []); // mount-once — load مستقر بـ []
+
+  const resetFormBuilder = () => {
+    setMeta({ title: "", slug: "", project: "", description: "", is_active: true });
+    setFields([]);
+    setFieldDraft({ label: "", type: "text", required: false, placeholder: "" });
+    setOptionsText("");
+  };
+
+  const openCreate = () => {
+    resetFormBuilder();
+    setEditing(null);
+    setCreateOpen(true);
+  };
+
+  const openEdit = (f: RForm) => {
+    setMeta({
+      title: f.title,
+      slug: f.slug,
+      project: f.project != null ? String(f.project) : "",
+      description: f.description || "",
+      is_active: f.is_active,
+    });
+    setFields([...f.fields_schema]);
+    setFieldDraft({ label: "", type: "text", required: false, placeholder: "" });
+    setOptionsText("");
+    setEditing(f);
+    setCreateOpen(true);
+  };
+
+  const closeFormModal = () => {
+    setCreateOpen(false);
+    setEditing(null);
+    resetFormBuilder();
+  };
+
+  const addField = () => {
+    if (!fieldDraft.label.trim()) { toast.error({ title: "التسمية مطلوبة" }); return; }
+    let key = autoFieldKeyFromLabel(fieldDraft.label);
+    let n = 2;
+    while (fields.some((f) => f.key === key)) {
+      key = `${autoFieldKeyFromLabel(fieldDraft.label)}_${n}`;
+      n += 1;
+    }
+    const options = fieldDraft.type === "select" ? optionsText.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
+    setFields([...fields, { key, label: fieldDraft.label, type: fieldDraft.type, required: fieldDraft.required, options, placeholder: fieldDraft.placeholder.trim() || undefined }]);
+    setFieldDraft({ label: "", type: "text", required: false, placeholder: "" });
+    setOptionsText("");
+  };
+
+  const saveForm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (fields.length === 0) { toast.error({ title: "أضِف حقلاً واحداً على الأقل" }); return; }
+    const slug = meta.slug.trim() || autoSlugFromLabel(meta.title, "form");
+    const body = {
+      title: meta.title,
+      description: meta.description,
+      project: meta.project ? Number(meta.project) : null,
+      fields_schema: fields,
+      is_active: meta.is_active,
+    };
+    const url = editing ? `/api/admin/request-forms/${editing.id}/` : "/api/admin/request-forms/";
+    const res = await authFetch(url, {
+      method: editing ? "PATCH" : "POST",
+      body: JSON.stringify(editing ? body : { ...body, slug }),
+    });
+    if (res.ok) {
+      toast.success({ title: editing ? "تم تحديث النموذج" : "تم إنشاء النموذج" });
+      closeFormModal();
+      void load("silent");
+    } else {
+      const d = await res.json().catch(() => ({}));
+      const rawSlug = d.slug?.[0];
+      const slugMsg = typeof rawSlug === "string" && /already exists|unique|موجود/i.test(rawSlug)
+        ? "المعرّف (slug) مستخدم مسبقاً — غيّر العنوان أو أعد المحاولة"
+        : rawSlug;
+      const msg = slugMsg || d.fields_schema?.[0] || d.detail || "تعذّر الحفظ";
+      toast.error({ title: typeof msg === "string" ? msg : JSON.stringify(msg) });
+    }
+  };
+
+  const toggleActive = async (f: RForm) => {
+    const res = await authFetch(`/api/admin/request-forms/${f.id}/`, { method: "PATCH", body: JSON.stringify({ is_active: !f.is_active }) });
+    if (res.ok) { toast.success({ title: f.is_active ? "أُلغي التفعيل" : "تم التفعيل" }); void load("silent"); }
+  };
+
+  const removeForm = async (f: RForm) => {
+    if (!window.confirm(`حذف النموذج «${f.title}» وكل طلباته؟`)) return;
+    const res = await authFetch(`/api/admin/request-forms/${f.id}/`, { method: "DELETE" });
+    if (res.ok) { toast.success({ title: "تم الحذف" }); if (selected?.id === f.id) setSelected(null); void load("silent"); }
+  };
+
+  const openSubmissions = async (f: RForm) => {
+    setSelected(f); setTab("submissions"); setSubs([]);
+    const res = await authFetch(`/api/admin/request-submissions/?form=${f.id}`);
+    if (res.ok) { const d = await res.json(); setSubs(d.results || d); }
+  };
+
+  const setSubStatus = async (s: Submission, status: string) => {
+    const res = await authFetch(`/api/admin/request-submissions/${s.id}/`, { method: "PATCH", body: JSON.stringify({ status }) });
+    if (res.ok && selected) { toast.success({ title: "تم تحديث الحالة" }); void openSubmissions(selected); }
+  };
+
+  const copyShareUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success({ title: "تم نسخ الرابط" });
+    } catch {
+      toast.error({ title: "تعذّر النسخ" });
+    }
+  };
+
+  return (
+    <AdminShell>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-extrabold text-primary">نماذج الطلبات</h1>
+        {tab === "forms" && <Button type="button" onClick={openCreate}>إضافة نموذج</Button>}
+      </div>
+      <div className="mb-4">
+        <Tabs active={tab} onChange={setTab} tabs={[
+          { key: "forms", label: `النماذج (${forms.length})` },
+          { key: "submissions", label: selected ? `الطلبات: ${selected.title}` : "الطلبات" },
+        ]} />
+      </div>
+
+      {tab === "forms" && (
+        loading ? <LoadingState title="جاري التحميل…" /> : (
+          <div className="space-y-3">
+            {forms.map((f) => (
+              <Card key={f.id}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                    <h3 className="truncate text-base font-bold text-primary">{f.title}</h3>
+                    <Badge variant={f.is_active ? "success" : "danger"}>{f.is_active ? "نشط" : "غير نشط"}</Badge>
+                    <span className="text-xs text-brand-gray">
+                      {f.created_at ? new Date(f.created_at).toLocaleDateString("ar") : "—"}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="secondary" size="sm" onClick={() => openSubmissions(f)}>التفاصيل ({f.submissions_count})</Button>
+                    <Button type="button" variant="secondary" size="sm" onClick={() => openEdit(f)}>تعديل</Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShareForm(f)}>مشاركة</Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => toggleActive(f)}>{f.is_active ? "تعطيل" : "تفعيل"}</Button>
+                    <Button type="button" variant="danger" size="sm" onClick={() => removeForm(f)}>حذف</Button>
+                  </div>
+                </div>
+              </Card>
+            ))}
+            {forms.length === 0 && <p className="text-brand-gray">لا نماذج بعد — اضغط «إضافة نموذج».</p>}
+          </div>
+        )
+      )}
+
+      {tab === "submissions" && (
+        <div className="space-y-3">
+          {!selected && <p className="text-brand-gray">اختر نموذجاً من تبويب «النماذج» لعرض طلباته.</p>}
+          {selected && (
+            <p className="text-sm text-brand-gray">
+              مراجعة الطلبات: قبول / رفض / إنجاز تغيّر حالة الطلب للمتابعة الإدارية.
+              <>الرابط العام: <button type="button" className="font-bold text-primary underline" onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/forms/${selected.slug}`)}>نسخ الرابط</button></>
+            </p>
+          )}
+          {selected && subs.length === 0 && <p className="text-brand-gray">لا طلبات على هذا النموذج بعد.</p>}
+          {subs.map((s) => (
+            <Card key={s.id}>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <Badge variant={s.status === "APPROVED" ? "success" : s.status === "REJECTED" ? "danger" : s.status === "DONE" ? "primary" : "warning"}>
+                  {labelAr(SUB_STATUS, s.status)}
+                </Badge>
+                <span className="text-xs text-brand-gray">{new Date(s.created_at).toLocaleString("ar")}</span>
+              </div>
+              <dl className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
+                {Object.entries(s.data).filter(([k]) => k !== "legacy_id").map(([k, v]) => (
+                  <div key={k} className="flex gap-2">
+                    <dt className="font-bold text-brand-gray">{labelAr(labelMap, k)}:</dt>
+                    <dd>{typeof v === "boolean" ? (v ? "نعم" : "لا") : String(v)}</dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button type="button" variant="secondary" size="sm" onClick={() => setSubStatus(s, "APPROVED")}>قبول</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setSubStatus(s, "REJECTED")}>رفض</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setSubStatus(s, "DONE")}>إنجاز</Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Modal open={createOpen} onClose={closeFormModal} title={editing ? "تعديل نموذج طلب" : "إنشاء نموذج طلب"} wide>
+        <form className="space-y-3" onSubmit={saveForm}>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Input
+              label="عنوان النموذج"
+              value={meta.title}
+              onChange={(e) => {
+                const title = e.target.value;
+                setMeta((m) => ({
+                  ...m,
+                  title,
+                  slug: editing
+                    ? m.slug
+                    : m.slug && m.slug !== autoSlugFromLabel(m.title, "form")
+                      ? m.slug
+                      : autoSlugFromLabel(title, "form"),
+                }));
+              }}
+              required
+            />
+            <Select label="المشروع (اختياري)" value={meta.project} onChange={(e) => setMeta({ ...meta, project: e.target.value })}>
+              <option value="">— بلا مشروع —</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </Select>
+            <Input label="وصف مختصر" value={meta.description} onChange={(e) => setMeta({ ...meta, description: e.target.value })} />
+            {editing && (
+              <div className="flex items-end">
+                <Checkbox label="نشط" checked={meta.is_active} onChange={(e) => setMeta({ ...meta, is_active: e.target.checked })} />
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border border-surface-border p-3">
+              <p className="mb-2 text-sm font-bold text-primary">الحقول ({fields.length})</p>
+              <div className="mb-2 space-y-1">
+                {fields.map((f, i) => (
+                  <div key={f.key} className="flex flex-wrap items-center gap-2 text-sm">
+                    <strong>{f.label}</strong>
+                    <Badge>{FIELD_TYPE_LABELS[f.type]}</Badge>
+                    {f.required && <Badge variant="warning">إلزامي</Badge>}
+                    <Button type="button" variant="danger" size="sm" onClick={() => setFields(fields.filter((_, j) => j !== i))}>إزالة</Button>
+                  </div>
+                ))}
+                {fields.length === 0 && <p className="text-xs text-brand-gray">لا حقول بعد — أضف حقلاً واحداً على الأقل.</p>}
+              </div>
+              <p className="mb-2 text-xs text-brand-gray">طريقة الإضافة: أدخل التسمية → اختر النوع → (خيارات إن لزم) → إلزامي → إضافة. مفتاح الحقل يُشتق تلقائياً ولا يُعرض.</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Input label="تسمية الحقل (عربية)" value={fieldDraft.label} onChange={(e) => setFieldDraft({ ...fieldDraft, label: e.target.value })} />
+                <Select label="النوع" value={fieldDraft.type} onChange={(e) => setFieldDraft({ ...fieldDraft, type: e.target.value as FieldType })}>
+                  {(Object.keys(FIELD_TYPE_LABELS) as FieldType[]).map((t) => <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>)}
+                </Select>
+                <Input label="نص إرشادي (placeholder)" value={fieldDraft.placeholder} onChange={(e) => setFieldDraft({ ...fieldDraft, placeholder: e.target.value })} />
+                {fieldDraft.type === "select" && (
+                  <Input label="الخيارات (بفواصل)" value={optionsText} onChange={(e) => setOptionsText(e.target.value)} />
+                )}
+                <div className="flex items-end"><Checkbox label="إلزامي" checked={fieldDraft.required} onChange={(e) => setFieldDraft({ ...fieldDraft, required: e.target.checked })} /></div>
+                <div className="flex items-end"><Button type="button" variant="secondary" onClick={addField}>إضافة حقل</Button></div>
+              </div>
+            </div>
+
+            <FormPreview title={meta.title} fields={fields} />
+          </div>
+
+          <div className="flex gap-2">
+            <Button type="submit">{editing ? "حفظ التعديلات" : "حفظ النموذج"}</Button>
+            <Button type="button" variant="secondary" onClick={closeFormModal}>إلغاء</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={!!shareForm} onClose={() => setShareForm(null)} title="مشاركة النموذج">
+        {shareForm && (
+          <div className="space-y-4 text-center">
+            <p className="text-sm text-brand-gray">رابط عام بدون بيانات شخصية — يُشارك مع المستفيدين.</p>
+            <p className="break-all rounded-lg bg-surface-muted px-3 py-2 text-sm font-mono text-primary" dir="ltr">{shareUrl}</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button type="button" variant="secondary" onClick={() => void copyShareUrl()}>نسخ الرابط</Button>
+            </div>
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="QR" className="mx-auto rounded-lg border border-surface-border" width={200} height={200} />
+            ) : (
+              <p className="text-xs text-brand-gray">جاري إنشاء رمز QR…</p>
+            )}
+          </div>
+        )}
+      </Modal>
+    </AdminShell>
+  );
+}
+
+/**
+ * معاينة حيّة للنموذج كما يراه مقدّم الطلب (UX2 P4 · 3.5).
+ * عرض فقط — لا إرسال. O(F) على الحقول.
+ */
+function FormPreview({ title, fields }: { title: string; fields: SchemaField[] }) {
+  return (
+    <div className="rounded-lg border border-surface-border bg-surface-muted p-3">
+      <p className="mb-2 text-sm font-bold text-primary">معاينة نموذج المستفيد</p>
+      <div className="rounded-lg bg-surface p-3">
+        <h4 className="mb-3 text-base font-bold text-primary">{title || "عنوان النموذج"}</h4>
+        {fields.length === 0 ? (
+          <p className="text-xs text-brand-gray">ستظهر الحقول هنا فور إضافتها.</p>
+        ) : (
+          <div className="space-y-3">
+            {fields.map((f) => {
+              const label = `${f.label}${f.required ? " *" : ""}`;
+              if (f.type === "select") {
+                return (
+                  <Select key={f.key} label={label} disabled defaultValue="">
+                    <option value="">{f.placeholder || "اختر…"}</option>
+                    {(f.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
+                  </Select>
+                );
+              }
+              if (f.type === "boolean") {
+                return <Checkbox key={f.key} label={label} disabled checked={false} onChange={() => {}} />;
+              }
+              return (
+                <Input
+                  key={f.key}
+                  label={label}
+                  type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                  placeholder={f.placeholder || ""}
+                  disabled
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

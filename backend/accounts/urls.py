@@ -1,11 +1,16 @@
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
 from .views import register, me, update_profile, change_password, logout
+from .views_admin import AdminUserViewSet
 from .serializers import EmailTokenObtainPairSerializer
 from core.throttles import AuthRateThrottle
+
+router = DefaultRouter()
+router.register(r"users", AdminUserViewSet, basename="admin-users")
 
 
 class EmailTokenObtainPairView(TokenObtainPairView):
@@ -30,4 +35,5 @@ urlpatterns = [
     path("profile/", update_profile, name="update_profile"),
     path("change-password/", change_password, name="change_password"),
     path("logout/", logout, name="logout"),
+    path("", include(router.urls)),
 ]

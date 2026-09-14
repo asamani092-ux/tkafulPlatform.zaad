@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState } from "react";
 import type { ReactNode } from "react";
 import { API_BASE_URL } from "../config";
 
@@ -37,26 +37,16 @@ const REFRESH_KEY = "refreshToken";
 const USER_KEY = "takaful_user";
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [access, setAccess] = useState<string | null>(null);
-  const [refresh, setRefresh] = useState<string | null>(null);
-
-  useEffect(() => {
-    const storedUser = localStorage.getItem(USER_KEY);
-    const storedAccess = localStorage.getItem(ACCESS_KEY);
-    const storedRefresh = localStorage.getItem(REFRESH_KEY);
-
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch {
-        localStorage.removeItem(USER_KEY);
-      }
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const stored = localStorage.getItem(USER_KEY);
+      return stored ? (JSON.parse(stored) as User) : null;
+    } catch {
+      return null;
     }
-
-    if (storedAccess) setAccess(storedAccess);
-    if (storedRefresh) setRefresh(storedRefresh);
-  }, []);
+  });
+  const [access, setAccess] = useState<string | null>(() => localStorage.getItem(ACCESS_KEY));
+  const [refresh, setRefresh] = useState<string | null>(() => localStorage.getItem(REFRESH_KEY));
 
   const login = (userData: User, accessToken: string, refreshToken: string) => {
     setUser(userData);

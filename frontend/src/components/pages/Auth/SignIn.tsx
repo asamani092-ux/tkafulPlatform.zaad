@@ -1,14 +1,23 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "../../../contexts/AuthContext";
 import { API_BASE_URL } from "../../../config";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
 import Button from "../../ui/Button";
-import HeroBand from "../../ui/HeroBand";
+
+/** يقبل مسارات داخلية آمنة فقط (يبدأ بـ / وليس //) لتفادي التحويل المفتوح. */
+function safeNext(raw: string | null): string | null {
+  if (!raw) return null;
+  const path = decodeURIComponent(raw);
+  if (path.startsWith("/") && !path.startsWith("//")) return path;
+  return null;
+}
 
 export default function SignIn() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const next = safeNext(searchParams.get("next"));
   const { login } = useAuth();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -53,7 +62,32 @@ export default function SignIn() {
       const userData = await profileRes.json();
       const role = userData.profile?.role || "user";
       login({ name: userData.profile?.name || userData.username, email: userData.email, role }, tokenData.access, tokenData.refresh);
-      navigate(role === "admin" ? "/Admin" : "/");
+      // إعادة المستخدم لوجهته السابقة إن وُجدت (بعد انتهاء جلسة) — RC-B.
+      if (next) {
+        navigate(next, { replace: true });
+        return;
+      }
+      // توجيه صريح لكل دور مفعّل — بلا سقوط صامت لأدوار الكفالات إلى /user/main
+      if (role === "admin") {
+        navigate("/Admin");
+      } else if (role === "manager" || role === "employee") {
+        navigate("/Admin/staff");
+      } else if (role === "donor" || role === "supplier" || role === "representative") {
+        navigate("/projects");
+      } else if (role === "beneficiary") {
+        navigate("/user/main");
+      } else {
+        // user = متطوّع
+        try {
+          const membershipsRes = await fetch(`${API_BASE_URL}/api/platform/my-memberships/`, {
+            headers: { Authorization: `Bearer ${tokenData.access}` },
+          });
+          const memberships = membershipsRes.ok ? (await membershipsRes.json()).memberships || [] : [];
+          navigate(memberships.length > 0 ? "/Admin/projects" : "/user/main");
+        } catch {
+          navigate("/user/main");
+        }
+      }
     } catch {
       setErrors({ form: "حدث خطأ غير متوقع، حاول مرة أخرى." });
       setIsSubmitting(false);
@@ -62,10 +96,12 @@ export default function SignIn() {
 
   return (
     <div>
-      <HeroBand title="نورتنا من جديد" subtitle="سجّل دخولك وأكمل رحلتك في صناعة الأثر." />
       <main className="mx-auto max-w-md px-4 py-12">
         <Card>
-          <h2 className="mb-6 text-center text-2xl font-bold text-primary">تسجيل الدخول</h2>
+          <div className="mb-4 flex justify-center">
+            <img src="/logo.png" alt="جمعية الزاد" style={{ height: 72, width: "auto" }} />
+          </div>
+          <h2 className="mb-6 text-center text-2xl font-bold text-primary">الدخول الموحّد — تكافل وأثر</h2>
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <Input type="email" dir="ltr" label="البريد الإلكتروني" placeholder="example@mail.com"
               value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} error={errors.email} required />
@@ -82,7 +118,6 @@ export default function SignIn() {
           </form>
           <div className="mt-4 space-y-1 text-center text-sm text-brand-gray">
             <p>ليس لديك حساب؟ <Link to="/signup" className="font-semibold text-primary">تسجيل جديد</Link></p>
-            <Link to="/admin/signin" className="font-semibold" style={{ color: "var(--tmkeen-secondary-dark)" }}>هل أنت مشرف؟ سجّل من هنا</Link>
           </div>
         </Card>
       </main>

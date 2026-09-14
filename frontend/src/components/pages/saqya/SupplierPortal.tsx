@@ -7,14 +7,12 @@ import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Badge from "../../ui/Badge";
 import Input from "../../ui/Input";
+import FileInput from "../../ui/FileInput";
 import Modal from "../../ui/Modal";
+import { labelAr, ORDER_STATUS_AR } from "../../../i18n/labels";
 
 interface Order { id: number; sponsorship_type: string; status: string; }
 
-const STATUS_AR: Record<string, string> = {
-  pending: "بانتظار", assigned: "مُسند", preparing: "قيد التحضير",
-  ready: "جاهز", delivered: "مُسلَّم", completed: "مكتمل", cancelled: "ملغى",
-};
 
 export default function SupplierPortal() {
   const { success, error } = useToast();
@@ -58,7 +56,7 @@ export default function SupplierPortal() {
             <Card key={o.id}>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="font-bold text-primary">طلب #{o.id} — {o.sponsorship_type}</h3>
-                <Badge variant="primary">{STATUS_AR[o.status] || o.status}</Badge>
+                <Badge variant="primary">{labelAr(ORDER_STATUS_AR, o.status)}</Badge>
               </div>
               <div className="flex flex-wrap gap-2">
                 {o.status === "assigned" && <Button onClick={() => act(o.id, "prepare")}>بدء التحضير</Button>}
@@ -74,10 +72,7 @@ export default function SupplierPortal() {
           <Input label="رقم الفاتورة" value={inv.invoice_number} onChange={(e) => setInv({ ...inv, invoice_number: e.target.value })} />
           <Input type="number" label="المبلغ" value={inv.amount} onChange={(e) => setInv({ ...inv, amount: e.target.value })} />
           <Input type="number" label="الإجمالي" value={inv.total_amount} onChange={(e) => setInv({ ...inv, total_amount: e.target.value })} />
-          <div>
-            <label className="label-field">ملف الفاتورة</label>
-            <input type="file" className="input-field" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-          </div>
+          <FileInput label="ملف الفاتورة" onChange={(e) => setFile(e.target.files?.[0] || null)} />
           <div className="flex gap-2"><Button onClick={submitInvoice}>رفع</Button><Button variant="secondary" onClick={() => setInvoiceFor(null)}>إلغاء</Button></div>
         </div>
       </Modal>

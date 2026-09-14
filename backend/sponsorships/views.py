@@ -8,19 +8,27 @@ from django.utils import timezone
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from core.throttles import PublicWriteRateThrottle
+from core.roles import CAP_CREATE_SPONSORSHIP, CAP_UPLOAD_DOCUMENTATION, has_capability
+from django.db.models import DecimalField, OuterRef, Subquery, Sum, Value
+from django.db.models.functions import Coalesce
+
 from .models import (
-    SupplierProfile, RepresentativeProfile, Sponsorship, Order, Invoice, Payment, Documentation,
+    SupplierProfile, RepresentativeProfile, Sponsorship, SponsorshipType,
+    Order, Invoice, Payment, Documentation,
 )
 from .serializers import (
     SupplierProfileSerializer, RepresentativeProfileSerializer, SponsorshipSerializer,
-    OrderSerializer, InvoiceSerializer, PaymentSerializer, DocumentationSerializer,
+    SponsorshipTypeSerializer, OrderSerializer, InvoiceSerializer, PaymentSerializer,
+    DocumentationSerializer,
 )
 from .permissions import IsSaqyaAdmin, IsSaqyaStaffOrReadOnly
 from . import notifications as notify
+from notifications.services import notify as platform_notify, EVENT_SPONSORSHIP
+from core.activity import ACTION_ORDER_ASSIGN, ACTION_SPONSORSHIP_APPROVE, log_activity
 from . import services as sponsorship_services
 from .validators import validate_upload_file, validate_gps
 from .payments import get_payment_provider, CheckoutRequest
@@ -41,6 +49,26 @@ def can_access_order(user, order):
     return order.supplier_id == user.id or order.representative_id == user.id
 
 
+def annotate_sponsorship_funding(qs):
+    """
+    يضيف _total_funded بمجموع دفعات completed عبر Subquery (آمن مع distinct).
+    الخاصية Sponsorship.total_funded تبقى للتفصيل/الكود القديم.
+    التعقيد: استعلام قائمة O(1) إضافي بدل N استعلامات.
+    """
+    funded_sq = (
+        Payment.objects.filter(sponsorship_id=OuterRef("pk"), status="completed")
+        .values("sponsorship_id")
+        .annotate(s=Sum("amount"))
+        .values("s")[:1]
+    )
+    return qs.annotate(
+        _total_funded=Coalesce(
+            Subquery(funded_sq, output_field=DecimalField(max_digits=14, decimal_places=2)),
+            Value(0, output_field=DecimalField(max_digits=14, decimal_places=2)),
+        )
+    )
+
+
 # ============ Sponsorships ============
 class SponsorshipViewSet(viewsets.ModelViewSet):
     serializer_class = SponsorshipSerializer
@@ -49,7 +77,13 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         u = self.request.user
         r = role(u)
-        qs = Sponsorship.objects.select_related("donor__profile")
+        qs = annotate_sponsorship_funding(
+            Sponsorship.objects.select_related("donor__profile")
+        )
+        # نطاق المشروع (UX2 P4): البوابة تُفتح من بطاقة مشروع فتُصفّى بكفالاته.
+        project_slug = self.request.query_params.get("project")
+        if project_slug:
+            qs = qs.filter(project__slug=project_slug)
         if r == "admin":
             return qs
         if r == "donor":
@@ -67,33 +101,67 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
         return super().get_throttles()
 
     def perform_create(self, serializer):
-        serializer.save(donor=self.request.user)
+        from core.roles import role_of
+
+        role = role_of(self.request.user)
+        # تسجيل إداري: بلا ربط donor إلزامي؛ المتبرّع يُربط بحسابه
+        if role in ("admin", "manager"):
+            serializer.save(donor=serializer.validated_data.get("donor") or None)
+        else:
+            serializer.save(donor=self.request.user)
 
     def create(self, request, *args, **kwargs):
-        if role(request.user) != "donor":
-            return Response({"detail": "إنشاء الكفالة متاح للمتبرّع فقط"}, status=status.HTTP_403_FORBIDDEN)
+        if not has_capability(request.user, CAP_CREATE_SPONSORSHIP):
+            return Response(
+                {"detail": "إنشاء الكفالة غير مصرّح لدورك"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         return super().create(request, *args, **kwargs)
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
     def approve(self, request, pk=None):
+        from .status_ops import set_sponsorship_status
+
         sp = self.get_object()
-        if sp.status != "pending":
-            return Response({"detail": "يمكن اعتماد الكفالات قيد المراجعة فقط"}, status=400)
-        sp.status = "approved"
+        # pending (قديم) أو available (زاد)
+        if sp.status not in ("pending", "available"):
+            return Response({"detail": "يمكن اعتماد الكفالات المتاحة/قيد المراجعة فقط"}, status=400)
         sp.approved_at = timezone.now()
-        sp.admin_notes = request.data.get("admin_notes", "")
-        sp.save()
+        notes = request.data.get("admin_notes", "")
+        extra = {"approved_at": sp.approved_at}
+        if hasattr(sp, "admin_notes"):
+            extra["admin_notes"] = notes
+        set_sponsorship_status(sp, "sponsored", extra_updates=extra)
         Order.objects.create(sponsorship=sp, status="pending")  # طلب أوّلي بانتظار الإسناد
+        platform_notify(
+            message=f"تم اعتماد الكفالة #{sp.id}",
+            users=[sp.donor] if sp.donor_id else None,
+            roles=["admin"],
+            notification_type="success",
+            link="/Admin/sponsorships",
+            event_type=EVENT_SPONSORSHIP,
+        )
+        log_activity(
+            actor=request.user,
+            action=ACTION_SPONSORSHIP_APPROVE,
+            target=sp,
+            summary=f"اعتماد الكفالة #{sp.id}",
+            request=request,
+        )
         return Response({"message": "تم اعتماد الكفالة", "sponsorship": SponsorshipSerializer(sp).data})
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
     def reject(self, request, pk=None):
+        from .status_ops import set_sponsorship_status
+
         sp = self.get_object()
-        if sp.status != "pending":
-            return Response({"detail": "يمكن رفض الكفالات قيد المراجعة فقط"}, status=400)
-        sp.status = "rejected"
-        sp.rejection_reason = request.data.get("rejection_reason", "")
-        sp.save()
+        if sp.status not in ("pending", "available"):
+            return Response({"detail": "يمكن رفض الكفالات المتاحة/قيد المراجعة فقط"}, status=400)
+        set_sponsorship_status(
+            sp,
+            "cancelled",
+            extra_updates={"rejection_reason": request.data.get("rejection_reason", "")},
+        )
         return Response({"message": "تم رفض الكفالة"})
 
     @action(detail=True, methods=["post"])
@@ -131,7 +199,7 @@ class SponsorshipViewSet(viewsets.ModelViewSet):
             amount_dec = Decimal(str(amount))
         except (InvalidOperation, TypeError):
             return Response({"detail": "مبلغ غير صالح"}, status=400)
-        provider = get_payment_provider()
+        provider = get_payment_provider(sp)
         result = provider.create_checkout(CheckoutRequest(
             sponsorship_id=sp.id,
             amount=amount_dec,
@@ -151,6 +219,9 @@ class OrderViewSet(viewsets.ModelViewSet):
         u = self.request.user
         r = role(u)
         qs = Order.objects.select_related("sponsorship", "supplier__profile", "representative__profile")
+        project_slug = self.request.query_params.get("project")
+        if project_slug:
+            qs = qs.filter(sponsorship__project__slug=project_slug)
         if r == "admin":
             return qs
         if r == "supplier":
@@ -164,12 +235,38 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
     def assign(self, request, pk=None):
         order = self.get_object()
-        order.supplier_id = request.data.get("supplier_id") or order.supplier_id
-        order.representative_id = request.data.get("representative_id") or order.representative_id
+        supplier_id = request.data.get("supplier_id") or order.supplier_id
+        representative_id = request.data.get("representative_id") or order.representative_id
+        project = getattr(order.sponsorship, "project", None)
+        if project is not None:
+            allowed_suppliers = list(project.allowed_supplier_links.values_list("user_id", flat=True))
+            allowed_reps = list(project.allowed_representative_links.values_list("user_id", flat=True))
+            # قائمة غير فارغة = فرض النطاق فقط؛ فارغة = بلا قيود
+            if allowed_suppliers and supplier_id and int(supplier_id) not in allowed_suppliers:
+                return Response({"detail": "المورّد غير مسموح ضمن هذا المشروع"}, status=400)
+            if allowed_reps and representative_id and int(representative_id) not in allowed_reps:
+                return Response({"detail": "المندوب غير مسموح ضمن هذا المشروع"}, status=400)
+        order.supplier_id = supplier_id
+        order.representative_id = representative_id
         order.status = "assigned"
         order.assigned_at = timezone.now()
         order.save()
         notify.notify_order_assigned(order)
+        platform_notify(
+            message=f"تم إسناد الطلب #{order.id}",
+            users=[u for u in (order.supplier, order.representative) if u],
+            roles=["admin"],
+            notification_type="action",
+            link="/Admin/sponsorships",
+            event_type=EVENT_SPONSORSHIP,
+        )
+        log_activity(
+            actor=request.user,
+            action=ACTION_ORDER_ASSIGN,
+            target=order,
+            summary=f"إسناد الطلب #{order.id}",
+            request=request,
+        )
         return Response({"message": "تم إسناد الطلب", "order": OrderSerializer(order).data})
 
     @action(detail=True, methods=["post"])
@@ -201,18 +298,30 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.status = "delivered"
         order.delivered_at = timezone.now()
         order.save()
+        platform_notify(
+            message=f"تم تسليم الطلب #{order.id}",
+            users=[order.sponsorship.donor] if order.sponsorship.donor_id else None,
+            roles=["admin"],
+            notification_type="success",
+            link="/Admin/sponsorships",
+            event_type=EVENT_SPONSORSHIP,
+        )
         return Response({"message": "تم التسليم"})
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
     def complete(self, request, pk=None):
+        from .status_ops import set_sponsorship_status
+
         order = self.get_object()
         order.status = "completed"
         order.completed_at = timezone.now()
         order.save()
         sp = order.sponsorship
-        sp.status = "completed"
-        sp.completed_at = timezone.now()
-        sp.save(update_fields=["status", "completed_at", "updated_at"])
+        set_sponsorship_status(
+            sp,
+            "delivered",
+            extra_updates={"completed_at": timezone.now()},
+        )
         return Response({"message": "اكتمل تنفيذ الطلب والكفالة"})
 
 
@@ -270,21 +379,31 @@ class DocumentationViewSet(viewsets.ModelViewSet):
         return qs.none()
 
     def create(self, request, *args, **kwargs):
-        if role(request.user) not in ("representative", "supplier", "admin"):
+        if not has_capability(request.user, CAP_UPLOAD_DOCUMENTATION):
             return Response({"detail": "رفع التوثيق للمندوب/المورّد فقط"}, status=403)
         f = request.FILES.get("file")
         err = validate_upload_file(f)
         if err:
             return Response({"detail": err}, status=400)
-        gps_err = validate_gps(request.data.get("latitude"), request.data.get("longitude"))
-        if gps_err:
-            return Response({"detail": gps_err}, status=400)
+        from core.runtime_config import gps_documentation_enabled
+
+        if gps_documentation_enabled():
+            gps_err = validate_gps(request.data.get("latitude"), request.data.get("longitude"))
+            if gps_err:
+                return Response({"detail": gps_err}, status=400)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         extra = {"uploaded_by": request.user}
         if f:
             extra.update(file_name=f.name, file_size=f.size, mime_type=getattr(f, "content_type", ""))
         serializer.save(**extra)
+        platform_notify(
+            message=f"تم توثيق الطلب #{serializer.instance.order_id}",
+            roles=["admin"],
+            notification_type="info",
+            link="/Admin/sponsorships",
+            event_type=EVENT_SPONSORSHIP,
+        )
         return Response(serializer.data, status=201)
 
     @action(detail=True, methods=["post"], permission_classes=[IsSaqyaAdmin])
@@ -303,6 +422,7 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        """Scope payments to the acting donor (or all for admin). Never cross-donor."""
         u = self.request.user
         r = role(u)
         qs = Payment.objects.select_related("sponsorship")
@@ -311,6 +431,16 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
         if r == "donor":
             return qs.filter(sponsorship__donor=u)
         return qs.none()
+
+    def check_object_permissions(self, request, obj):
+        super().check_object_permissions(request, obj)
+        r = role(request.user)
+        if r == "admin":
+            return
+        if r == "donor" and obj.sponsorship.donor_id == request.user.id:
+            return
+        # Defense in depth: deny even if queryset scoping is bypassed.
+        self.permission_denied(request, message="غير مصرّح")
 
 
 # ============ Supplier / Representative profiles (admin manage) ============
@@ -359,13 +489,19 @@ def saqya_dashboard(request):
     """إحصاءات حسب الدور."""
     u = request.user
     r = role(u)
+    project_slug = request.query_params.get("project")
     if r == "admin":
+        base = Sponsorship.objects.all()
+        payments = Payment.objects.filter(status="completed")
+        if project_slug:
+            base = base.filter(project__slug=project_slug)
+            payments = payments.filter(sponsorship__project__slug=project_slug)
         data = {
-            "total_sponsorships": Sponsorship.objects.count(),
-            "active": Sponsorship.objects.filter(status="in_progress").count(),
-            "completed": Sponsorship.objects.filter(status="completed").count(),
-            "pending": Sponsorship.objects.filter(status="pending").count(),
-            "total_funded": float(sum(float(p.amount) for p in Payment.objects.filter(status="completed"))),
+            "total_sponsorships": base.count(),
+            "active": base.filter(status="in_progress").count(),
+            "completed": base.filter(status="completed").count(),
+            "pending": base.filter(status="pending").count(),
+            "total_funded": float(sum(float(p.amount) for p in payments)),
         }
     elif r == "donor":
         mine = Sponsorship.objects.filter(donor=u)
@@ -384,6 +520,28 @@ def saqya_dashboard(request):
 
 
 @api_view(["GET"])
+@permission_classes([AllowAny])
+def public_sponsorship_stats(request):
+    """إحصاءات عامة للكفالات مع إخفاء العدّاد إن كان أقل من 5."""
+    from maps.services import mask_small_count
+
+    project_slug = request.query_params.get("project")
+    qs = Sponsorship.objects.all()
+    if project_slug:
+        qs = qs.filter(project__slug=project_slug)
+    total = qs.count()
+    available = qs.filter(status__in=("available", "pending")).count()
+    sponsored = qs.filter(status__in=("sponsored", "approved", "prepared", "in_progress", "delivered", "completed")).count()
+    community = qs.filter(kind=Sponsorship.KIND_COMMUNITY).count()
+    return Response({
+        "total": mask_small_count(total),
+        "available": mask_small_count(available),
+        "sponsored": mask_small_count(sponsored),
+        "community": mask_small_count(community),
+    })
+
+
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def saqya_map(request):
     """نقاط الكفالات ذات الإحداثيات للخريطة (admin)."""
@@ -392,3 +550,44 @@ def saqya_map(request):
     points = Sponsorship.objects.exclude(latitude__isnull=True).exclude(longitude__isnull=True) \
         .values("id", "type", "status", "location", "latitude", "longitude", "amount")
     return Response({"points": list(points)})
+
+
+# ============ أنواع الكفالات ============
+class SponsorshipTypeViewSet(viewsets.ModelViewSet):
+    """CRUD لأنواع الكفالات بنطاق مشروع + قائمة نشطة للمتبرّع."""
+    serializer_class = SponsorshipTypeSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = SponsorshipType.objects.select_related("project").all()
+        project_slug = self.request.query_params.get("project")
+        if project_slug:
+            qs = qs.filter(project__slug=project_slug)
+        r = role(self.request.user)
+        # غير المشرف: الأنواع النشطة فقط (واجهة المتبرّع)
+        if r != "admin" and self.action in ("list", "retrieve"):
+            qs = qs.filter(is_active=True)
+        return qs.order_by("order", "name")
+
+    def _assert_can_manage(self, project):
+        from rest_framework.exceptions import PermissionDenied
+        from projects.services import can_manage_project
+        u = self.request.user
+        if role(u) == "admin" or can_manage_project(u, project):
+            return
+        raise PermissionDenied("غير مصرّح بإدارة أنواع كفالات هذا المشروع")
+
+    def perform_create(self, serializer):
+        project = serializer.validated_data["project"]
+        self._assert_can_manage(project)
+        serializer.save()
+
+    def perform_update(self, serializer):
+        project = serializer.validated_data.get("project", serializer.instance.project)
+        self._assert_can_manage(project)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._assert_can_manage(instance.project)
+        instance.delete()
+

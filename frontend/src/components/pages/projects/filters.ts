@@ -3,6 +3,7 @@
  * التعقيد: applyDynamicFilters O(N·K) حيث N عدد العناصر وK عدد الفلاتر المفعّلة.
  */
 import type { MapFieldDef, MapFieldOption, PublicMapItem } from "./types";
+import { COLOR_SCHEME_LABELS } from "./types";
 
 export type DynamicFilterValue = string | boolean;
 export type DynamicFilters = Record<string, DynamicFilterValue | null>;
@@ -12,12 +13,32 @@ export function optionValue(option: MapFieldOption | string): string {
 }
 
 export function optionLabel(option: MapFieldOption | string): string {
-  return typeof option === "string" ? option : option.label;
+  if (typeof option === "string") return COLOR_SCHEME_LABELS[option] || option;
+  return option.label || COLOR_SCHEME_LABELS[option.value] || option.value;
 }
 
-/** الحقول التي تصلح كفلاتر عامة: select و boolean فقط. */
+/** عرض قيمة حقل عنصر خريطة بالعربية — O(خيارات الحقل). */
+export function displayFieldValue(field: MapFieldDef | undefined, value: unknown): string {
+  if (typeof value === "boolean") return value ? "نعم" : "لا";
+  if (value == null || value === "") return "—";
+  const str = String(value);
+  if (field?.options?.length) {
+    const match = field.options.find((o) => optionValue(o) === str);
+    if (match) return optionLabel(match);
+  }
+  return COLOR_SCHEME_LABELS[str] || str;
+}
+
+/** مفاتيح تُستبعد من شريط الفلاتر العامة فوق الخريطة. */
+const HIDDEN_PUBLIC_FILTER_KEYS = new Set(["priority", "outlet_type", "kind", "product"]);
+
+/** الحقول التي تصلح كفلاتر عامة: select و boolean فقط — مع استثناءات العرض. */
 export function filterableFields(fields: MapFieldDef[]): MapFieldDef[] {
-  return fields.filter((f) => f.type === "select" || f.type === "boolean");
+  return fields.filter(
+    (f) =>
+      (f.type === "select" || f.type === "boolean") &&
+      !HIDDEN_PUBLIC_FILTER_KEYS.has(f.key),
+  );
 }
 
 /** يطبّق الفلاتر المفعّلة (غير null) على العناصر بمطابقة قيمة data[key]. */
@@ -30,4 +51,45 @@ export function applyDynamicFilters(
   return items.filter((item) =>
     active.every(([key, value]) => item.data?.[key] === value),
   );
+}
+
+/**
+ * دمج حقول عدة خرائط لفلاتر موحّدة (المجمّع /map): توحيد بالمفتاح مع اتحاد خيارات
+ * select حسب القيمة — O(M·F) حيث M عدد الخرائط وF حقولها.
+ */
+export function mergeFields(fieldSets: MapFieldDef[][]): MapFieldDef[] {
+  const merged = new Map<string, MapFieldDef>();
+  for (const fields of fieldSets) {
+    for (const field of fields) {
+      const existing = merged.get(field.key);
+      if (!existing) {
+        merged.set(field.key, { ...field, options: [...field.options] });
+        continue;
+      }
+      if (field.type === "select" && existing.type === "select") {
+        const seen = new Set(existing.options.map(optionValue));
+        for (const option of field.options) {
+          if (!seen.has(optionValue(option))) {
+            existing.options.push(option);
+            seen.add(optionValue(option));
+          }
+        }
+      }
+    }
+  }
+  return [...merged.values()].sort((a, b) => a.order - b.order);
+}
+
+/**
+ * جمع قيم قد تكون مقنّعة PDPL ("<5"): يجمع الأرقام فقط ويُعلم بوجود قيم مقنّعة —
+ * لا يكشف القيم الصغيرة أبداً. O(V).
+ */
+export function sumMasked(values: Array<number | "<5">): { total: number; masked: boolean } {
+  let total = 0;
+  let masked = false;
+  for (const value of values) {
+    if (value === "<5") masked = true;
+    else total += value;
+  }
+  return { total, masked };
 }

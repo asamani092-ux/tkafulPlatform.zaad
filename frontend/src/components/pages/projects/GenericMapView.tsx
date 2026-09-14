@@ -23,14 +23,17 @@ function parseBoundary(raw: unknown): [number, number][] | null {
 
 function itemColor(item: PublicMapItem, detail: PublicMapDetail): string {
   const scheme = detail.color_scheme || {};
-  const priority = item.data?.priority;
-  if (typeof priority === "string" && scheme[priority]) return scheme[priority];
-  const kind = item.data?.kind;
-  if (typeof kind === "string" && scheme[kind]) return scheme[kind];
+  // الترتيب: أولوية المنطقة → نوع المنفذ → نوع العنصر → لون هوية المشروع
+  for (const key of ["priority", "outlet_type", "kind"] as const) {
+    const value = item.data?.[key];
+    if (typeof value === "string" && scheme[value]) return scheme[value];
+  }
   return detail.project.brand_color || "#8b1538";
 }
 
-/** عارض الخرائط العام — يرسم عناصر الطبقات العامة لخريطة أو أكثر (leaflet). */
+/** عارض الخرائط العام — يرسم عناصر الطبقات العامة لخريطة أو أكثر (leaflet).
+ * مركز العرض = أول نقطة ظاهرة؛ وإلا افتراضي الرياض. لا يعتمد على إعدادات معالج المشروع.
+ */
 export default function GenericMapView({ maps, visibleItems, selectedItemId, onSelectItem }: Props) {
   const first = visibleItems[0];
   const center: [number, number] = first ? [first.lat, first.lng] : [24.7136, 46.6753];

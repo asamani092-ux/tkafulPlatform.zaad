@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useToast } from "../../contexts/ToastContext";
-import { API_BASE_URL } from "../../config";
+import { API_BASE_URL, WATER_SUPPLY_FORM_ENABLED } from "../../config";
 import Card from "../ui/Card";
 import Input from "../ui/Input";
 import Select from "../ui/Select";
@@ -27,6 +28,8 @@ const EMPTY: FormData = {
 
 export default function WaterSupplyRequestPage() {
   const { success, error } = useToast();
+  const [params] = useSearchParams();
+  const projectSlug = params.get("project") || "saqya";
   const [formData, setFormData] = useState<FormData>(EMPTY);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,7 +73,7 @@ export default function WaterSupplyRequestPage() {
       const res = await fetch(`${API_BASE_URL}/api/public-water-supply-request/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, project: projectSlug }),
       });
       if (!res.ok) throw new Error();
       success({ title: "تم إرسال طلبك بنجاح", description: "شكرًا لتقديمك طلب سقيا الماء، سيتم التواصل معك قريبًا." });
@@ -83,10 +86,36 @@ export default function WaterSupplyRequestPage() {
     }
   };
 
+  if (!WATER_SUPPLY_FORM_ENABLED) {
+    return (
+      <div>
+        <HeroBand title="طلب سقيا الماء" subtitle="النموذج غير مفعّل حالياً في هذه البيئة." />
+        <main className="mx-auto max-w-2xl px-4 py-10">
+          <Card>
+            <p className="text-sm text-brand-gray">
+              تُستقبل الطلبات عبر القنوات الخارجية المعتمدة. لتفعيل النموذج محلياً:{" "}
+              <code dir="ltr">VITE_ENABLE_WATER_SUPPLY_FORM=true</code>
+            </p>
+            <Link to="/projects/saqya" className="mt-4 inline-block text-sm font-bold text-primary">← صفحة مشروع السقيا</Link>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <HeroBand title="طلب سقيا الماء" subtitle="يرجى تعبئة البيانات التالية لإرسال طلب سقيا الماء للمسجد." />
+      <HeroBand
+        title="طلب سقيا الماء"
+        subtitle="نموذج مرتبط بمشروع السقيا — تُراجع الطلبات من نطاق الطلبات في لوحة الإدارة."
+      />
       <main className="mx-auto max-w-3xl px-4 py-10">
+        <p className="mb-4 text-sm text-brand-gray">
+          المشروع:{" "}
+          <Link className="font-semibold text-primary" to={`/projects/${projectSlug}`}>
+            {projectSlug}
+          </Link>
+        </p>
         <form onSubmit={handleSubmit} className="space-y-6">
           <Card>
             <h2 className="mb-4 text-xl font-bold text-primary">بيانات مقدم الطلب</h2>
@@ -129,9 +158,13 @@ export default function WaterSupplyRequestPage() {
             </div>
           </Card>
 
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting ? "جاري الإرسال…" : "إرسال"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" className="flex-1" disabled={isSubmitting}>
+              {isSubmitting ? "جاري الإرسال…" : "إرسال"}
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => { setFormData(EMPTY); setErrors({}); }}>مسح الحقول</Button>
+          </div>
+          <p className="mt-3 text-center text-xs text-brand-gray">لا يُعدّل الطلب بعد الإرسال — يُراجع من /Admin/requests/water-supply.</p>
         </form>
       </main>
     </div>

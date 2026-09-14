@@ -99,10 +99,20 @@ sponsorships unlinked to project: got=0 want=0
 
 ---
 
+## 5.5) إصلاح ما قبل الدمج — مزامنة ما بعد الهجرة (D-16)
+- `maps/sync.py::sync_impact_map_to_maps`: منطق النسخ الوحيد المشترك بين هجرة `maps.0002`
+  والأمر الإداري `sync_impact_map_to_maps` — idempotent (upsert للعناصر/الحقول، والمساهمات
+  تُنسخ مرة واحدة بوسم `external_id="impact_map:<id>"` مع حفظ `created_at` الأصلي).
+- `seed_impact_map` يستدعي المزامنة تلقائياً في نهايته — سير `migrate` ثم `seed` مغطّى.
+- فحص السلامة يقارن النسخ الموسومة فقط، فالمساهمات العامة الجديدة لا تكسر المقارنة.
+- اختبارات: `PostMigrateSeedSyncTests` (4) — migrate→seed→integrity، idempotency،
+  نسخ المساهمات المتأخرة مرة واحدة، وسلامة المساهمات العامة المباشرة.
+- `DEPLOYMENT.md` §6.5: ملاحظة «post-migrate sync» للإنتاج.
+
 ## 6) نتائج البوابات
 | البوابة | النتيجة |
 |---|---|
-| حزمة الباك إند | **Ran 95 tests — OK** (53 قائمة + 42 جديدة، skipped=1 قائم سابقاً) |
+| حزمة الباك إند | **Ran 99 tests — OK** (53 قائمة + 46 جديدة، skipped=1 قائم سابقاً) |
 | `check --deploy` (DEBUG=False + SECRET_KEY قوي) | **0 issues** |
 | `tsc --noEmit` | **نظيف** |
 | `vitest` | **12/12 passed** (4 ملفات) |

@@ -6,25 +6,30 @@ import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Badge from "../../ui/Badge";
 import Input from "../../ui/Input";
+import Textarea from "../../ui/Textarea";
 import Modal from "../../ui/Modal";
 import ProgressBar from "../../ui/ProgressBar";
 import { LoadingState, EmptyState } from "../../feedback/PageStates";
+import { labelAr, SPONSORSHIP_STATUS_AR } from "../../../i18n/labels";
+import Select from "../../ui/Select";
+import { DynamicFieldsInput, type SchemaField } from "../../admin/FieldSchemaBuilder";
 
 interface Sponsorship {
   id: number; amount: string; type: string; description: string; status: string;
   total_funded: number; remaining: number; is_fully_funded: boolean; beneficiaries_count: number;
 }
 
-const STATUS_AR: Record<string, string> = {
-  pending: "قيد المراجعة", approved: "معتمدة", rejected: "مرفوضة",
-  in_progress: "قيد التنفيذ", completed: "مكتملة", cancelled: "ملغاة",
-};
 
-export default function DonorPortal() {
+export default function DonorPortal({ projectSlug }: { projectSlug?: string }) {
   const { success, error } = useToast();
   const [items, setItems] = useState<Sponsorship[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ amount: "", type: "سقيا", description: "", beneficiaries_count: "1", location: "" });
+  const [cfg, setCfg] = useState<{ show_description?: boolean; show_location?: boolean; show_public_type_fields?: boolean }>({});
+  const [types, setTypes] = useState<{ id: number; name: string; fields: SchemaField[] }[]>([]);
+  const [selectedTypeId, setSelectedTypeId] = useState("");
+  const [typeData, setTypeData] = useState<Record<string, unknown>>({});
+  const selectedType = types.find((x) => String(x.id) === selectedTypeId) || null;
   const [contribTarget, setContribTarget] = useState<Sponsorship | null>(null);
   const [contribAmount, setContribAmount] = useState("");
   const [redirecting, setRedirecting] = useState(false);
@@ -39,18 +44,50 @@ export default function DonorPortal() {
   };
   useEffect(load, []);
 
+  useEffect(() => {
+    if (!projectSlug) return;
+    authFetch(`/api/saqya/sponsorship-types/?project=${encodeURIComponent(projectSlug)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setTypes(d.results || d))
+      .catch(() => undefined);
+    authFetch(`/api/platform/public/projects/${encodeURIComponent(projectSlug)}/`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const c = d?.tool_config?.sponsorships || {};
+        setCfg(c);
+      })
+      .catch(() => undefined);
+  }, [projectSlug]);
+
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
+    const payload: Record<string, unknown> = {
+      amount: Number(form.amount),
+      description: form.description,
+      beneficiaries_count: Number(form.beneficiaries_count),
+      location: form.location,
+    };
+    if (projectSlug) payload.project = projectSlug;
+    if (selectedType) {
+      payload.sponsorship_type = selectedType.id;
+      payload.type_data = typeData;
+    } else {
+      payload.type = form.type;
+    }
     const res = await authFetch("/api/saqya/sponsorships/", {
       method: "POST",
-      body: JSON.stringify({ ...form, amount: Number(form.amount), beneficiaries_count: Number(form.beneficiaries_count) }),
+      body: JSON.stringify(payload),
     });
     if (res.ok) {
       success({ title: "تم إنشاء الكفالة بنجاح" });
       setForm({ amount: "", type: "سقيا", description: "", beneficiaries_count: "1", location: "" });
+      setSelectedTypeId("");
+      setTypeData({});
       load();
     } else {
-      error({ title: "تعذّر الإنشاء", description: "تحقّق من الحقول وحاول مجدداً" });
+      const d = await res.json().catch(() => ({}));
+      const msg = d.type_data || d.type || d.detail || "تحقّق من الحقول وحاول مجدداً";
+      error({ title: "تعذّر الإنشاء", description: typeof msg === "string" ? msg : JSON.stringify(msg) });
     }
   };
 
@@ -79,13 +116,25 @@ export default function DonorPortal() {
           <h2 className="mb-4 text-lg font-bold text-primary">إنشاء كفالة جديدة</h2>
           <form className="space-y-3" onSubmit={create} aria-label="نموذج إنشاء كفالة">
             <Input type="number" label="المبلغ المستهدف" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
-            <Input label="نوع الكفالة" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} required />
+            {types.length > 0 ? (
+              <Select
+                label="نوع الكفالة"
+                value={selectedTypeId}
+                onChange={(e) => { setSelectedTypeId(e.target.value); setTypeData({}); }}
+                required
+              >
+                <option value="">اختر النوع…</option>
+                {types.map((tp) => <option key={tp.id} value={tp.id}>{tp.name}</option>)}
+              </Select>
+            ) : (
+              <Input label="نوع الكفالة" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} required />
+            )}
+            {selectedType && (selectedType.fields?.length ?? 0) > 0 && (
+              <DynamicFieldsInput fields={selectedType.fields} values={typeData} onChange={setTypeData} />
+            )}
             <Input label="الموقع" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
             <Input type="number" label="عدد المستفيدين" value={form.beneficiaries_count} onChange={(e) => setForm({ ...form, beneficiaries_count: e.target.value })} />
-            <div>
-              <label className="label-field" htmlFor="desc">الوصف</label>
-              <textarea id="desc" className="input-field min-w-0 w-full" style={{ resize: "none" }} rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            </div>
+            <Textarea label="الوصف" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             <Button type="submit" className="w-full">إنشاء الكفالة</Button>
           </form>
         </Card>
@@ -102,9 +151,11 @@ export default function DonorPortal() {
                   <Card key={s.id}>
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <h3 className="font-bold text-primary break-words">{s.type} — {Number(s.amount).toLocaleString("en-US")} ر.س</h3>
-                      <Badge variant={s.status === "completed" ? "success" : s.status === "rejected" ? "danger" : "warning"}>{STATUS_AR[s.status] || s.status}</Badge>
+                      <Badge variant={s.status === "completed" ? "success" : s.status === "rejected" ? "danger" : "warning"}>{labelAr(SPONSORSHIP_STATUS_AR, s.status)}</Badge>
                     </div>
-                    <p className="mb-2 text-xs text-brand-gray break-words">{s.description}</p>
+                    {cfg.show_description !== false && s.description && (
+                      <p className="mb-2 text-xs text-brand-gray break-words">{s.description}</p>
+                    )}
                     <div className="mb-2"><span className="me-2 text-sm">مموّل {s.total_funded} / {Number(s.amount)} ({pct}%)</span><ProgressBar value={pct} /></div>
                     {!s.is_fully_funded && s.status !== "rejected" && s.status !== "completed" && (
                       <Button variant="secondary" aria-label={`تبرّع للكفالة ${s.id}`} onClick={() => { setContribTarget(s); setContribAmount(String(s.remaining)); }}>

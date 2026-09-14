@@ -5,6 +5,7 @@ from . import views
 
 router = DefaultRouter()
 router.register(r"sponsorships", views.SponsorshipViewSet, basename="saqya-sponsorship")
+router.register(r"sponsorship-types", views.SponsorshipTypeViewSet, basename="saqya-sponsorship-type")
 router.register(r"orders", views.OrderViewSet, basename="saqya-order")
 router.register(r"invoices", views.InvoiceViewSet, basename="saqya-invoice")
 router.register(r"documentation", views.DocumentationViewSet, basename="saqya-documentation")
@@ -15,6 +16,7 @@ router.register(r"representatives", views.RepresentativeProfileViewSet, basename
 urlpatterns = [
     path("dashboard/", views.saqya_dashboard, name="saqya-dashboard"),
     path("map/", views.saqya_map, name="saqya-map"),
+    path("public-stats/", views.public_sponsorship_stats, name="saqya-public-stats"),
     path("invoices/<int:pk>/file/", views.serve_invoice_file, name="saqya-invoice-file"),
     path("documentation/<int:pk>/file/", views.serve_documentation_file, name="saqya-documentation-file"),
     path("", include(router.urls)),

@@ -147,6 +147,8 @@ def build_public_map_detail(map_obj: Map) -> dict:
             "slug": map_obj.project.slug,
             "name": map_obj.project.name,
             "brand_color": map_obj.project.brand_color,
+            "donation_url": map_obj.project.donation_url,
+            "donation_label": map_obj.project.donation_label or "تبرع الآن",
         },
         "layers": [
             {"id": l.id, "name": l.name, "order": l.order, "style": l.style}
@@ -173,8 +175,8 @@ def public_maps_index(project_slug: str | None = None) -> list[dict]:
             visibility__in=["public", "mixed"],
             published_at__isnull=False,
             project__is_active=True,
+            project__status="active",  # النشطة فقط تظهر عامّاً (D-43)
         )
-        .exclude(project__status__in=["draft", "archived"])
         .select_related("project")
         .annotate(items_count=Count("items", distinct=True))
     )
@@ -192,6 +194,8 @@ def public_maps_index(project_slug: str | None = None) -> list[dict]:
                 "slug": m.project.slug,
                 "name": m.project.name,
                 "brand_color": m.project.brand_color,
+                "donation_url": m.project.donation_url,
+                "donation_label": m.project.donation_label or "تبرع الآن",
             },
         }
         for m in qs

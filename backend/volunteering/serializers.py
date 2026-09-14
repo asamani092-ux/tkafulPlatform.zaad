@@ -1,108 +1,76 @@
 from rest_framework import serializers
+from django.utils.text import slugify
+
+from projects.models import Project
 from .models import (
-    Project, Service, ServiceRequest, ServiceVolunteerApplication, Volunteer, Suggestion,
-    ProjectAssignment, Task, Subtask, AdminReport, VolunteerApplication,
-    VolunteerStatistics, QuarterlyTarget, DepartmentHours, TopVolunteer,
-    WaterSupplyRequest
+    VolunteeringProfile, Volunteer, ProjectAssignment, Task, Subtask, VolunteerApplication,
+    PLATFORM_STATUS_MAP,
 )
+from . import project_helpers
 from django.contrib.auth.models import User
 
 
 class ProjectSerializer(serializers.ModelSerializer):
+    """API serializer for volunteering projects (VolunteeringProfile + platform Project)."""
+    id = serializers.IntegerField(source="project.id", read_only=True)
+    title = serializers.CharField(source="project.name")
+    desc = serializers.CharField(source="project.description", required=False, allow_blank=True)
+    description = serializers.CharField(source="project.description", read_only=True)
+    start_date = serializers.DateField(source="project.start_date", required=False, allow_null=True)
+    end_date = serializers.DateField(source="project.end_date", required=False, allow_null=True)
+    status = serializers.CharField(source="volunteer_status")
     status_display = serializers.SerializerMethodField()
-    description = serializers.CharField(source='desc', read_only=True)  # Alias for frontend compatibility
 
     class Meta:
-        model = Project
+        model = VolunteeringProfile
         fields = [
-            'id',
-            'title',
-            'desc',
-            'description',  # Read-only alias for desc
-            'category',
-            'target_audience',
-            'beneficiaries',
-            'location',
-            'donation_amount',
-            'start_date',
-            'end_date',
-            'implementation_requirements',
-            'project_goals',
-            'estimated_hours',
-            'supervisor',
-            'duration',
-            'tags',
-            'progress',
-            'organization',
-            'hours',
-            'is_hidden',
-            'status',
-            'status_display',  # Arabic status for frontend
-            'created_at',
-            'updated_at',
+            'id', 'title', 'desc', 'description', 'category', 'target_audience',
+            'beneficiaries', 'location', 'donation_amount', 'start_date', 'end_date',
+            'implementation_requirements', 'project_goals', 'estimated_hours',
+            'supervisor', 'duration', 'tags', 'progress', 'organization', 'hours',
+            'is_hidden', 'status', 'status_display', 'created_at', 'updated_at',
         ]
         read_only_fields = ['created_at', 'updated_at', 'description', 'status_display']
 
     def get_status_display(self, obj):
-        """Return Arabic status display"""
         status_map = {
-            'ACTIVE': 'نشط',
-            'PLANNED': 'متوقف',
-            'COMPLETED': 'مكتمل',
-            'CANCELLED': 'ملغي'
+            'ACTIVE': 'نشط', 'PLANNED': 'متوقف',
+            'COMPLETED': 'مكتمل', 'CANCELLED': 'ملغي',
         }
-        return status_map.get(obj.status, 'نشط')
+        return status_map.get(obj.volunteer_status, 'نشط')
 
+    def create(self, validated_data):
+        project_data = validated_data.pop("project", {})
+        title = project_data.get("name", "")
+        desc = project_data.get("description", "")
+        start_date = project_data.get("start_date")
+        end_date = project_data.get("end_date")
+        status = validated_data.get("volunteer_status", "ACTIVE")
+        return project_helpers.create_volunteering_project(
+            title=title, desc=desc, status=status,
+            start_date=start_date, end_date=end_date, **validated_data,
+        )
 
-class ServiceSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Service
-        fields = ['id', 'title', 'desc', 'status', 'service_type', 'is_active', 'created_at']
-        read_only_fields = ['created_at']
-
-
-class ServiceRequestSerializer(serializers.ModelSerializer):
-    service_title = serializers.CharField(source='service.title', read_only=True)
-
-    class Meta:
-        model = ServiceRequest
-        fields = [
-            'id',
-            'service',
-            'service_title',
-            'beneficiary_name',
-            'beneficiary_contact',
-            'details',
-            'status',
-            'created_at',
-        ]
-        read_only_fields = ['created_at']
-
-
-class ServiceVolunteerApplicationSerializer(serializers.ModelSerializer):
-    volunteer_name = serializers.CharField(source='volunteer.profile.name', read_only=True)
-    volunteer_email = serializers.CharField(source='volunteer.email', read_only=True)
-    service_title = serializers.CharField(source='service.title', read_only=True)
-    reviewed_by_name = serializers.CharField(source='reviewed_by.profile.name', read_only=True, allow_null=True)
-
-    class Meta:
-        model = ServiceVolunteerApplication
-        fields = [
-            'id',
-            'volunteer',
-            'volunteer_name',
-            'volunteer_email',
-            'service',
-            'service_title',
-            'status',
-            'message',
-            'admin_notes',
-            'applied_at',
-            'reviewed_at',
-            'reviewed_by',
-            'reviewed_by_name',
-        ]
-        read_only_fields = ['applied_at', 'reviewed_at', 'reviewed_by', 'volunteer_name', 'volunteer_email', 'service_title', 'reviewed_by_name']
+    def update(self, instance, validated_data):
+        project_data = validated_data.pop("project", {})
+        if "name" in project_data:
+            instance.project.name = project_data["name"]
+        if "description" in project_data:
+            instance.project.description = project_data["description"]
+        if "start_date" in project_data:
+            instance.project.start_date = project_data["start_date"]
+        if "end_date" in project_data:
+            instance.project.end_date = project_data["end_date"]
+        if "volunteer_status" in validated_data:
+            instance.volunteer_status = validated_data["volunteer_status"]
+            instance.project.status = PLATFORM_STATUS_MAP.get(
+                validated_data["volunteer_status"], instance.project.status
+            )
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.project.save()
+        instance.save()
+        return instance
 
 
 class VolunteerSerializer(serializers.ModelSerializer):
@@ -112,17 +80,10 @@ class VolunteerSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at']
 
 
-class SuggestionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Suggestion
-        fields = ['id', 'title', 'description', 'submitted_by', 'created_at', 'is_reviewed']
-        read_only_fields = ['created_at']
-
-
 class ProjectAssignmentSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source='user.email', read_only=True)
     user_name = serializers.CharField(source='user.profile.name', read_only=True)
-    project_title = serializers.CharField(source='project.title', read_only=True)
+    project_title = serializers.CharField(source='project.name', read_only=True)
     
     class Meta:
         model = ProjectAssignment
@@ -157,7 +118,7 @@ class SubtaskSerializer(serializers.ModelSerializer):
 class TaskSerializer(serializers.ModelSerializer):
     volunteer_name = serializers.SerializerMethodField()
     volunteer_id = serializers.IntegerField(source='volunteer.id', read_only=True, allow_null=True)
-    project_name = serializers.CharField(source='project.title', read_only=True)
+    project_name = serializers.CharField(source='project.name', read_only=True)
     subtasks = SubtaskSerializer(many=True, required=False)
     
     class Meta:
@@ -238,6 +199,7 @@ class VolunteerDetailSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source='profile.name', read_only=True)
     phone = serializers.CharField(source='profile.phone', read_only=True)
     location = serializers.CharField(source='profile.city', read_only=True)
+    city = serializers.CharField(source='profile.city', read_only=True)
     skills = serializers.JSONField(source='profile.skills', read_only=True)
     available_days = serializers.JSONField(source='profile.available_days', read_only=True)
     qualification = serializers.CharField(source='profile.qualification', read_only=True)
@@ -263,6 +225,7 @@ class VolunteerDetailSerializer(serializers.ModelSerializer):
             'name',
             'phone',
             'location',
+            'city',
             'status',
             'skills',
             'available_days',
@@ -275,15 +238,16 @@ class VolunteerDetailSerializer(serializers.ModelSerializer):
             'join_date',
             'volunteer_hours',
             'current_projects',
+            'is_active',
         ]
     
     def get_current_tasks(self, obj):
         return obj.assigned_tasks.exclude(status='مكتملة').count()
     
     def get_current_projects(self, obj):
-        # Get unique project titles from current task assignments
+        # Get unique project names from current task assignments
         tasks = obj.assigned_tasks.exclude(status='مكتملة')
-        return list(set([task.project.title for task in tasks]))
+        return list(set([task.project.name for task in tasks]))
     
     def get_status(self, obj):
         current_tasks_count = self.get_current_tasks(obj)
@@ -327,34 +291,6 @@ class VolunteerRequestSerializer(serializers.ModelSerializer):
         ]
 
 
-class AdminReportSerializer(serializers.ModelSerializer):
-    """
-    Serializer for AdminReport model
-    """
-    admin_name = serializers.CharField(source='admin.profile.name', read_only=True)
-    admin_email = serializers.EmailField(source='admin.email', read_only=True)
-
-    class Meta:
-        model = AdminReport
-        fields = [
-            'id',
-            'admin',
-            'admin_name',
-            'admin_email',
-            'title',
-            'date_from',
-            'date_to',
-            'report_data',
-            'total_projects',
-            'total_volunteers',
-            'total_tasks',
-            'total_beneficiaries',
-            'total_donations',
-            'generated_at',
-        ]
-        read_only_fields = ['generated_at', 'admin_name', 'admin_email']
-
-
 class VolunteerApplicationSerializer(serializers.ModelSerializer):
     """
     Serializer for VolunteerApplication model
@@ -362,7 +298,7 @@ class VolunteerApplicationSerializer(serializers.ModelSerializer):
     """
     volunteer_name = serializers.CharField(source='volunteer.profile.name', read_only=True)
     volunteer_email = serializers.EmailField(source='volunteer.email', read_only=True)
-    project_title = serializers.CharField(source='project.title', read_only=True)
+    project_title = serializers.CharField(source='project.name', read_only=True)
     reviewed_by_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -388,88 +324,3 @@ class VolunteerApplicationSerializer(serializers.ModelSerializer):
         if obj.reviewed_by and hasattr(obj.reviewed_by, 'profile'):
             return obj.reviewed_by.profile.name
         return None
-
-
-# ============================================================================
-# VOLUNTEER STATISTICS SERIALIZERS
-# ============================================================================
-
-class QuarterlyTargetSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = QuarterlyTarget
-        fields = ['quarter', 'volunteer_target', 'volunteer_actual', 'hours_target', 'hours_actual']
-
-
-class DepartmentHoursSerializer(serializers.ModelSerializer):
-    label = serializers.CharField(source='department_name_ar')
-    value = serializers.IntegerField(source='hours')
-
-    class Meta:
-        model = DepartmentHours
-        fields = ['label', 'value', 'percentage', 'color', 'department_name', 'department_name_ar']
-
-
-class TopVolunteerSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TopVolunteer
-        fields = ['rank', 'name', 'hours']
-
-
-class VolunteerStatisticsSerializer(serializers.ModelSerializer):
-    quarterly_targets = QuarterlyTargetSerializer(many=True, read_only=True)
-    department_hours = DepartmentHoursSerializer(many=True, read_only=True)
-    top_volunteers = TopVolunteerSerializer(many=True, read_only=True)
-
-    # Formatted display values
-    hours_display = serializers.SerializerMethodField()
-    volunteers_display = serializers.SerializerMethodField()
-
-    class Meta:
-        model = VolunteerStatistics
-        fields = [
-            'year',
-            'total_volunteers',
-            'new_volunteers',
-            'returning_volunteers',
-            'total_hours',
-            'hours_display',
-            'volunteers_display',
-            'total_contribution_value',
-            'contribution_value_display',
-            'quarterly_targets',
-            'department_hours',
-            'top_volunteers',
-        ]
-
-    def get_hours_display(self, obj):
-        return f"{obj.total_hours:,}"
-
-    def get_volunteers_display(self, obj):
-        return f"{obj.total_volunteers:,}"
-
-
-# ============================================================================
-# WATER SUPPLY REQUEST SERIALIZER
-# ============================================================================
-
-class WaterSupplyRequestSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = WaterSupplyRequest
-        fields = [
-            'id',
-            'applicant_name',
-            'mobile_number',
-            'applicant_role',
-            'mosque_name',
-            'neighborhood',
-            'location_link',
-            'worshippers_count',
-            'donor_exists',
-            'donor_name',
-            'donor_phone',
-            'status',
-            'admin_notes',
-            'created_at',
-            'updated_at',
-        ]
-        read_only_fields = ['created_at', 'updated_at', 'status', 'admin_notes']

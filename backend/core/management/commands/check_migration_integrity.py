@@ -1,43 +1,51 @@
 """
-فحص سلامة بيانات الهجرة (project-first restructure).
+فحص سلامة بيانات الهجرة (project-first restructure + Phase A1 maps).
 
 الاستخدام:
-  # قبل الهجرة: التقاط لقطة أعداد لكل الجداول المعنية
   python manage.py check_migration_integrity --snapshot /tmp/before.json
-
-  # بعد الهجرة الأمامية: تحقق أن المصادر لم تتغير وأن النسخ مطابق
   python manage.py check_migration_integrity --verify /tmp/before.json --expect migrated
-
-  # بعد الهجرة العكسية: تحقق أن المصادر لم تتغير وأن المنسوخ أُزيل
   python manage.py check_migration_integrity --verify /tmp/before.json --expect reverted
-
-يخرج برمز غير صفري عند أي اختلال (شرط الإيقاف الاضطراري في خطة إعادة الهيكلة).
-التعقيد: O(T) استعلامات COUNT حيث T عدد الجداول (~30) — لا يجلب صفوفاً.
 """
 import json
 
 from django.core.management.base import BaseCommand, CommandError
 
+from maps.constants import MAP_TITLE, PROJECT_SLUG
+
+
+def _tafaqqadhum_map():
+    from maps.models import Map
+    from projects.models import Project
+
+    project = Project.objects.filter(slug=PROJECT_SLUG).first()
+    if project is None:
+        return None
+    return Map.objects.filter(project=project, title=MAP_TITLE).first()
+
 
 def _counts():
-    """أعداد الصفوف لكل الجداول المعنية بالهجرة (مصدر وهدف)."""
-    from impact_map.models import (
-        Contribution, DistributionRecord, Outlet, Product, Region,
-    )
+    """أعداد الصفوف لكل الجداول المعنية بالهجرة (maps مصدر الحقيقة بعد Phase A1)."""
+    from maps.models import MapContribution, MapDistributionRecord, MapItem, MapProduct
     from sponsorships.models import (
         Documentation, Invoice, Order, Payment, RepresentativeProfile,
         Sponsorship, SupplierProfile,
     )
     from volunteering import models as vol
 
+    map_obj = _tafaqqadhum_map()
+    map_id = map_obj.id if map_obj else None
+
+    def scoped(qs):
+        return qs.count() if map_id else 0
+
     counts = {
-        # ---- مصدر: impact_map (يجب ألا يتغير أبداً) ----
-        "impact_map.Region": Region.objects.count(),
-        "impact_map.Product": Product.objects.count(),
-        "impact_map.Outlet": Outlet.objects.count(),
-        "impact_map.Contribution": Contribution.objects.count(),
-        "impact_map.DistributionRecord": DistributionRecord.objects.count(),
-        # ---- كفالات السقيا (جداول saqya_* نفسها عبر نماذج sponsorships) ----
+        # ---- خارطة تفقدهم (maps — مصدر الحقيقة) ----
+        "maps.MapProduct": scoped(MapProduct.objects.filter(map_id=map_id)),
+        "maps.MapDistributionRecord": scoped(MapDistributionRecord.objects.filter(map_id=map_id)),
+        "maps.region_items": scoped(MapItem.objects.filter(map_id=map_id, data__kind="region")),
+        "maps.outlet_items": scoped(MapItem.objects.filter(map_id=map_id, data__kind="outlet")),
+        "maps.MapContribution": scoped(MapContribution.objects.filter(map_id=map_id)),
+        # ---- كفالات السقيا ----
         "sponsorships.Sponsorship": Sponsorship.objects.count(),
         "sponsorships.Order": Order.objects.count(),
         "sponsorships.Invoice": Invoice.objects.count(),
@@ -45,66 +53,52 @@ def _counts():
         "sponsorships.Documentation": Documentation.objects.count(),
         "sponsorships.SupplierProfile": SupplierProfile.objects.count(),
         "sponsorships.RepresentativeProfile": RepresentativeProfile.objects.count(),
-        # ---- التطوع (جداول takaful_app_* نفسها عبر نماذج volunteering) ----
-        "volunteering.Project": vol.Project.objects.count(),
-        "volunteering.Service": vol.Service.objects.count(),
-        "volunteering.ServiceRequest": vol.ServiceRequest.objects.count(),
-        "volunteering.ServiceVolunteerApplication": vol.ServiceVolunteerApplication.objects.count(),
+        # ---- التطوع ----
+        "volunteering.VolunteeringProfile": vol.VolunteeringProfile.objects.count(),
+        "services.Service": __import__("services.models", fromlist=["Service"]).Service.objects.count(),
+        "services.ServiceRequest": __import__("services.models", fromlist=["ServiceRequest"]).ServiceRequest.objects.count(),
+        "services.ServiceVolunteerApplication": __import__("services.models", fromlist=["ServiceVolunteerApplication"]).ServiceVolunteerApplication.objects.count(),
+        "services.Suggestion": __import__("services.models", fromlist=["Suggestion"]).Suggestion.objects.count(),
+        "services.WaterSupplyRequest": __import__("services.models", fromlist=["WaterSupplyRequest"]).WaterSupplyRequest.objects.count(),
         "volunteering.Volunteer": vol.Volunteer.objects.count(),
-        "volunteering.Suggestion": vol.Suggestion.objects.count(),
         "volunteering.ProjectAssignment": vol.ProjectAssignment.objects.count(),
         "volunteering.Task": vol.Task.objects.count(),
         "volunteering.Subtask": vol.Subtask.objects.count(),
-        "volunteering.AdminReport": vol.AdminReport.objects.count(),
+        "reporting.AdminReport": __import__("reporting.models", fromlist=["AdminReport"]).AdminReport.objects.count(),
         "volunteering.VolunteerApplication": vol.VolunteerApplication.objects.count(),
-        "volunteering.VolunteerStatistics": vol.VolunteerStatistics.objects.count(),
-        "volunteering.QuarterlyTarget": vol.QuarterlyTarget.objects.count(),
-        "volunteering.DepartmentHours": vol.DepartmentHours.objects.count(),
-        "volunteering.TopVolunteer": vol.TopVolunteer.objects.count(),
-        "volunteering.WaterSupplyRequest": vol.WaterSupplyRequest.objects.count(),
+        "reporting.VolunteerStatistics": __import__("reporting.models", fromlist=["VolunteerStatistics"]).VolunteerStatistics.objects.count(),
+        "reporting.QuarterlyTarget": __import__("reporting.models", fromlist=["QuarterlyTarget"]).QuarterlyTarget.objects.count(),
+        "reporting.DepartmentHours": __import__("reporting.models", fromlist=["DepartmentHours"]).DepartmentHours.objects.count(),
+        "reporting.TopVolunteer": __import__("reporting.models", fromlist=["TopVolunteer"]).TopVolunteer.objects.count(),
     }
     return counts
 
 
-# الجداول التي يجب ألا تتغير أعدادها بين اللقطة وأي حالة لاحقة (مصدر الحقيقة)
 INVARIANT_KEYS = [
-    "impact_map.Region", "impact_map.Product", "impact_map.Outlet",
-    "impact_map.Contribution", "impact_map.DistributionRecord",
+    "maps.MapProduct", "maps.MapDistributionRecord",
+    "maps.region_items", "maps.outlet_items", "maps.MapContribution",
     "sponsorships.Sponsorship", "sponsorships.Order", "sponsorships.Invoice",
     "sponsorships.Payment", "sponsorships.Documentation",
     "sponsorships.SupplierProfile", "sponsorships.RepresentativeProfile",
-    "volunteering.Project", "volunteering.Service", "volunteering.ServiceRequest",
-    "volunteering.ServiceVolunteerApplication", "volunteering.Volunteer",
-    "volunteering.Suggestion", "volunteering.ProjectAssignment", "volunteering.Task",
-    "volunteering.Subtask", "volunteering.AdminReport",
-    "volunteering.VolunteerApplication", "volunteering.VolunteerStatistics",
-    "volunteering.QuarterlyTarget", "volunteering.DepartmentHours",
-    "volunteering.TopVolunteer", "volunteering.WaterSupplyRequest",
+    "volunteering.VolunteeringProfile", "services.Service", "services.ServiceRequest",
+    "services.ServiceVolunteerApplication", "services.Suggestion", "services.WaterSupplyRequest",
+    "volunteering.Volunteer", "volunteering.ProjectAssignment", "volunteering.Task",
+    "volunteering.Subtask", "reporting.AdminReport",
+    "volunteering.VolunteerApplication", "reporting.VolunteerStatistics",
+    "reporting.QuarterlyTarget", "reporting.DepartmentHours",
+    "reporting.TopVolunteer",
 ]
 
 
 def _cross_checks(expect: str):
-    """فحوصات مطابقة المصدر ↔ الهدف حسب الحالة المتوقعة."""
-    from impact_map.models import Contribution, Outlet, Product, Region
-    from maps.models import Map, MapContribution, MapItem, MapItemField
+    """فحوصات سلامة خريطة «تفقدهم» حسب الحالة المتوقعة."""
+    from maps.models import MapContribution, MapDistributionRecord, MapItem, MapProduct
     from projects.models import Project
     from sponsorships.models import Sponsorship
 
     failures = []
     info = {}
-
-    try:
-        tafaqqadhum = Project.objects.filter(slug="tafaqqadhum").first()
-        copied_map = (
-            Map.objects.filter(project=tafaqqadhum, title="خارطة تفقدهم").first()
-            if tafaqqadhum
-            else None
-        )
-    except Exception:
-        # جداول projects/maps غير موجودة (عكس كامل إلى zero) — لا منسوخ إذن
-        if expect == "migrated":
-            failures.append("جداول projects/maps غير موجودة رغم توقع migrated")
-        return failures, info
+    copied_map = _tafaqqadhum_map()
 
     if expect == "migrated":
         for slug in ("saqya", "tafaqqadhum", "takaful-athar"):
@@ -112,30 +106,27 @@ def _cross_checks(expect: str):
                 failures.append(f"المشروع الأساسي مفقود: {slug}")
 
         if copied_map is None:
-            failures.append("خريطة «تفقدهم» المنسوخة غير موجودة")
+            failures.append("خريطة «تفقدهم» غير موجودة")
         else:
+            dist_count = MapDistributionRecord.objects.filter(map=copied_map).count()
+            product_count = MapProduct.objects.filter(map=copied_map).count()
             checks = [
-                ("region items == impact_map.Region",
-                 MapItem.objects.filter(map=copied_map, data__kind="region").count(),
-                 Region.objects.count()),
-                ("outlet items == impact_map.Outlet",
-                 MapItem.objects.filter(map=copied_map, data__kind="outlet").count(),
-                 Outlet.objects.count()),
-                # تُحتسب النسخ الموسومة فقط — المساهمات العامة الجديدة (بدون وسم) خارج المقارنة
-                ("map contributions == impact_map.Contribution",
-                 MapContribution.objects.filter(
-                     map=copied_map, external_id__startswith="impact_map:"
-                 ).count(),
-                 Contribution.objects.count()),
-                ("product options == impact_map.Product",
-                 len(MapItemField.objects.filter(map=copied_map, key="product")
-                     .values_list("options", flat=True).first() or []),
-                 Product.objects.count()),
+                ("distribution records have products",
+                 MapDistributionRecord.objects.filter(map=copied_map, product__isnull=True).count(), 0),
+                ("distribution records have region items",
+                 MapDistributionRecord.objects.filter(map=copied_map, region_item__isnull=True).count(), 0),
             ]
-            for label, got, want in checks:
-                info[label] = {"got": got, "want": want}
-                if got != want:
-                    failures.append(f"عدم تطابق: {label} (got={got}, want={want})")
+            if product_count > 0 and dist_count > 0:
+                checks.append(
+                    ("products with distributions",
+                     MapDistributionRecord.objects.filter(map=copied_map).values("product").distinct().count(),
+                     min(product_count, dist_count) if dist_count else 0)
+                )
+            for label, got, want_max in checks:
+                info[label] = {"got": got, "want": want_max}
+                if label.endswith("have products") or label.endswith("have region items"):
+                    if got != 0:
+                        failures.append(f"سجلات توزيع ناقصة: {label} (got={got})")
 
         unlinked = Sponsorship.objects.filter(project__isnull=True).count()
         info["sponsorships unlinked to project"] = {"got": unlinked, "want": 0}
@@ -144,11 +135,10 @@ def _cross_checks(expect: str):
 
     elif expect == "reverted":
         if copied_map is not None:
-            failures.append("العكس لم يحذف خريطة «تفقدهم» المنسوخة")
+            failures.append("العكس لم يحذف خريطة «تفقدهم»")
         try:
             linked = Sponsorship.objects.filter(project__isnull=False).count()
         except Exception:
-            # العمود نفسه أُزيل بعكس AddField — حالة عكس كامل سليمة
             linked = 0
         info["sponsorships still linked after revert"] = {"got": linked, "want": 0}
         if linked:
@@ -204,7 +194,6 @@ class Command(BaseCommand):
             failures.extend(cross_failures)
 
         if not options["verify"] and options["expect"] == "none":
-            # عرض الأعداد فقط
             for key, value in counts.items():
                 self.stdout.write(f"  {key}: {value}")
             return

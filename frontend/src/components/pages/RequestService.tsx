@@ -65,7 +65,9 @@ export default function RequestService() {
                 placeholder="اكتب تفاصيل إضافية عن احتياجاتك…" />
             </div>
             <Button type="submit" className="w-full">إرسال الطلب</Button>
+            <Button type="button" variant="secondary" className="w-full" onClick={() => setFormData({ service: "", beneficiary_name: "", beneficiary_contact: "", details: "" })}>مسح الحقول</Button>
           </form>
+          <p className="mt-3 text-xs text-brand-gray">لا يُعدّل الطلب بعد الإرسال — يُراجع من /Admin/requests.</p>
         </Card>
       </main>
     </div>

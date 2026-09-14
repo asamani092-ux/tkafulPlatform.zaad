@@ -1,19 +1,19 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { HandHeart, Lightbulb } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 import { API_BASE_URL } from "../../config";
+import { usePlatformSettings } from "../../contexts/PlatformSettingsContext";
+import { displayPlatformName } from "../../admin/publicNav";
 import Card from "../ui/Card";
+import Badge from "../ui/Badge";
 import Button from "../ui/Button";
+import KpiCard from "../ui/KpiCard";
+import { LoadingState } from "../feedback/PageStates";
 
 interface Stats {
   beneficiaries: number;
   potential_projects: number;
   donations: number;
-}
-interface BeneficiaryService {
-  id: number;
-  title: string;
-  desc: string;
 }
 interface PlatformProjectCard {
   id: number;
@@ -21,111 +21,138 @@ interface PlatformProjectCard {
   slug: string;
   description: string;
   brand_color: string;
+  donation_url?: string;
+  donation_label?: string;
+  status: string;
   tools: string[];
 }
 
+const TOOL_AR: Record<string, string> = {
+  map: "خريطة",
+  sponsorships: "كفالات",
+  volunteering: "تطوع",
+  services: "خدمات",
+  reports: "تقارير",
+};
+
+/** الصفحة الرئيسية — رأس فاتح وفق نظام الزاد المعتمد (لا هيرو مارون ممتلئ). */
+const HOME_INTRO_FALLBACK =
+  "منصّة واحدة للعمل الخيري والتطوعي — مشاريع، كفالات، خارطة أثر، وخدمات مجتمعية.";
+
 export default function Home() {
+  const { settings, pageBySlug } = usePlatformSettings();
+  const brandName = displayPlatformName(settings.platform_name);
+  const homePage = pageBySlug("home");
+  const headline = homePage?.title || brandName;
+  const intro = homePage?.body || HOME_INTRO_FALLBACK;
   const [stats, setStats] = useState<Stats>({ beneficiaries: 0, potential_projects: 0, donations: 0 });
-  const [services, setServices] = useState<BeneficiaryService[]>([]);
   const [platformProjects, setPlatformProjects] = useState<PlatformProjectCard[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/public-home-stats/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setStats(d)).catch(() => {});
-    fetch(`${API_BASE_URL}/api/beneficiary-services/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setServices(d.results || d)).catch(() => {});
-    fetch(`${API_BASE_URL}/api/platform/public/projects/`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setPlatformProjects(d)).catch(() => {});
+    Promise.all([
+      fetch(`${API_BASE_URL}/api/public-home-stats/`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`${API_BASE_URL}/api/platform/public/projects/?home=1&limit=6`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ]).then(([st, pr]) => {
+      if (st) setStats(st);
+      if (pr) setPlatformProjects(Array.isArray(pr) ? pr : pr.results || []);
+    }).finally(() => setLoading(false));
   }, []);
 
   const display = [
     { label: "مستفيد", value: stats.beneficiaries },
-    { label: "مشروع محتمل", value: stats.potential_projects },
+    { label: "مشروع", value: stats.potential_projects || platformProjects.length },
     { label: "متبرع", value: Math.floor((stats.donations || 0) / 100) },
   ];
 
   return (
-    <div>
-      {/* Hero */}
-      <header className="px-4 py-16 text-center text-white" style={{ background: "linear-gradient(to left, var(--tmkeen-primary), var(--tmkeen-secondary))" }}>
+    <div className="bg-surface-muted">
+      <header className="border-b border-surface-border bg-surface px-4 py-14 text-center">
         <div className="mx-auto max-w-page">
-          <h1 className="text-4xl font-extrabold md:text-5xl">منصة تكافل وأثر</h1>
-          <p className="mt-3 text-lg" style={{ opacity: 0.9 }}>حيث يلتقي العطاء بالأثر — انضم إلى مجتمع المتكافلين واصنع أثرًا يدوم</p>
+          <h1 className="text-4xl font-extrabold text-primary md:text-5xl">{headline}</h1>
+          <p className="mt-3 text-lg text-brand-gray">{intro}</p>
           <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {display.map((s) => (
-              <div key={s.label} className="rounded-xl border px-6 py-6" style={{ background: "rgba(255,255,255,.12)", borderColor: "rgba(255,255,255,.25)" }}>
-                <div className="text-3xl font-extrabold">{s.value.toLocaleString("en-US")} +</div>
-                <div className="mt-1 text-sm" style={{ opacity: 0.9 }}>{s.label}</div>
-              </div>
+              <KpiCard key={s.label} label={s.label} value={`${Number(s.value || 0).toLocaleString("en-US")} +`} />
             ))}
           </div>
-          <Link to="/about" className="btn-register mt-8 inline-flex">اعرف أكثر</Link>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <Link to="/projects" className="btn-primary inline-flex">استكشف المشاريع</Link>
+            {settings.show_map && (
+              <Link to="/map" className="btn-register inline-flex" style={{ color: "var(--text-brand)" }}>خارطة الأثر</Link>
+            )}
+            {settings.show_volunteering && (
+              <Link to="/volunteers" className="btn-register inline-flex" style={{ color: "var(--text-brand)" }}>تطوّع معنا</Link>
+            )}
+          </div>
         </div>
       </header>
 
-      {/* مشاريع المنصّة (project-first): كل مشروع له صفحة هبوط خاصة */}
-      {platformProjects.length > 0 && (
-        <section className="mx-auto max-w-page px-4 py-12">
-          <h2 className="mb-8 text-center text-3xl font-bold text-primary">مشاريع المنصّة</h2>
+      <section className="mx-auto max-w-page px-4 py-12">
+        <h2 className="mb-2 text-center text-3xl font-bold text-primary">المشاريع النشطة</h2>
+        <p className="mb-8 text-center text-sm text-brand-gray">
+          مشاريع مختارة للعرض — للاطلاع على الكل استخدم «استكشف المشاريع».
+        </p>
+        {loading && <LoadingState title="جاري التحميل…" />}
+        {!loading && (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {platformProjects.map((p) => (
-              <Link key={p.slug} to={`/projects/${p.slug}`} className="block">
-                <Card className="h-full">
-                  <div className="mb-2 flex items-center gap-2">
-                    <span style={{ width: 14, height: 14, borderRadius: 4, background: p.brand_color, display: "inline-block" }} />
+              <Card key={p.id} className="flex h-full flex-col">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span style={{ width: 12, height: 12, borderRadius: 3, background: p.brand_color }} />
                     <h3 className="text-lg font-bold text-primary">{p.name}</h3>
                   </div>
-                  <p className="mb-3 text-sm text-brand-gray">{p.description}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {p.tools.map((t) => (
-                      <span key={t} className="rounded-full border border-surface-border bg-surface px-2 py-0.5 text-xs font-bold text-brand-gray">
-                        {{ map: "خريطة", sponsorships: "كفالات", volunteering: "تطوع", services: "خدمات", reports: "تقارير" }[t] || t}
-                      </span>
-                    ))}
-                  </div>
-                </Card>
-              </Link>
+                  <Badge variant="success">{p.status === "active" ? "نشط" : (p.status || "نشط")}</Badge>
+                </div>
+                <p className="mb-3 flex-1 text-sm text-brand-gray">{p.description}</p>
+                <div className="mb-4 flex flex-wrap gap-1">
+                  {(p.tools || []).map((t) => (
+                    <span key={t} className="rounded border border-surface-border bg-surface px-2 py-0.5 text-xs font-bold text-brand-gray">
+                      {TOOL_AR[t] || t}
+                    </span>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Link to={`/projects/${p.slug}`}><Button>صفحة المشروع</Button></Link>
+                  {p.donation_url ? (
+                    <a href={p.donation_url} target="_blank" rel="noopener noreferrer">
+                      <Button variant="secondary">{p.donation_label || "تبرع الآن"}</Button>
+                    </a>
+                  ) : null}
+                </div>
+              </Card>
             ))}
+          </div>
+        )}
+        {!loading && platformProjects.length > 0 && (
+          <div className="mt-8 text-center">
+            <Link to="/projects" className="text-sm font-bold text-primary hover:underline">
+              عرض كل المشاريع ←
+            </Link>
+          </div>
+        )}
+      </section>
+
+      {settings.show_services && (
+        <section className="bg-surface-muted py-12">
+          <div className="mx-auto max-w-page px-4">
+            <h2 className="mb-8 text-center text-3xl font-bold text-primary">الخدمات</h2>
+            <div className="mx-auto grid max-w-md grid-cols-1 gap-6">
+              <Card>
+                <div className="mb-4 flex items-start justify-between">
+                  <div>
+                    <h3 className="mb-2 text-xl font-bold text-primary">طلب خدمة</h3>
+                    <p className="text-sm text-brand-gray">قدّم طلباً للمستفيدين — يُراجع من الإدارة ويُتابع حتى الإنجاز.</p>
+                  </div>
+                  <ClipboardList className="text-secondary" size={32} />
+                </div>
+                <Link to="/request-service"><Button variant="secondary">قدّم طلباً</Button></Link>
+              </Card>
+            </div>
           </div>
         </section>
       )}
-
-      <section className="mx-auto max-w-page px-4 py-12">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card>
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <h3 className="mb-2 text-xl font-bold text-primary">شارك في مشروع تكافلي</h3>
-                <p className="text-sm text-brand-gray">اكتشف مشاريعنا المتنوعة واختر ما يناسب اهتماماتك للمشاركة في صنع الأثر.</p>
-              </div>
-              <HandHeart className="text-secondary" size={32} />
-            </div>
-            <Link to="/projects"><Button>المشاريع</Button></Link>
-          </Card>
-          <Card>
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <h3 className="mb-2 text-xl font-bold text-primary">اقترح مبادرة تكافلية</h3>
-                <p className="text-sm text-brand-gray">شاركنا أفكارك لمبادرات جديدة تُحدث أثرًا إيجابيًا في المجتمع.</p>
-              </div>
-              <Lightbulb className="text-secondary" size={32} />
-            </div>
-            <Link to="/suggest"><Button variant="secondary">شارك اقتراحك</Button></Link>
-          </Card>
-        </div>
-      </section>
-
-      <section className="bg-surface-muted py-12">
-        <div className="mx-auto max-w-page px-4">
-          <h2 className="mb-8 text-center text-3xl font-bold text-primary">خدماتنا الأساسية المؤثّرة</h2>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {services.length > 0 ? services.map((s) => (
-              <Card key={s.id}>
-                <h3 className="mb-2 text-lg font-bold text-primary">{s.title}</h3>
-                <p className="mb-4 text-sm text-brand-gray">{s.desc}</p>
-                <Link to={`/request-service`}><Button variant="secondary">اطلب الخدمة</Button></Link>
-              </Card>
-            )) : <p className="text-center text-brand-gray">لا توجد خدمات حالياً.</p>}
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

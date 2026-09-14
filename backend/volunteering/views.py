@@ -1,11 +1,10 @@
 import logging
 
 from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-
-from core.throttles import PublicWriteRateThrottle
+from notifications.services import notify, EVENT_VOLUNTEER
 
 logger = logging.getLogger(__name__)
 from django.contrib.auth.models import User
@@ -13,19 +12,14 @@ from django.db.models import Sum, Count, Q
 from django.utils import timezone
 
 from .models import (
-    Project, Service, ServiceRequest, ServiceVolunteerApplication, Suggestion,
-    ProjectAssignment, Task, Subtask, AdminReport, VolunteerApplication,
-    VolunteerStatistics, QuarterlyTarget, DepartmentHours, TopVolunteer, WaterSupplyRequest
+    VolunteeringProfile, Volunteer,
+    ProjectAssignment, Task, Subtask, VolunteerApplication,
 )
-import openpyxl
-from io import BytesIO
-from decimal import Decimal
+from . import project_helpers
 from .serializers import (
-    ProjectSerializer, ServiceSerializer, ServiceRequestSerializer, ServiceVolunteerApplicationSerializer,
-    SuggestionSerializer, ProjectAssignmentSerializer,
+    ProjectSerializer, ProjectAssignmentSerializer,
     TaskSerializer, SubtaskSerializer, VolunteerDetailSerializer,
-    VolunteerRequestSerializer, AdminReportSerializer, VolunteerApplicationSerializer,
-    VolunteerStatisticsSerializer, WaterSupplyRequestSerializer
+    VolunteerRequestSerializer, VolunteerApplicationSerializer,
 )
 
 
@@ -43,17 +37,13 @@ def admin_stats(request):
     GET /api/admin/stats/
     Returns aggregated statistics for admin dashboard (main.tsx)
     """
-    active_projects_count = Project.objects.filter(status='ACTIVE').count()
-    completed_projects_count = Project.objects.filter(status='COMPLETED').count()
-    total_projects_count = Project.objects.count()
-    
-    total_donations = Project.objects.aggregate(
-        total=Sum('donation_amount')
-    )['total'] or 0
-    
-    total_beneficiaries = Project.objects.aggregate(
-        total=Sum('beneficiaries')
-    )['total'] or 0
+    active_projects_count = VolunteeringProfile.objects.filter(volunteer_status='ACTIVE').count()
+    completed_projects_count = VolunteeringProfile.objects.filter(volunteer_status='COMPLETED').count()
+    total_projects_count = VolunteeringProfile.objects.count()
+
+    total_donations = project_helpers.aggregate_donations()
+
+    total_beneficiaries = project_helpers.aggregate_beneficiaries()
     
     return Response({
         'total_donations': float(total_donations),
@@ -132,36 +122,36 @@ def get_my_active_project(request):
         # If specific project requested, return it (highest priority)
         if project_id:
             try:
-                project = Project.objects.get(id=project_id)
-                serializer = ProjectSerializer(project)
-                return Response(serializer.data)
-            except Project.DoesNotExist:
+                profile = project_helpers.profile_for_project_id(project_id)
+                if profile:
+                    serializer = ProjectSerializer(profile)
+                    return Response(serializer.data)
+            except VolunteeringProfile.DoesNotExist:
                 pass
 
         # If status filter provided, return most recent project with that status
         if status_filter:
-            # Convert Arabic status to English if needed
             english_status = status_map.get(status_filter, status_filter)
 
-            project = Project.objects.filter(
-                status=english_status
-            ).order_by('-updated_at').first()
+            profile = VolunteeringProfile.objects.filter(
+                volunteer_status=english_status
+            ).select_related("project").order_by('-updated_at').first()
 
-            if project:
-                serializer = ProjectSerializer(project)
+            if profile:
+                serializer = ProjectSerializer(profile)
                 return Response(serializer.data)
             else:
-                # No project found with this status
                 return Response(None, status=200)
 
-        # Default: Return most recent active project, fallback to any recent project
-        project = Project.objects.filter(status='ACTIVE').order_by('-updated_at').first()
+        profile = VolunteeringProfile.objects.filter(
+            volunteer_status='ACTIVE'
+        ).select_related("project").order_by('-updated_at').first()
 
-        if not project:
-            project = Project.objects.all().order_by('-updated_at').first()
+        if not profile:
+            profile = VolunteeringProfile.objects.select_related("project").order_by('-updated_at').first()
 
-        if project:
-            serializer = ProjectSerializer(project)
+        if profile:
+            serializer = ProjectSerializer(profile)
             return Response(serializer.data)
 
         # Return null only if there are absolutely no projects
@@ -174,15 +164,15 @@ def get_my_active_project(request):
 # ============================================================================
 # PROJECT VIEWSET (Enhanced) - CORRECTED VERSION
 # ============================================================================
-class ProjectViewSet(viewsets.ModelViewSet):
+class VolunteeringProfileViewSet(viewsets.ModelViewSet):
     """
-    Admin endpoint for managing projects
-    Returns all projects (no pagination) filtered by status
+    Admin endpoint for managing volunteering projects (VolunteeringProfile).
+    URL pk = platform Project.id for backward compatibility.
     """
-    queryset = Project.objects.all()
+    queryset = project_helpers.volunteering_profiles_qs()
     serializer_class = ProjectSerializer
     permission_classes = [IsAdmin]
-    pagination_class = None  # Disable pagination to return all projects
+    pagination_class = None
 
     STATUS_MAPPING = {
         'نشط': 'ACTIVE',
@@ -192,18 +182,21 @@ class ProjectViewSet(viewsets.ModelViewSet):
         'حالة المشروع': 'PLANNED',
     }
 
+    def get_object(self):
+        return project_helpers.profile_for_project_id(self.kwargs["pk"])
+
     def get_queryset(self):
         queryset = super().get_queryset()
         status_param = self.request.query_params.get('status', None)
 
         if status_param == 'pending':
-            queryset = queryset.filter(status='PLANNED')
+            queryset = queryset.filter(volunteer_status='PLANNED')
         elif status_param == 'active':
-            queryset = queryset.filter(status='ACTIVE')
+            queryset = queryset.filter(volunteer_status='ACTIVE')
         elif status_param == 'completed':
-            queryset = queryset.filter(status='COMPLETED')
+            queryset = queryset.filter(volunteer_status='COMPLETED')
 
-        return queryset.order_by('-created_at')  # Most recent first
+        return queryset.order_by('-created_at')
 
     def create(self, request, *args, **kwargs):
         """
@@ -275,7 +268,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             )
         
         assignment, created = ProjectAssignment.objects.get_or_create(
-            project=project,
+            project=project.project,
             user=user,
             defaults={'status': 'جديدة'}
         )
@@ -295,22 +288,23 @@ class ProjectViewSet(viewsets.ModelViewSet):
         Approve a pending project idea - changes status from PLANNED to ACTIVE
         POST /api/admin/projects/{id}/approve/
         """
-        project = self.get_object()
+        profile = self.get_object()
 
-        if project.status != 'PLANNED':
+        if profile.volunteer_status != 'PLANNED':
             return Response(
                 {"error": "Only pending projects can be approved"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Change status from PLANNED (متوقف) to ACTIVE (نشط)
-        old_status = project.status
-        project.status = 'ACTIVE'
-        project.save()
+        old_status = profile.volunteer_status
+        profile.volunteer_status = 'ACTIVE'
+        profile.project.status = 'active'
+        profile.project.save()
+        profile.save()
 
-        logger.info("Project %s approved: %s -> ACTIVE", project.id, old_status)
+        logger.info("Project %s approved: %s -> ACTIVE", profile.project.id, old_status)
 
-        serializer = self.get_serializer(project)
+        serializer = self.get_serializer(profile)
         return Response({
             "message": "Project approved successfully",
             "project": serializer.data
@@ -318,16 +312,16 @@ class ProjectViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
-        project = self.get_object()
+        profile = self.get_object()
         
-        if project.status != 'PLANNED':
+        if profile.volunteer_status != 'PLANNED':
             return Response(
                 {"error": "Only pending projects can be rejected"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        project_title = project.title
-        project.delete()
+        project_title = profile.project.name
+        profile.project.delete()
         
         return Response({
             "message": f"Project '{project_title}' rejected successfully"
@@ -411,14 +405,29 @@ class TaskViewSet(viewsets.ModelViewSet):
 @permission_classes([IsAdmin])
 def list_volunteers(request):
     """
-    GET /api/admin/volunteers/
-    Returns detailed list of APPROVED volunteers for VolunteerManagement page
+    GET /api/volunteers/
+    قائمة المتطوّعين المعتمدين — بحث/فلترة اختيارية (?q=&is_active=).
     """
-    # ✅ UPDATED: Only show approved volunteers
+    from django.db.models import Q
+
     volunteers = User.objects.filter(
         profile__role='user',
         profile__is_approved=True
     ).select_related('profile').prefetch_related('assigned_tasks')
+
+    q = (request.query_params.get('q') or request.query_params.get('search') or "").strip()
+    if q:
+        volunteers = volunteers.filter(
+            Q(email__icontains=q)
+            | Q(profile__name__icontains=q)
+            | Q(profile__city__icontains=q)
+            | Q(profile__phone__icontains=q)
+        )
+    active = request.query_params.get('is_active')
+    if active in ("true", "1"):
+        volunteers = volunteers.filter(is_active=True)
+    elif active in ("false", "0"):
+        volunteers = volunteers.filter(is_active=False)
 
     # ترقيم اختياري للقوائم الكبيرة (لا يغيّر السلوك الافتراضي عند عدم تمرير page)
     if request.query_params.get('page'):
@@ -518,203 +527,6 @@ def reject_volunteer_request(request, volunteer_id):
 # ============================================================================
 # PERFORMANCE REPORTS
 # ============================================================================
-@api_view(['GET'])
-@permission_classes([IsAdmin])
-def projects_progress_report(request):
-    """
-    GET /api/admin/reports/projects-progress/
-    Returns progress report for all projects
-    """
-    projects = Project.objects.filter(
-        status__in=['ACTIVE', 'COMPLETED']
-    ).values('title', 'progress')
-    
-    return Response({
-        'projects': [
-            {
-                'name': p['title'],
-                'progress': p['progress']
-            }
-            for p in projects
-        ]
-    })
-
-
-@api_view(['GET'])
-@permission_classes([IsAdmin])
-def volunteers_performance_report(request):
-    """
-    GET /api/admin/reports/volunteers-performance/
-    Returns performance report for all volunteers
-    """
-    # ✅ UPDATED: Only show approved volunteers
-    volunteers = User.objects.filter(
-        profile__role='user',
-        profile__is_approved=True
-    ).select_related('profile')
-    
-    data = []
-    for volunteer in volunteers:
-        completed = volunteer.assigned_tasks.filter(status='مكتملة').count()
-        current = volunteer.assigned_tasks.exclude(status='مكتملة').count()
-        total = completed + current
-        completion_rate = int((completed / total) * 100) if total > 0 else 0
-        
-        data.append({
-            'name': volunteer.profile.name,
-            'completed': completed,
-            'current': current,
-            'completion_rate': completion_rate,
-            'join_date': volunteer.date_joined.strftime('%Y-%m-%d'),
-        })
-    
-    return Response({
-        'volunteers': data
-    })
-
-
-@api_view(['GET'])
-@permission_classes([IsAdmin])
-def volunteer_tasks_report(request):
-    """
-    GET /api/admin/reports/volunteer-tasks/?volunteer_id=1
-    Returns tasks for a specific volunteer
-    """
-    volunteer_id = request.query_params.get('volunteer_id')
-    
-    if not volunteer_id:
-        return Response(
-            {"error": "volunteer_id parameter is required"},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    tasks = Task.objects.filter(
-        volunteer_id=volunteer_id
-    ).order_by('-due_date')
-    
-    serializer = TaskSerializer(tasks, many=True)
-    return Response({
-        'tasks': serializer.data
-    })
-
-
-# ============================================================================
-# SERVICE & SERVICE REQUEST VIEWSETS
-# ============================================================================
-class ServiceViewSet(viewsets.ModelViewSet):
-    """
-    Admin endpoint for managing services
-    GET /api/services/ - List all services
-    POST /api/services/ - Create new service
-    """
-    queryset = Service.objects.all()
-    serializer_class = ServiceSerializer
-    permission_classes = [IsAdmin]
-
-
-class ServiceRequestViewSet(viewsets.ModelViewSet):
-    """
-    Admin endpoint for managing service requests
-    GET /api/service-requests/ - List all service requests
-    GET /api/service-requests/?status=PENDING - Filter by status
-    """
-    queryset = ServiceRequest.objects.all()
-    serializer_class = ServiceRequestSerializer
-    permission_classes = [IsAdmin]
-
-    def get_queryset(self):
-        queryset = super().get_queryset().select_related('service')
-
-        # Filter by status
-        status_param = self.request.query_params.get('status')
-        if status_param:
-            queryset = queryset.filter(status=status_param)
-
-        return queryset.order_by('-created_at')
-
-    @action(detail=True, methods=['post'])
-    def approve(self, request, pk=None):
-        """
-        POST /api/service-requests/{id}/approve/
-        Approve a service request
-        """
-        service_request = self.get_object()
-
-        if service_request.status != 'PENDING':
-            return Response(
-                {"error": "Only pending requests can be approved"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        service_request.status = 'APPROVED'
-        service_request.save()
-
-        serializer = self.get_serializer(service_request)
-        return Response({
-            "message": "تم قبول طلب الخدمة بنجاح",
-            "request": serializer.data
-        })
-
-    @action(detail=True, methods=['post'])
-    def reject(self, request, pk=None):
-        """
-        POST /api/service-requests/{id}/reject/
-        Reject a service request
-        """
-        service_request = self.get_object()
-
-        if service_request.status != 'PENDING':
-            return Response(
-                {"error": "Only pending requests can be rejected"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        service_request.status = 'REJECTED'
-        service_request.save()
-
-        serializer = self.get_serializer(service_request)
-        return Response({
-            "message": "تم رفض طلب الخدمة",
-            "request": serializer.data
-        })
-
-    @action(detail=True, methods=['post'])
-    def mark_done(self, request, pk=None):
-        """
-        POST /api/service-requests/{id}/mark_done/
-        Mark a service request as done
-        """
-        service_request = self.get_object()
-
-        if service_request.status not in ['PENDING', 'APPROVED']:
-            return Response(
-                {"error": "Cannot mark this request as done"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        service_request.status = 'DONE'
-        service_request.save()
-
-        serializer = self.get_serializer(service_request)
-        return Response({
-            "message": "تم وضع علامة على الطلب كمكتمل",
-            "request": serializer.data
-        })
-
-
-class SuggestionViewSet(viewsets.ModelViewSet):
-    queryset = Suggestion.objects.all()
-    serializer_class = SuggestionSerializer
-
-    def get_permissions(self):
-        if self.action == "create":
-            return [AllowAny()]
-        return [IsAdmin()]
-
-    def get_throttles(self):
-        if self.action == "create":
-            return [PublicWriteRateThrottle()]
-        return super().get_throttles()
 
 
 class ProjectAssignmentViewSet(viewsets.ModelViewSet):
@@ -761,260 +573,6 @@ def list_users(request):
 # ============================================================================
 # ADMIN REPORTS GENERATION
 # ============================================================================
-@api_view(['POST'])
-@permission_classes([IsAdmin])
-def generate_report(request):
-    """
-    POST /api/admin/reports/generate/
-    Generate a comprehensive platform report
-    Body: { "date_from": "2026-01-01", "date_to": "2026-01-31" } (optional)
-    """
-    from datetime import datetime
-
-    date_from = request.data.get('date_from')
-    date_to = request.data.get('date_to')
-
-    # Query filters based on date range
-    project_filter = Q()
-    task_filter = Q()
-    volunteer_filter = Q()
-
-    if date_from:
-        project_filter &= Q(created_at__gte=date_from)
-        task_filter &= Q(created_at__gte=date_from)
-        volunteer_filter &= Q(date_joined__gte=date_from)
-
-    if date_to:
-        project_filter &= Q(created_at__lte=date_to)
-        task_filter &= Q(created_at__lte=date_to)
-        volunteer_filter &= Q(date_joined__lte=date_to)
-
-    # ========== COLLECT DATA ==========
-
-    # Projects data
-    projects = Project.objects.filter(project_filter)
-    projects_by_status = {
-        'active': projects.filter(status='ACTIVE').count(),
-        'completed': projects.filter(status='COMPLETED').count(),
-        'planned': projects.filter(status='PLANNED').count(),
-        'cancelled': projects.filter(status='CANCELLED').count(),
-    }
-    projects_by_category = {}
-    for category in projects.values_list('category', flat=True).distinct():
-        if category:
-            projects_by_category[category] = projects.filter(category=category).count()
-
-    # Projects list with details
-    projects_list = []
-    for project in projects:
-        volunteers_count = ProjectAssignment.objects.filter(project=project).count()
-        tasks_count = Task.objects.filter(project=project).count()
-        tasks_completed = Task.objects.filter(project=project, status='مكتملة').count()
-
-        # Calculate automatic progress based on task completion
-        # If no tasks exist, use manual progress field as fallback
-        if tasks_count > 0:
-            automatic_progress = int((tasks_completed / tasks_count) * 100)
-        else:
-            automatic_progress = project.progress  # Fallback to manual progress
-
-        projects_list.append({
-            'id': project.id,
-            'title': project.title,
-            'category': project.category,
-            'status': project.status,
-            'status_display': {
-                'ACTIVE': 'نشط',
-                'COMPLETED': 'مكتمل',
-                'PLANNED': 'متوقف',
-                'CANCELLED': 'ملغي'
-            }.get(project.status, project.status),
-            'progress': automatic_progress,  # ✅ Now using task-based calculation
-            'beneficiaries': project.beneficiaries,
-            'donation_amount': float(project.donation_amount),
-            'start_date': project.start_date.isoformat() if project.start_date else None,
-            'end_date': project.end_date.isoformat() if project.end_date else None,
-            'volunteers_assigned': volunteers_count,
-            'tasks_total': tasks_count,
-            'tasks_completed': tasks_completed,
-            'completion_rate': automatic_progress,  # Same value for consistency
-        })
-
-    # Volunteers data
-    volunteers = User.objects.filter(
-        profile__role='user',
-        profile__is_approved=True
-    ).filter(volunteer_filter).select_related('profile')
-
-    volunteers_list = []
-    for volunteer in volunteers:
-        tasks = volunteer.assigned_tasks.all()
-        tasks_completed = tasks.filter(status='مكتملة').count()
-        tasks_in_progress = tasks.exclude(status='مكتملة').count()
-        current_projects = list(set([task.project.title for task in tasks.exclude(status='مكتملة')]))
-
-        volunteers_list.append({
-            'id': volunteer.id,
-            'name': volunteer.profile.name,
-            'email': volunteer.email,
-            'phone': volunteer.profile.phone,
-            'city': volunteer.profile.city,
-            'skills': volunteer.profile.skills,
-            'qualification': volunteer.profile.qualification,
-            'university': volunteer.profile.university,
-            'total_hours': volunteer.profile.total_volunteer_hours,
-            'tasks_completed': tasks_completed,
-            'tasks_in_progress': tasks_in_progress,
-            'rating': float(volunteer.profile.rating),
-            'join_date': volunteer.date_joined.isoformat(),
-            'current_projects': current_projects,
-        })
-
-    # Tasks data
-    tasks = Task.objects.filter(task_filter).select_related('project', 'volunteer')
-    tasks_by_status = {
-        'in_progress': tasks.filter(status='قيد التنفيذ').count(),
-        'waiting': tasks.filter(status='في الانتظار').count(),
-        'completed': tasks.filter(status='مكتملة').count(),
-        'on_hold': tasks.filter(status='معلقة').count(),
-    }
-    tasks_by_priority = {
-        'high': tasks.filter(priority='عالية').count(),
-        'medium': tasks.filter(priority='متوسطة').count(),
-        'low': tasks.filter(priority='منخفضة').count(),
-    }
-
-    # Overdue tasks (past due date and not completed)
-    from django.utils import timezone
-    overdue_tasks = tasks.filter(
-        due_date__lt=timezone.now().date(),
-        status__in=['قيد التنفيذ', 'في الانتظار', 'معلقة']
-    )
-    overdue_tasks_list = [{
-        'id': task.id,
-        'title': task.title,
-        'project': task.project.title,
-        'volunteer': task.volunteer.profile.name if task.volunteer else None,
-        'due_date': task.due_date.isoformat() if task.due_date else None,
-        'status': task.status,
-        'priority': task.priority,
-    } for task in overdue_tasks[:10]]  # Top 10 overdue
-
-    # Totals
-    total_beneficiaries = projects.aggregate(total=Sum('beneficiaries'))['total'] or 0
-    total_donations = projects.aggregate(total=Sum('donation_amount'))['total'] or 0
-    total_volunteer_hours = volunteers.aggregate(
-        total=Sum('profile__total_volunteer_hours')
-    )['total'] or 0
-
-    # Build report data structure
-    report_data = {
-        'summary': {
-            'total_projects': projects.count(),
-            'total_volunteers': volunteers.count(),
-            'total_tasks': tasks.count(),
-            'total_beneficiaries': total_beneficiaries,
-            'total_donations': float(total_donations),
-            'total_volunteer_hours': total_volunteer_hours,
-            'date_from': date_from,
-            'date_to': date_to,
-        },
-        'projects': {
-            'by_status': projects_by_status,
-            'by_category': projects_by_category,
-            'list': projects_list,
-        },
-        'volunteers': {
-            'total': volunteers.count(),
-            'list': volunteers_list,
-        },
-        'tasks': {
-            'by_status': tasks_by_status,
-            'by_priority': tasks_by_priority,
-            'overdue': overdue_tasks_list,
-            'total_completed': tasks_by_status['completed'],
-            'completion_rate': int((tasks_by_status['completed'] / tasks.count()) * 100) if tasks.count() > 0 else 0,
-        },
-    }
-
-    # Generate report title
-    now = timezone.now()
-    if date_from and date_to:
-        title = f"تقرير شامل ({date_from} - {date_to})"
-    else:
-        title = f"تقرير شامل - {now.strftime('%Y-%m-%d %H:%M')}"
-
-    # Create and save report
-    report = AdminReport.objects.create(
-        admin=request.user,
-        title=title,
-        date_from=date_from,
-        date_to=date_to,
-        report_data=report_data,
-        total_projects=projects.count(),
-        total_volunteers=volunteers.count(),
-        total_tasks=tasks.count(),
-        total_beneficiaries=total_beneficiaries,
-        total_donations=total_donations,
-    )
-
-    serializer = AdminReportSerializer(report)
-    return Response({
-        'message': 'تم إنشاء التقرير بنجاح',
-        'report': serializer.data
-    }, status=status.HTTP_201_CREATED)
-
-
-@api_view(['GET'])
-@permission_classes([IsAdmin])
-def list_reports(request):
-    """
-    GET /api/admin/reports/
-    List all generated reports
-    """
-    reports = AdminReport.objects.all()
-    serializer = AdminReportSerializer(reports, many=True)
-    return Response({'results': serializer.data})
-
-
-@api_view(['GET'])
-@permission_classes([IsAdmin])
-def get_report_detail(request, report_id):
-    """
-    GET /api/admin/reports/{id}/
-    Get specific report details
-    """
-    try:
-        report = AdminReport.objects.get(id=report_id)
-        serializer = AdminReportSerializer(report)
-        return Response(serializer.data)
-    except AdminReport.DoesNotExist:
-        return Response(
-            {'error': 'التقرير غير موجود'},
-            status=status.HTTP_404_NOT_FOUND
-        )
-
-
-@api_view(['DELETE'])
-@permission_classes([IsAdmin])
-def delete_report(request, report_id):
-    """
-    DELETE /api/admin/reports/{id}/
-    Delete a report
-    """
-    try:
-        report = AdminReport.objects.get(id=report_id)
-        report_title = report.title
-        report.delete()
-        return Response({
-            'message': f'تم حذف التقرير "{report_title}" بنجاح'
-        })
-    except AdminReport.DoesNotExist:
-        return Response(
-            {'error': 'التقرير غير موجود'},
-            status=status.HTTP_404_NOT_FOUND
-        )
-
 
 # ============================================================================
 # VOLUNTEER-SPECIFIC ENDPOINTS (User Pages)
@@ -1075,15 +633,12 @@ def my_tasks(request):
 def public_projects(request):
     """
     GET /api/public-projects/
-    Public endpoint - returns all visible projects for public viewing
-    No authentication required
+    واجهة توافقية — نفس شكل VolunteeringProfile لكن بفلتر دورة الحياة العام
+    (active فقط) عبر public_volunteering_profiles_qs. المصدر الكانوني للمنصّة:
+    GET /api/platform/public/projects/ (projects.services.public_projects_queryset).
     """
-    # Get all visible projects (not hidden)
-    projects = Project.objects.filter(
-        is_hidden=False
-    ).order_by('-created_at')
-
-    serializer = ProjectSerializer(projects, many=True)
+    profiles = project_helpers.public_volunteering_profiles_qs().order_by('-created_at')
+    serializer = ProjectSerializer(profiles, many=True)
     return Response(serializer.data)
 
 
@@ -1092,16 +647,9 @@ def public_projects(request):
 def available_opportunities(request):
     """
     GET /api/user/opportunities/
-    Returns available projects/opportunities that volunteers can apply to
-    Shows all projects that are NOT hidden (is_hidden=False)
-    Volunteers can apply and wait for admin approval
-    Requires authentication
+    فرص التطوّع للمصادقة — مشاريع المنصّة النشطة غير المخفية فقط (لا draft/archived).
     """
-    # Get all visible projects (regardless of status)
-    opportunities = Project.objects.filter(
-        is_hidden=False
-    ).order_by('-created_at')  # Show all visible projects, sorted by newest first
-
+    opportunities = project_helpers.public_volunteering_profiles_qs().order_by('-created_at')
     serializer = ProjectSerializer(opportunities, many=True)
     return Response({
         'results': serializer.data
@@ -1116,12 +664,18 @@ def apply_to_opportunity(request, project_id):
     Apply to an opportunity/project - Creates an application for admin review
     """
     try:
-        project = Project.objects.get(id=project_id)
+        from projects.models import Project
+        platform_project = Project.objects.get(id=project_id)
+        # لا قبول طلبات على مشاريع غير عامة (مسودة/مؤرشف/مخفي/موقوف)
+        if not project_helpers.public_volunteering_profiles_qs().filter(project_id=project_id).exists():
+            return Response(
+                {'error': 'المشروع غير متاح للتقديم'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         user = request.user
 
-        # Check if already applied
         existing_application = VolunteerApplication.objects.filter(
-            project=project,
+            project=platform_project,
             volunteer=user
         ).first()
 
@@ -1131,12 +685,19 @@ def apply_to_opportunity(request, project_id):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Create a new application (NOT a task yet)
         application = VolunteerApplication.objects.create(
             volunteer=user,
-            project=project,
+            project=platform_project,
             message=request.data.get('message', ''),
             status='قيد المراجعة'
+        )
+
+        notify(
+            message=f"طلب تطوع جديد على مشروع {platform_project.name}",
+            roles=["admin"],
+            notification_type="action",
+            link="/Admin/volunteers/applications",
+            event_type=EVENT_VOLUNTEER,
         )
 
         return Response({
@@ -1302,13 +863,13 @@ def accept_volunteer_application(request, application_id):
 
         # Create a task for the volunteer
         task = Task.objects.create(
-            title=f"مهمة في {application.project.title}",
-            description=application.project.desc or "لا يوجد وصف",
+            title=f"مهمة في {application.project.name}",
+            description=application.project.description or "لا يوجد وصف",
             project=application.project,
             volunteer=application.volunteer,
             status='قيد التنفيذ',  # Accepted = In Progress
             priority='متوسطة',
-            hours=application.project.estimated_hours or 0
+            hours=getattr(application.project, "estimated_hours", 0) or 0
         )
 
         # Create default subtasks
@@ -1413,32 +974,6 @@ def public_volunteers_stats(request):
     })
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-@throttle_classes([PublicWriteRateThrottle])
-def public_submit_suggestion(request):
-    """
-    POST /api/public-suggestions/
-    Submit a suggestion from the public suggest page
-    No authentication required
-
-    Payload:
-    {
-        "title": "Suggestion title",
-        "description": "Suggestion description",
-        "submitted_by": "email@example.com"
-    }
-    """
-    serializer = SuggestionSerializer(data=request.data)
-
-    if serializer.is_valid():
-        serializer.save()
-        return Response({
-            'message': 'تم استلام اقتراحك بنجاح'
-        }, status=status.HTTP_201_CREATED)
-
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -1448,541 +983,13 @@ def public_home_stats(request):
     Returns aggregated statistics for home page (Hero section)
     No authentication required
     """
-    # Total beneficiaries from all projects
-    total_beneficiaries = Project.objects.aggregate(
-        total=Sum('beneficiaries')
-    )['total'] or 0
-
-    # Total potential projects (all non-cancelled projects)
-    potential_projects = Project.objects.exclude(status='CANCELLED').count()
-
-    # Total donations amount
-    total_donations = Project.objects.aggregate(
-        total=Sum('donation_amount')
-    )['total'] or 0
+    # إحصاءات عامة من المشاريع النشطة الظاهرة فقط — لا تُضخّم بمسودات/مؤرشفة.
+    total_beneficiaries = project_helpers.aggregate_beneficiaries(public_only=True)
+    potential_projects = project_helpers.public_volunteering_profiles_qs().count()
+    total_donations = project_helpers.aggregate_donations(public_only=True)
 
     return Response({
         'beneficiaries': total_beneficiaries,
         'potential_projects': potential_projects,
         'donations': float(total_donations),
     })
-
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-@throttle_classes([PublicWriteRateThrottle])
-def public_submit_service_request(request):
-    """
-    POST /api/public-service-request/
-    Submit a service request from the public (beneficiaries)
-    No authentication required
-
-    Payload:
-    {
-        "service": 1,  // Service ID
-        "beneficiary_name": "اسم المسجد",
-        "beneficiary_contact": "0500000000",
-        "details": "نحتاج إلى 100 زجاجة ماء للمسجد"
-    }
-    """
-    serializer = ServiceRequestSerializer(data=request.data)
-
-    if serializer.is_valid():
-        serializer.save()
-        return Response({
-            'message': 'تم استلام طلبك بنجاح. سيتم مراجعته من قبل الإدارة.',
-            'request_id': serializer.data['id']
-        }, status=status.HTTP_201_CREATED)
-
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def public_services_list(request):
-    """
-    GET /api/public-services/
-    List all active VOLUNTEER OPPORTUNITY services for /services page
-    No authentication required
-    """
-    services = Service.objects.filter(
-        is_active=True,
-        service_type="للمتطوعين"  # Only volunteer opportunity services
-    ).order_by('-created_at')
-    serializer = ServiceSerializer(services, many=True)
-    return Response({
-        'results': serializer.data
-    })
-
-
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def beneficiary_services_list(request):
-    """
-    GET /api/beneficiary-services/
-    List all active BENEFICIARY services for main page
-    No authentication required
-    """
-    services = Service.objects.filter(
-        is_active=True,
-        service_type="للمستفيدين"  # Only beneficiary services
-    ).order_by('-created_at')
-    serializer = ServiceSerializer(services, many=True)
-    return Response({
-        'results': serializer.data
-    })
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def apply_to_service_as_volunteer(request, service_id):
-    """
-    POST /api/services/{service_id}/apply-volunteer/
-    Apply to help with a service as a volunteer
-    Requires authentication
-    """
-    try:
-        service = Service.objects.get(id=service_id)
-        user = request.user
-
-        # Check if already applied
-        existing_application = ServiceVolunteerApplication.objects.filter(
-            service=service,
-            volunteer=user
-        ).first()
-
-        if existing_application:
-            return Response(
-                {'message': 'لقد تقدمت للمساعدة في هذه الخدمة من قبل'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Create new application
-        application = ServiceVolunteerApplication.objects.create(
-            volunteer=user,
-            service=service,
-            message=request.data.get('message', ''),
-            status='قيد المراجعة'
-        )
-
-        return Response({
-            'message': 'تم إرسال طلبك للمساعدة بنجاح. سيتم مراجعته من قبل المشرف.',
-            'application_id': application.id
-        })
-
-    except Service.DoesNotExist:
-        return Response(
-            {'error': 'الخدمة غير موجودة'},
-            status=status.HTTP_404_NOT_FOUND
-        )
-
-
-# ============================================================================
-# ADMIN: SERVICE VOLUNTEER APPLICATIONS MANAGEMENT
-# ============================================================================
-
-@api_view(['GET'])
-@permission_classes([IsAdmin])
-def list_service_volunteer_applications(request):
-    """
-    GET /api/admin/service-volunteer-applications/
-    List all volunteer applications for services with optional status filter
-    """
-    status_filter = request.query_params.get('status', None)
-
-    applications = ServiceVolunteerApplication.objects.select_related(
-        'volunteer__profile', 'service', 'reviewed_by__profile'
-    ).all()
-
-    if status_filter:
-        applications = applications.filter(status=status_filter)
-
-    serializer = ServiceVolunteerApplicationSerializer(applications, many=True)
-    return Response({'results': serializer.data})
-
-
-@api_view(['POST'])
-@permission_classes([IsAdmin])
-def accept_service_volunteer_application(request, application_id):
-    """
-    POST /api/admin/service-volunteer-applications/{application_id}/accept/
-    Accept a volunteer application for a service
-    """
-    try:
-        application = ServiceVolunteerApplication.objects.get(id=application_id)
-
-        if application.status != 'قيد المراجعة':
-            return Response(
-                {'error': 'هذا الطلب تم مراجعته بالفعل'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Update application status
-        application.status = 'مقبول'
-        application.reviewed_by = request.user
-        application.reviewed_at = timezone.now()
-        application.admin_notes = request.data.get('admin_notes', '')
-        application.save()
-
-        return Response({
-            'message': 'تم قبول المتطوع للمساعدة في الخدمة'
-        })
-
-    except ServiceVolunteerApplication.DoesNotExist:
-        return Response(
-            {'error': 'الطلب غير موجود'},
-            status=status.HTTP_404_NOT_FOUND
-        )
-
-
-@api_view(['POST'])
-@permission_classes([IsAdmin])
-def reject_service_volunteer_application(request, application_id):
-    """
-    POST /api/admin/service-volunteer-applications/{application_id}/reject/
-    Reject a volunteer application for a service
-    """
-    try:
-        application = ServiceVolunteerApplication.objects.get(id=application_id)
-
-        if application.status != 'قيد المراجعة':
-            return Response(
-                {'error': 'هذا الطلب تم مراجعته بالفعل'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Update application status
-        application.status = 'مرفوض'
-        application.reviewed_by = request.user
-        application.reviewed_at = timezone.now()
-        application.admin_notes = request.data.get('admin_notes', '')
-        application.save()
-
-        return Response({
-            'message': 'تم رفض الطلب'
-        })
-
-    except ServiceVolunteerApplication.DoesNotExist:
-        return Response(
-            {'error': 'الطلب غير موجود'},
-            status=status.HTTP_404_NOT_FOUND
-        )
-
-
-# ============================================================================
-# PUBLIC: VOLUNTEER STATISTICS ENDPOINT
-# ============================================================================
-
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def public_volunteer_statistics(request):
-    """
-    GET /api/public-volunteer-statistics/
-    Returns volunteer statistics for the home page dashboard
-    Optional query param: ?year=2025 (defaults to latest year)
-    """
-    year = request.query_params.get('year', None)
-
-    if year:
-        stats = VolunteerStatistics.objects.filter(year=int(year)).first()
-    else:
-        # Get the most recent year's statistics
-        stats = VolunteerStatistics.objects.first()
-
-    if not stats:
-        return Response({
-            'error': 'No statistics found',
-            'data': None
-        }, status=status.HTTP_404_NOT_FOUND)
-
-    serializer = VolunteerStatisticsSerializer(stats)
-    return Response(serializer.data)
-
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-@throttle_classes([PublicWriteRateThrottle])
-def public_water_supply_request(request):
-    """
-    POST /api/public-water-supply-request/
-    Submit a water supply request for a mosque
-    No authentication required
-    """
-    data = request.data.copy()
-
-    # Convert frontend field names to backend field names
-    field_mapping = {
-        'applicantName': 'applicant_name',
-        'mobileNumber': 'mobile_number',
-        'applicantRole': 'applicant_role',
-        'mosqueName': 'mosque_name',
-        'neighborhood': 'neighborhood',
-        'locationLink': 'location_link',
-        'worshippersCount': 'worshippers_count',
-        'donorExists': 'donor_exists',
-        'donorName': 'donor_name',
-        'donorPhone': 'donor_phone',
-    }
-
-    # Map frontend camelCase to backend snake_case
-    mapped_data = {}
-    for frontend_key, backend_key in field_mapping.items():
-        if frontend_key in data:
-            value = data[frontend_key]
-            # Convert donorExists from string to boolean
-            if frontend_key == 'donorExists':
-                value = value == 'نعم'
-            # Convert worshippersCount to integer
-            elif frontend_key == 'worshippersCount':
-                try:
-                    value = int(value)
-                except (ValueError, TypeError):
-                    value = 0
-            mapped_data[backend_key] = value
-
-    serializer = WaterSupplyRequestSerializer(data=mapped_data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response({
-            'success': True,
-            'message': 'تم إرسال طلبك بنجاح'
-        }, status=status.HTTP_201_CREATED)
-
-    return Response({
-        'success': False,
-        'errors': serializer.errors
-    }, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(['POST'])
-@permission_classes([IsAdmin])
-def upload_volunteer_statistics(request):
-    """
-    POST /api/admin/upload-statistics/
-    Upload Excel file to update volunteer statistics for home page
-    Requires admin authentication
-    """
-    if 'file' not in request.FILES:
-        return Response({
-            'success': False,
-            'error': 'لم يتم رفع أي ملف'
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    excel_file = request.FILES['file']
-
-    try:
-        # Read Excel file
-        wb = openpyxl.load_workbook(BytesIO(excel_file.read()), data_only=True)
-        ws = wb.active
-
-        # Get all rows (skip header)
-        rows = list(ws.iter_rows(min_row=2, values_only=True))
-
-        # Calculate statistics from raw data
-        total_records = len([r for r in rows if r and any(r)])
-
-        # Count unique volunteers by phone or ID
-        volunteer_ids = set()
-        total_hours = 0
-        department_hours_map = {}
-        volunteer_hours_map = {}
-
-        # Find column indices from header
-        headers = [cell.value for cell in ws[1]]
-
-        # Try to find relevant columns
-        hours_col = None
-        dept_col = None
-        name_col = None
-        id_col = None
-
-        for i, h in enumerate(headers):
-            if h:
-                h_lower = str(h).strip()
-                if 'ساع' in h_lower or 'hours' in h_lower.lower():
-                    hours_col = i
-                elif 'إدار' in h_lower or 'قسم' in h_lower or 'department' in h_lower.lower():
-                    dept_col = i
-                elif 'اسم' in h_lower and 'مشروع' not in h_lower:
-                    name_col = i
-                elif 'هوية' in h_lower or 'id' in h_lower.lower():
-                    id_col = i
-
-        for row in rows:
-            if not row or not any(row):
-                continue
-
-            # Get volunteer identifier
-            vol_id = None
-            if id_col is not None and id_col < len(row):
-                vol_id = row[id_col]
-            if vol_id:
-                volunteer_ids.add(str(vol_id))
-
-            # Get hours
-            hours = 0
-            if hours_col is not None and hours_col < len(row):
-                try:
-                    hours = float(row[hours_col] or 0)
-                except (ValueError, TypeError):
-                    hours = 0
-            total_hours += hours
-
-            # Get department
-            dept = 'غير مسند'
-            if dept_col is not None and dept_col < len(row):
-                dept = str(row[dept_col] or 'غير مسند').strip()
-
-            if dept not in department_hours_map:
-                department_hours_map[dept] = 0
-            department_hours_map[dept] += hours
-
-            # Track volunteer hours for top volunteers
-            vol_name = None
-            if name_col is not None and name_col < len(row):
-                vol_name = str(row[name_col] or '').strip()
-            if vol_name:
-                if vol_name not in volunteer_hours_map:
-                    volunteer_hours_map[vol_name] = 0
-                volunteer_hours_map[vol_name] += hours
-
-        # Get or create 2025 statistics
-        year = 2025
-        stats, created = VolunteerStatistics.objects.update_or_create(
-            year=year,
-            defaults={
-                'total_volunteers': len(volunteer_ids) or total_records,
-                'new_volunteers': int(len(volunteer_ids) * 0.78),  # Estimate 78% new
-                'returning_volunteers': int(len(volunteer_ids) * 0.22),  # Estimate 22% returning
-                'total_hours': int(total_hours),
-                'total_contribution_value': Decimal(total_hours * 13),  # 13 SAR per hour
-                'contribution_value_display': f"{total_hours * 13 / 1000000:.2f}M" if total_hours > 100000 else f"{total_hours * 13 / 1000:.0f}K",
-            }
-        )
-
-        # Clear and recreate department hours
-        DepartmentHours.objects.filter(statistics=stats).delete()
-
-        colors = ['#6B1F2B', '#8B5A2B', '#2E8B57', '#4169E1', '#9370DB', '#FF8C00', '#20B2AA', '#DC143C']
-        total_dept_hours = sum(department_hours_map.values()) or 1
-
-        for i, (dept, hours) in enumerate(sorted(department_hours_map.items(), key=lambda x: -x[1])):
-            DepartmentHours.objects.create(
-                statistics=stats,
-                department_name=dept,
-                department_name_ar=dept,
-                hours=int(hours),
-                percentage=Decimal(hours / total_dept_hours * 100),
-                color=colors[i % len(colors)]
-            )
-
-        # Clear and recreate top volunteers
-        TopVolunteer.objects.filter(statistics=stats).delete()
-
-        top_vols = sorted(volunteer_hours_map.items(), key=lambda x: -x[1])[:5]
-        for rank, (name, hours) in enumerate(top_vols, 1):
-            TopVolunteer.objects.create(
-                statistics=stats,
-                rank=rank,
-                name=name,
-                hours=int(hours)
-            )
-
-        return Response({
-            'success': True,
-            'message': 'تم تحديث الإحصائيات بنجاح',
-            'data': {
-                'total_records': total_records,
-                'total_volunteers': len(volunteer_ids) or total_records,
-                'total_hours': int(total_hours),
-                'departments': len(department_hours_map),
-                'top_volunteers': len(top_vols)
-            }
-        }, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        return Response({
-            'success': False,
-            'error': f'خطأ في معالجة الملف: {str(e)}'
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(['GET', 'PUT'])
-@permission_classes([IsAdmin])
-def admin_volunteer_statistics(request):
-    """
-    GET/PUT /api/admin/volunteer-statistics/
-    Get or update volunteer statistics for home page dashboard
-    Requires admin authentication
-    """
-    year = request.query_params.get('year', 2025)
-
-    if request.method == 'GET':
-        stats = VolunteerStatistics.objects.filter(year=year).first()
-        if not stats:
-            return Response({'error': 'No statistics found'}, status=status.HTTP_404_NOT_FOUND)
-        serializer = VolunteerStatisticsSerializer(stats)
-        return Response(serializer.data)
-
-    elif request.method == 'PUT':
-        data = request.data
-
-        # Get or create statistics for the year
-        stats, created = VolunteerStatistics.objects.update_or_create(
-            year=int(data.get('year', 2025)),
-            defaults={
-                'total_volunteers': int(data.get('total_volunteers', 0)),
-                'new_volunteers': int(data.get('new_volunteers', 0)),
-                'returning_volunteers': int(data.get('returning_volunteers', 0)),
-                'total_hours': int(data.get('total_hours', 0)),
-                'total_contribution_value': Decimal(str(data.get('total_contribution_value', 0))),
-                'contribution_value_display': data.get('contribution_value_display', ''),
-            }
-        )
-
-        # Update quarterly targets if provided
-        quarterly_targets = data.get('quarterly_targets', [])
-        if quarterly_targets:
-            QuarterlyTarget.objects.filter(statistics=stats).delete()
-            for qt in quarterly_targets:
-                QuarterlyTarget.objects.create(
-                    statistics=stats,
-                    quarter=int(qt.get('quarter', 1)),
-                    volunteer_target=int(qt.get('volunteer_target', 0)),
-                    volunteer_actual=int(qt.get('volunteer_actual', 0)),
-                    hours_target=int(qt.get('hours_target', 0)),
-                    hours_actual=int(qt.get('hours_actual', 0)),
-                )
-
-        # Update department hours if provided
-        department_hours = data.get('department_hours', [])
-        if department_hours:
-            DepartmentHours.objects.filter(statistics=stats).delete()
-            for dh in department_hours:
-                DepartmentHours.objects.create(
-                    statistics=stats,
-                    department_name=dh.get('department_name', ''),
-                    department_name_ar=dh.get('department_name_ar', dh.get('label', '')),
-                    hours=int(dh.get('hours', dh.get('value', 0))),
-                    percentage=Decimal(str(dh.get('percentage', 0))),
-                    color=dh.get('color', '#6B1F2B'),
-                )
-
-        # Update top volunteers if provided
-        top_volunteers = data.get('top_volunteers', [])
-        if top_volunteers:
-            TopVolunteer.objects.filter(statistics=stats).delete()
-            for tv in top_volunteers:
-                TopVolunteer.objects.create(
-                    statistics=stats,
-                    rank=int(tv.get('rank', 1)),
-                    name=tv.get('name', ''),
-                    hours=int(tv.get('hours', 0)),
-                )
-
-        serializer = VolunteerStatisticsSerializer(stats)
-        return Response({
-            'success': True,
-            'message': 'تم تحديث الإحصائيات بنجاح',
-            'data': serializer.data
-        }, status=status.HTTP_200_OK)

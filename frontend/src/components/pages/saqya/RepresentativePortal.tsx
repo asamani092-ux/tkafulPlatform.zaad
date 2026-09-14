@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useToast } from "../../../contexts/ToastContext";
+import { usePlatformSettings } from "../../../contexts/PlatformSettingsContext";
 import { authFetch } from "../../../lib/api";
 import { API_BASE_URL } from "../../../config";
 import SaqyaShell from "../../layout/SaqyaShell";
@@ -7,18 +8,18 @@ import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Badge from "../../ui/Badge";
 import Input from "../../ui/Input";
+import FileInput from "../../ui/FileInput";
 import Select from "../../ui/Select";
 import Modal from "../../ui/Modal";
+import { labelAr, ORDER_STATUS_AR } from "../../../i18n/labels";
 
 interface Order { id: number; sponsorship_type: string; status: string; }
 
-const STATUS_AR: Record<string, string> = {
-  assigned: "مُسند", preparing: "قيد التحضير", ready: "جاهز",
-  delivered: "مُسلَّم", completed: "مكتمل",
-};
 
 export default function RepresentativePortal() {
   const { success, error } = useToast();
+  const { settings } = usePlatformSettings();
+  const gpsEnabled = Boolean(settings.sponsorship_gps_documentation);
   const [orders, setOrders] = useState<Order[]>([]);
   const [docFor, setDocFor] = useState<Order | null>(null);
   const [doc, setDoc] = useState({ type: "photo", title: "", latitude: "", longitude: "", location_name: "" });
@@ -38,8 +39,10 @@ export default function RepresentativePortal() {
     fd.append("order", String(docFor.id));
     fd.append("type", doc.type);
     fd.append("title", doc.title);
-    if (doc.latitude) fd.append("latitude", doc.latitude);
-    if (doc.longitude) fd.append("longitude", doc.longitude);
+    if (gpsEnabled) {
+      if (doc.latitude) fd.append("latitude", doc.latitude);
+      if (doc.longitude) fd.append("longitude", doc.longitude);
+    }
     if (doc.location_name) fd.append("location_name", doc.location_name);
     fd.append("file", file);
     const res = await fetch(`${API_BASE_URL}/api/saqya/documentation/`, {
@@ -60,7 +63,7 @@ export default function RepresentativePortal() {
             <Card key={o.id}>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="font-bold text-primary">طلب #{o.id} — {o.sponsorship_type}</h3>
-                <Badge variant="primary">{STATUS_AR[o.status] || o.status}</Badge>
+                <Badge variant="primary">{labelAr(ORDER_STATUS_AR, o.status)}</Badge>
               </div>
               <div className="flex flex-wrap gap-2">
                 {o.status === "ready" && <Button onClick={() => deliver(o.id)}>تأكيد التسليم</Button>}
@@ -76,15 +79,14 @@ export default function RepresentativePortal() {
             <option value="photo">صورة</option><option value="video">فيديو</option><option value="document">مستند</option><option value="receipt">إيصال</option>
           </Select>
           <Input label="العنوان" value={doc.title} onChange={(e) => setDoc({ ...doc, title: e.target.value })} />
-          <div className="grid grid-cols-2 gap-2">
-            <Input label="خط العرض (lat)" value={doc.latitude} onChange={(e) => setDoc({ ...doc, latitude: e.target.value })} />
-            <Input label="خط الطول (lng)" value={doc.longitude} onChange={(e) => setDoc({ ...doc, longitude: e.target.value })} />
-          </div>
+          {gpsEnabled && (
+            <div className="grid grid-cols-2 gap-2">
+              <Input label="خط العرض (lat)" value={doc.latitude} onChange={(e) => setDoc({ ...doc, latitude: e.target.value })} />
+              <Input label="خط الطول (lng)" value={doc.longitude} onChange={(e) => setDoc({ ...doc, longitude: e.target.value })} />
+            </div>
+          )}
           <Input label="اسم الموقع" value={doc.location_name} onChange={(e) => setDoc({ ...doc, location_name: e.target.value })} />
-          <div>
-            <label className="label-field">الملف</label>
-            <input type="file" className="input-field" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-          </div>
+          <FileInput label="الملف" onChange={(e) => setFile(e.target.files?.[0] || null)} />
           <div className="flex gap-2"><Button onClick={submitDoc}>رفع</Button><Button variant="secondary" onClick={() => setDocFor(null)}>إلغاء</Button></div>
         </div>
       </Modal>

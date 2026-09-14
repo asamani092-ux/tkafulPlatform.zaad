@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { useMemberships } from "../../hooks/useMemberships";
+import { useMembershipsContext } from "../../contexts/MembershipsContext";
+import { canAccessAdminPath } from "../../admin/access";
 import { LoadingState } from "../feedback/PageStates";
 
-// staff = مشرف عام أو عضو مشروع (project_admin/editor/viewer) — للوحة الأدمن الموحّدة
-type RequiredRole = "admin" | "authenticated" | "staff";
+type RequiredRole = "admin" | "authenticated" | "staff" | "orgStaff";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -14,17 +14,18 @@ interface ProtectedRouteProps {
 }
 
 function StaffGate({ children, signInPath }: { children: ReactNode; signInPath: string }) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const location = useLocation();
-  const { loading, isSuperAdmin, memberships } = useMemberships();
+  const { loading, access } = useMembershipsContext();
 
   if (!isAuthenticated) {
     return <Navigate to={signInPath} replace state={{ from: location.pathname }} />;
   }
-  if (user?.role === "admin") return <>{children}</>;
   if (loading) return <LoadingState title="جاري التحقق من الصلاحيات…" />;
-  if (isSuperAdmin || memberships.length > 0) return <>{children}</>;
-  return <Navigate to="/403" replace />;
+  if (!canAccessAdminPath(location.pathname, access)) {
+    return <Navigate to="/403" replace />;
+  }
+  return <>{children}</>;
 }
 
 /** يحمي المسارات حسب الدور — يُحوّل غير المصرّح لصفحة الدخول أو 403. */
@@ -33,10 +34,13 @@ export default function ProtectedRoute({
   requiredRole,
   signInPath = "/signin",
 }: ProtectedRouteProps) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const location = useLocation();
+  const { loading, access } = useMembershipsContext();
 
-  if (requiredRole === "staff") {
+  // بوابة موحّدة (RC-C): staff و orgStaff يمرّان عبر canAccessAdminPath
+  // فلا تشعّب في مفردات الأدوار ولا شاشات ميتة للمشرف.
+  if (requiredRole === "staff" || requiredRole === "orgStaff") {
     return <StaffGate signInPath={signInPath}>{children}</StaffGate>;
   }
 
@@ -44,8 +48,9 @@ export default function ProtectedRoute({
     return <Navigate to={signInPath} replace state={{ from: location.pathname }} />;
   }
 
-  if (requiredRole === "admin" && user?.role !== "admin") {
-    return <Navigate to="/403" replace />;
+  if (requiredRole === "admin") {
+    if (loading) return <LoadingState title="جاري التحقق من الصلاحيات…" />;
+    if (!access.isGlobalAdmin) return <Navigate to="/403" replace />;
   }
 
   return <>{children}</>;

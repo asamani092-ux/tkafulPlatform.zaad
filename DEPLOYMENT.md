@@ -101,3 +101,21 @@ Browser → Nginx (TLS)
 ```bash
 cd /var/www/takaful && ./deploy/deploy.sh
 ```
+
+## Removing the evaluation form before production
+
+The internal acceptance evaluation form (`/uat` and `GET /api/uat/`) is for test
+environments only. It must be fully absent from production.
+
+- Do **not** set `VITE_ENABLE_UAT` or `UAT_ENABLED` in production (defaults keep
+  both off).
+- Frontend: build without the flag, then verify the bundle has no UAT component:
+
+  ```bash
+  cd frontend
+  npm run build && npm run assert:no-uat
+  ```
+
+  With the flag unset, `/uat` is not registered and falls through to the SPA 404.
+- Backend: `GET /api/uat/` returns **404** by default (`UAT_ENABLED` false). Only
+  enable it in a dedicated test env if you need the status probe.

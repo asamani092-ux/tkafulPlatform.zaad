@@ -6,6 +6,24 @@
 from django.conf import settings
 from django.db import models
 
+from .validators import validate_https_donation_url
+
+
+class ProjectType(models.Model):
+    """نوع/تصنيف المشروع — جدول قابل للتوسّع (ليس enum ثابتاً)."""
+
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=100, unique=True, allow_unicode=True)
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0, help_text="ترتيب العرض (الأصغر أولاً)")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["order", "name"]
+
+    def __str__(self):
+        return self.name
+
 
 class Project(models.Model):
     STATUS_CHOICES = [
@@ -22,6 +40,20 @@ class Project(models.Model):
     brand_color = models.CharField(max_length=20, default="#8b1538")
     # رابط صورة الغلاف (URL) — لا اعتماد على Pillow (انظر DECISIONS.md D-13)
     cover_image = models.URLField(blank=True)
+    donation_url = models.URLField(
+        blank=True,
+        validators=[validate_https_donation_url],
+        help_text="رابط تبرع خاص بالمشروع (HTTPS فقط)",
+    )
+    donation_label = models.CharField(max_length=100, blank=True, default="تبرع الآن")
+    type = models.ForeignKey(
+        ProjectType,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="projects",
+        help_text="نوع المشروع (اختياري، قابل للتوسّع من الإعدادات)",
+    )
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
@@ -33,12 +65,23 @@ class Project(models.Model):
         related_name="created_platform_projects",
     )
     is_active = models.BooleanField(default=True)
+    is_featured = models.BooleanField(
+        default=False,
+        help_text="عرض في قسم المشاريع النشطة بالصفحة الرئيسية",
+    )
+    featured_order = models.PositiveIntegerField(
+        default=0,
+        help_text="ترتيب العرض بين المشاريع المميزة (الأصغر أولاً)",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["name"]
-        indexes = [models.Index(fields=["is_active", "status"])]
+        indexes = [
+            models.Index(fields=["is_active", "status"]),
+            models.Index(fields=["is_featured", "featured_order"]),
+        ]
 
     def __str__(self):
         return self.name
@@ -100,3 +143,38 @@ class ProjectTool(models.Model):
 
     def __str__(self):
         return f"{self.project.slug}:{self.tool_key} ({'on' if self.is_enabled else 'off'})"
+
+
+class ProjectAllowedSupplier(models.Model):
+    """مورّدون مسموح إسنادهم ضمن مشروع — قائمة فارغة = بلا قيد."""
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="allowed_supplier_links")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="project_supplier_allowances"
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["project", "user"], name="uq_project_allowed_supplier"),
+        ]
+
+    def __str__(self):
+        return f"supplier {self.user_id} @ {self.project_id}"
+
+
+class ProjectAllowedRepresentative(models.Model):
+    """مندوبون مسموح إسنادهم ضمن مشروع — قائمة فارغة = بلا قيد."""
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="allowed_representative_links")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="project_representative_allowances"
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["project", "user"], name="uq_project_allowed_representative"),
+        ]
+
+    def __str__(self):
+        return f"representative {self.user_id} @ {self.project_id}"
+
