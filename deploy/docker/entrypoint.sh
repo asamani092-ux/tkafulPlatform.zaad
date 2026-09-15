@@ -40,8 +40,10 @@ gunicorn takaful_backend.wsgi:application \
   --access-logfile - \
   --error-logfile - &
 
-for i in $(seq 1 40); do
-  if curl -fsS http://127.0.0.1:8000/api/ping/ >/dev/null 2>&1; then
+for i in $(seq 1 60); do
+  if curl -fsS -H "Host: localhost" -H "X-Forwarded-Proto: https" \
+      http://127.0.0.1:8000/api/ping/ >/dev/null 2>&1; then
+    echo "gunicorn ready" >&2
     break
   fi
   sleep 0.5
