@@ -32,7 +32,7 @@ RUN rm -f /etc/nginx/sites-enabled/default \
 
 WORKDIR /app/backend
 EXPOSE 80
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-    CMD curl -fsS http://127.0.0.1/api/ping/ || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
+    CMD curl -fsS -H "Host: localhost" -H "X-Forwarded-Proto: https" http://127.0.0.1/api/ping/ || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]

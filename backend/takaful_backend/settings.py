@@ -26,11 +26,16 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
 DEBUG = os.environ.get("DEBUG", "True") == "True"
 
 # Example:
-# ALLOWED_HOSTS="takaful-backend.onrender.com,localhost,127.0.0.1"
-ALLOWED_HOSTS = os.environ.get(
-    "ALLOWED_HOSTS",
-    "localhost,127.0.0.1"
-).split(",")
+# ALLOWED_HOSTS="tkaful.alzaad.org.sa,localhost,127.0.0.1"
+# دائماً نضيف localhost/127.0.0.1 لفحص الصحة داخل الحاوية (Coolify healthcheck)
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if h.strip()
+]
+for _h in ("localhost", "127.0.0.1"):
+    if _h not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_h)
 
 
 # ===========================

@@ -19,6 +19,7 @@
 - `EMAIL_HOST_PASSWORD` بكلمة مرور تطبيق أوتلوك لحساب `tkaful@alzaad.org.sa`
 
 لا تفعّل `VITE_ENABLE_UAT` ولا `UAT_ENABLED` في الإنتاج. اترك `VITE_API_BASE_URL` فارغاً إذا الواجهة والـ API على نفس النطاق.
+أضف `localhost,127.0.0.1` إلى `ALLOWED_HOSTS` (أو اعتمد الإضافة التلقائية في الكود) واضبط `SECURE_SSL_REDIRECT=False` لأن Coolify ينهي TLS خارج الحاوية.
 
 ### 3) قاعدة البيانات
 بعد أول نشر:
