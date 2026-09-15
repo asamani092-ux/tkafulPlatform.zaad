@@ -168,10 +168,11 @@ function AppContent() {
           ))}
 
           {/* —— صفحات المشاريع العامة —— */}
-          <Route path="/projects/:slug" element={<Lazy><ProjectLanding /></Lazy>} />
+          {/* المسارات الفرعية قبل :slug حتى لا تُلتقط كمعرّف مشروع */}
           <Route path="/projects/:slug/map" element={<Lazy><ProjectMapPage /></Lazy>} />
           <Route path="/projects/:slug/volunteer" element={<Lazy><ProjectVolunteerJoin /></Lazy>} />
           <Route path="/projects/:slug/sponsorships" element={<Lazy><SaqyaHome /></Lazy>} />
+          <Route path="/projects/:slug" element={<Lazy><ProjectLanding /></Lazy>} />
           <Route path="/map" element={<Lazy><MapsAggregator /></Lazy>} />
           <Route path="/forms/:slug" element={<Lazy><DynamicFormPage /></Lazy>} />
 
