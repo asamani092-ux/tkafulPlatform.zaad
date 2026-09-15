@@ -7,6 +7,7 @@ from rest_framework_simplejwt.views import (
 from .views import register, me, update_profile, change_password, logout
 from .views_admin import AdminUserViewSet
 from .serializers import EmailTokenObtainPairSerializer
+from .otp_views import login_request_otp, login_verify_otp
 from core.throttles import AuthRateThrottle
 
 router = DefaultRouter()
@@ -29,6 +30,8 @@ urlpatterns = [
     path("auth/register/", register, name="register"),
     path("auth/token/", EmailTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/token/refresh/", ThrottledTokenRefreshView.as_view(), name="token_refresh"),
+    path("auth/otp/request/", login_request_otp, name="login-otp-request"),
+    path("auth/otp/verify/", login_verify_otp, name="login-otp-verify"),
     
     # User profile endpoints
     path("me/", me, name="me"),

@@ -14,7 +14,7 @@ import Modal from "../../ui/Modal";
 import { LoadingState } from "../../feedback/PageStates";
 import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
-type TabKey = "volunteers" | "applications" | "joins";
+type TabKey = "volunteers" | "applications" | "joins" | "opportunity_regs";
 
 interface VStats { total_volunteers: number; active_volunteers: number; total_hours: number; completed_tasks: number }
 interface Volunteer {
@@ -24,6 +24,19 @@ interface Volunteer {
 }
 interface Application { id: number; volunteer_name: string; volunteer_email: string; project_title: string; status: string; message: string }
 interface JoinReq { id: number; name: string; email: string; phone: string; location: string; qualification: string; skills: string[] }
+interface OpportunityReg {
+  id: number;
+  project_name: string;
+  project_slug: string;
+  opportunity_ended: boolean;
+  full_name: string;
+  email: string;
+  phone: string;
+  national_id: string;
+  source: string;
+  status: string;
+  created_at: string;
+}
 interface VTask { id: number; title: string; status: string; project_name: string; progress: number; due_date: string | null }
 interface ReportMetrics { volunteer_hours: number; projects_participated: number; completed_tasks: number; total_tasks: number }
 
@@ -80,12 +93,35 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
       .then((r) => (r.ok ? r.json() : null)).then((d) => setJoins(d?.results || [])).catch(() => {});
   }, []);
 
+  const [oppRegs, setOppRegs] = useState<OpportunityReg[]>([]);
+  const loadOppRegs = useCallback(() => {
+    authFetch(`/api/admin/opportunity-registrations/?source=guest`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setOppRegs(d?.results || []))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!access) return;
     if (tab === "volunteers") loadVolunteers(volunteers.length ? "silent" : "initial");
     if (tab === "applications") loadApps(appStatus);
     if (tab === "joins") loadJoins();
-  }, [access, tab, appStatus, loadVolunteers, loadApps, loadJoins]);
+    if (tab === "opportunity_regs") loadOppRegs();
+  }, [access, tab, appStatus, loadVolunteers, loadApps, loadJoins, loadOppRegs]);
+
+  const actOppReg = async (id: number, action: "approve" | "reject") => {
+    const res = await authFetch(`/api/admin/opportunity-registrations/${id}/${action}/`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    if (res.ok) {
+      success({ title: action === "approve" ? "تم الاعتماد كمستخدم" : "تم الرفض" });
+      loadOppRegs();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      error({ title: d.detail || "تعذّر تنفيذ العملية" });
+    }
+  };
 
   const toggleActive = async (v: Volunteer) => {
     const res = await authFetch(`/api/accounts/users/${v.id}/set_active/`, {
@@ -177,6 +213,7 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
             { key: "volunteers", label: "المتطوّعون" },
             { key: "applications", label: "طلبات المشاريع" },
             { key: "joins", label: "طلبات الانضمام" },
+            { key: "opportunity_regs", label: "تسجيلات الفرص" },
           ]}
         />
       </div>
@@ -290,6 +327,39 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
                 </div>
               </Card>
             ))}
+        </div>
+      )}
+
+      {tab === "opportunity_regs" && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {oppRegs.length === 0 ? (
+            <Card><p className="text-center text-sm text-brand-gray">لا توجد تسجيلات ضيوف.</p></Card>
+          ) : (
+            oppRegs.map((r) => (
+              <Card key={r.id}>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="font-bold text-primary">{r.full_name}</h3>
+                  <Badge variant={r.status === "approved" ? "success" : r.status === "rejected" ? "danger" : "warning"}>
+                    {r.status}
+                  </Badge>
+                </div>
+                <p className="text-sm text-brand-gray">المشروع: {r.project_name}</p>
+                <p className="mb-2 text-xs text-brand-gray">{r.email} · {r.phone} · {r.national_id}</p>
+                {r.status === "confirmed" && (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      disabled={!r.opportunity_ended}
+                      title={!r.opportunity_ended ? "متاح بعد انتهاء الفرصة" : undefined}
+                      onClick={() => void actOppReg(r.id, "approve")}
+                    >
+                      اعتماد كمستخدم
+                    </Button>
+                    <Button variant="secondary" onClick={() => void actOppReg(r.id, "reject")}>رفض</Button>
+                  </div>
+                )}
+              </Card>
+            ))
+          )}
         </div>
       )}
 

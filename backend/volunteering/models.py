@@ -231,3 +231,82 @@ class VolunteerApplication(models.Model):
 
     def __str__(self):
         return f"{self.volunteer.email} -> {self.project.name} ({self.status})"
+
+
+class OpportunityRegistration(models.Model):
+    """
+    تسجيل على فرصة تطوع لمشروع — زائر (بدون حساب فوري) أو مستخدم حالي.
+    الاعتماد كمستخدم للمنصة يتم لاحقاً بعد انتهاء الفرصة (مسار منفصل).
+    التعقيد: إنشاء/فحص تكرار O(1) عبر القيد الفريد.
+    """
+
+    SOURCE_EXISTING = "existing_user"
+    SOURCE_GUEST = "guest"
+    SOURCE_CHOICES = [
+        (SOURCE_EXISTING, "مستخدم حالي"),
+        (SOURCE_GUEST, "زائر"),
+    ]
+
+    STATUS_PENDING = "pending"
+    STATUS_CONFIRMED = "confirmed"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "قيد التحقق"),
+        (STATUS_CONFIRMED, "مؤكَّد"),
+        (STATUS_APPROVED, "معتمد كمستخدم"),
+        (STATUS_REJECTED, "مرفوض"),
+    ]
+
+    project = models.ForeignKey(
+        "projects.Project",
+        on_delete=models.CASCADE,
+        related_name="opportunity_registrations",
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="opportunity_registrations",
+    )
+    full_name = models.CharField(max_length=150)
+    email = models.EmailField()
+    phone = models.CharField(max_length=30)
+    national_id = models.CharField(max_length=20)
+    city = models.CharField(max_length=100, blank=True)
+    gender = models.CharField(max_length=10, blank=True)
+    age = models.PositiveSmallIntegerField(null=True, blank=True)
+    qualification = models.CharField(max_length=100, blank=True)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_opportunity_registrations",
+    )
+    admin_notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "volunteering_opportunity_registration"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "national_id", "phone"],
+                name="uq_opportunity_reg_project_nid_phone",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["project", "status"], name="idx_opp_reg_project_status"),
+            models.Index(fields=["email"], name="idx_opp_reg_email"),
+        ]
+
+    def __str__(self):
+        return f"{self.full_name} @ {self.project_id} ({self.status})"

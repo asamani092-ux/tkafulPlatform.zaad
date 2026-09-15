@@ -3,6 +3,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from . import views
+from . import opportunity_views as opp_views
 
 router = DefaultRouter()
 router.register(r"projects", views.VolunteeringProfileViewSet, basename="volunteering-profile")
@@ -10,6 +11,41 @@ router.register(r"assignments", views.ProjectAssignmentViewSet, basename="assign
 router.register(r"tasks", views.TaskViewSet, basename="task")
 
 urlpatterns = [
+    path(
+        "projects/<slug:slug>/volunteer/",
+        opp_views.public_opportunity_detail,
+        name="public-opportunity-detail",
+    ),
+    path(
+        "projects/<slug:slug>/volunteer/otp/",
+        opp_views.opportunity_request_otp,
+        name="opportunity-request-otp",
+    ),
+    path(
+        "projects/<slug:slug>/volunteer/register/",
+        opp_views.opportunity_register_guest,
+        name="opportunity-register-guest",
+    ),
+    path(
+        "projects/<slug:slug>/volunteer/confirm/",
+        opp_views.opportunity_confirm_user,
+        name="opportunity-confirm-user",
+    ),
+    path(
+        "admin/opportunity-registrations/",
+        opp_views.admin_opportunity_registrations,
+        name="admin-opportunity-registrations",
+    ),
+    path(
+        "admin/opportunity-registrations/<int:registration_id>/approve/",
+        opp_views.admin_approve_opportunity_registration,
+        name="admin-approve-opportunity-registration",
+    ),
+    path(
+        "admin/opportunity-registrations/<int:registration_id>/reject/",
+        opp_views.admin_reject_opportunity_registration,
+        name="admin-reject-opportunity-registration",
+    ),
     path("public-projects/", views.public_projects, name="public-projects"),
     path("public-volunteers-stats/", views.public_volunteers_stats, name="public-volunteers-stats"),
     path("public-home-stats/", views.public_home_stats, name="public-home-stats"),
