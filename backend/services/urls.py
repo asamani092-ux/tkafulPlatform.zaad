@@ -15,8 +15,8 @@ router.register(r"admin/request-submissions", views.RequestSubmissionViewSet, ba
 urlpatterns = [
     path("public-suggestions/", views.public_submit_suggestion, name="public-suggestions"),
     path("public-forms/", views.public_active_forms, name="public-forms"),
-    path("public-forms/<slug:slug>/", views.public_form_detail, name="public-form-detail"),
-    path("public-forms/<slug:slug>/submit/", views.public_submit_form, name="public-form-submit"),
+    path("public-forms/<str:slug>/", views.public_form_detail, name="public-form-detail"),
+    path("public-forms/<str:slug>/submit/", views.public_submit_form, name="public-form-submit"),
     path("public-services/", views.public_services_list, name="public-services"),
     path("beneficiary-services/", views.beneficiary_services_list, name="beneficiary-services"),
     path("public-service-request/", views.public_submit_service_request, name="public-service-request"),

@@ -1,4 +1,4 @@
-# Nginx template — replace SUBDOMAIN and paths before use.
+# Nginx template — replace SUBDOMAIN (e.g. tkaful.alzaad.org.sa) and paths before use.
 # TLS via certbot: sudo certbot --nginx -d SUBDOMAIN
 
 upstream takaful_gunicorn {

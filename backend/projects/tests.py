@@ -144,6 +144,13 @@ class PublicProjectEndpointsTests(APITestCase):
         res = self.client.get("/api/platform/public/projects/draft-p/")
         self.assertEqual(res.status_code, 404)
 
+    def test_public_detail_supports_unicode_slug(self):
+        """Project.slug allow_unicode=True — يجب أن يعمل مسار التفصيل بالعربية."""
+        Project.objects.create(name="عربي", slug="فرصة-عربية", status="active", is_active=True)
+        res = self.client.get("/api/platform/public/projects/فرصة-عربية/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["slug"], "فرصة-عربية")
+
     def test_my_memberships_flags_super_admin(self):
         boss = make_user("boss2", role="admin")
         self.client.force_authenticate(boss)

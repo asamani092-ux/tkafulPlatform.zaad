@@ -18,7 +18,9 @@ export const fetchPublicProjects = () =>
   getJson<PlatformProject[]>("/api/platform/public/projects/");
 
 export const fetchPublicProject = (slug: string) =>
-  getJson<PublicProjectDetail>(`/api/platform/public/projects/${slug}/`);
+  getJson<PublicProjectDetail>(
+    `/api/platform/public/projects/${encodeURIComponent(slug)}/`,
+  );
 
 export const fetchPublicMapsIndex = (projectSlug?: string) =>
   getJson<PublicMapIndexEntry[]>(

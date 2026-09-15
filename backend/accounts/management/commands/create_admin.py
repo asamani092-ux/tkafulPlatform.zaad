@@ -5,33 +5,39 @@ import os
 
 
 class Command(BaseCommand):
-    help = 'Create admin user if it does not exist'
+    help = "Create admin user if it does not exist"
 
     def handle(self, *args, **options):
-        # Get credentials from environment variables or use defaults
-        username = os.environ.get('ADMIN_USERNAME', 'admin')
-        email = os.environ.get('ADMIN_EMAIL', 'admin@takaful.com')
-        password = os.environ.get('ADMIN_PASSWORD', 'admin123')
+        username = os.environ.get("ADMIN_USERNAME", "admin")
+        email = os.environ.get("ADMIN_EMAIL", "admin@takaful.com")
+        password = os.environ.get("ADMIN_PASSWORD", "admin123")
 
-        # Check if admin user already exists
         if User.objects.filter(username=username).exists():
             self.stdout.write(self.style.WARNING(f'Admin user "{username}" already exists'))
             return
 
-        # Create superuser
-        user = User.objects.create_superuser(
+        if User.objects.filter(email__iexact=email).exists():
+            self.stdout.write(self.style.WARNING(f'User with email "{email}" already exists'))
+            return
+
+        # إنشاء مباشر دون validate_password حتى تعمل كلمات المرور المحددة للنشر
+        # (مثل الأرقام فقط)؛ يُفضَّل تغييرها بعد أول دخول.
+        user = User(
             username=username,
             email=email,
-            password=password
+            is_staff=True,
+            is_superuser=True,
+            is_active=True,
         )
+        user.set_password(password)
+        user.save()
 
-        # Create profile
-        profile, created = Profile.objects.get_or_create(user=user)
-        profile.name = 'المسؤول'
-        profile.role = 'admin'
+        profile, _ = Profile.objects.get_or_create(user=user)
+        profile.name = "المسؤول"
+        profile.role = "admin"
         profile.is_approved = True
         profile.save()
 
         self.stdout.write(self.style.SUCCESS(f'Successfully created admin user "{username}"'))
-        self.stdout.write(self.style.SUCCESS(f'Email: {email}'))
-        self.stdout.write(self.style.SUCCESS('You can change the password after first login'))
+        self.stdout.write(self.style.SUCCESS(f"Email: {email}"))
+        self.stdout.write(self.style.SUCCESS("You can change the password after first login"))

@@ -162,9 +162,18 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 SAQYA_MAX_UPLOAD_SIZE = 16 * 1024 * 1024  # 16MB
 
-# البريد: console محلياً، SMTP عبر البيئة في الإنتاج (لإشعارات سير العمل)
-EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@alzad.org")
+# البريد: console محلياً، SMTP عبر البيئة في الإنتاج (أوت لوك / Office 365)
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
+)
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.office365.com")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() in ("1", "true", "yes")
+EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False").lower() in ("1", "true", "yes")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "tkaful@alzaad.org.sa")
+SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 
 EXTERNAL_STORE_URL = os.environ.get("EXTERNAL_STORE_URL", "")
 
@@ -283,9 +292,14 @@ if not DEBUG:
             "SECRET_KEY must be set via environment in production (DEBUG=False)."
         )
 
-    # الثقة بترويسة البروكسي لتحديد HTTPS (Render/Reverse proxy)
+    # الثقة بترويسة البروكسي لتحديد HTTPS (Coolify / Nginx)
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-    SECURE_SSL_REDIRECT = True
+    USE_X_FORWARDED_HOST = True
+    SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "True").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
     # HSTS
     SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30  # 30 يوماً

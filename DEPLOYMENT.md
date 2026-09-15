@@ -1,9 +1,58 @@
-# Deploy — Ubuntu VPS (first-time setup)
+# Deploy
+
+## Coolify — نطاق الإنتاج `tkaful.alzaad.org.sa`
+
+الترتيب الموصى به:
+
+### 1) لوحة كولفاي
+1. أنشئ **Project** جديد.
+2. أضف مورد **PostgreSQL** واحفظ `DATABASE_URL`.
+3. أضف **Application** من GitHub (`tkafulPlatform.zaad`).
+4. Build Pack = **Dockerfile** (الملف في جذر المستودع). المنفذ المكشوف: **80**.
+5. اربط النطاق `tkaful.alzaad.org.sa` وفعّل TLS.
+6. الصورة تبني الواجهة ثم تشغّل gunicorn + nginx: `/` للواجهة و`/api/` للخادم. عند الإقلاع تُنفَّذ `migrate` و`create_admin` تلقائياً.
+
+### 2) متغيرات التطبيق
+انسخ من [`deploy/.env.production.example`](deploy/.env.production.example) إلى Environment في كولفاي، مع استبدال:
+- `SECRET_KEY` بمفتاح عشوائي طويل
+- `DATABASE_URL` من مورد PostgreSQL
+- `EMAIL_HOST_PASSWORD` بكلمة مرور تطبيق أوتلوك لحساب `tkaful@alzaad.org.sa`
+
+لا تفعّل `VITE_ENABLE_UAT` ولا `UAT_ENABLED` في الإنتاج. اترك `VITE_API_BASE_URL` فارغاً إذا الواجهة والـ API على نفس النطاق.
+
+### 3) قاعدة البيانات
+بعد أول نشر:
+
+```bash
+cd backend
+./venv/bin/python manage.py migrate --noinput
+./venv/bin/python manage.py collectstatic --noinput
+```
+
+### 4) البريد (أوت لوك)
+- المضيف: `smtp.office365.com` — المنفذ `587` — TLS مفعّل
+- المستخدم / المرسل: `tkaful@alzaad.org.sa`
+- يُستخدم لـ OTP والإشعارات والرسائل النظامية عبر `DEFAULT_FROM_EMAIL`
+
+### 5) مدير النظام
+بعد تعيين `ADMIN_*` في البيئة:
+
+```bash
+cd backend && ./venv/bin/python manage.py create_admin
+```
+
+- الدخول من الواجهة بالبريد: `td@alzaad.org.sa`
+- كلمة المرور الأولية: كما في `ADMIN_PASSWORD` (يُفضَّل تغييرها بعد أول دخول)
+- تحقق: `GET https://tkaful.alzaad.org.sa/api/ping/`
+
+---
+
+## Ubuntu VPS (first-time setup)
 
 ## المتطلبات
 
 - Ubuntu 22.04+ LTS
-- Domain/subdomain pointing to VPS (e.g. `app.client.org`)
+- Domain/subdomain pointing to VPS (e.g. `tkaful.alzaad.org.sa`)
 - Git, Python 3.11+, Node 20+, PostgreSQL 15+, Nginx, Certbot
 
 ## 1. System packages

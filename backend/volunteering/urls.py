@@ -11,23 +11,24 @@ router.register(r"assignments", views.ProjectAssignmentViewSet, basename="assign
 router.register(r"tasks", views.TaskViewSet, basename="task")
 
 urlpatterns = [
+    # <str:> لدعم slug عربي (allow_unicode على Project.slug)
     path(
-        "projects/<slug:slug>/volunteer/",
+        "projects/<str:slug>/volunteer/",
         opp_views.public_opportunity_detail,
         name="public-opportunity-detail",
     ),
     path(
-        "projects/<slug:slug>/volunteer/otp/",
+        "projects/<str:slug>/volunteer/otp/",
         opp_views.opportunity_request_otp,
         name="opportunity-request-otp",
     ),
     path(
-        "projects/<slug:slug>/volunteer/register/",
+        "projects/<str:slug>/volunteer/register/",
         opp_views.opportunity_register_guest,
         name="opportunity-register-guest",
     ),
     path(
-        "projects/<slug:slug>/volunteer/confirm/",
+        "projects/<str:slug>/volunteer/confirm/",
         opp_views.opportunity_confirm_user,
         name="opportunity-confirm-user",
     ),
