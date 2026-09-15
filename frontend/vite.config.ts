@@ -21,18 +21,18 @@ export default defineConfig({
         // اعتماداً دائرياً وخطأ: Cannot access '…' before initialization
         // التقسيم يتم عبر React.lazy في App.tsx؛ هنا فقط مكتبات الطرف الثالث.
         manualChunks(id) {
-          if (id.includes('node_modules/leaflet') || id.includes('node_modules/react-leaflet')) {
-            return 'leaflet';
+          if (id.includes("node_modules/@vis.gl/react-google-maps")) {
+            return "google-maps";
           }
-          if (id.includes('node_modules/jspdf') || id.includes('node_modules/xlsx')) {
-            return 'export-libs';
+          if (id.includes("node_modules/jspdf") || id.includes("node_modules/xlsx")) {
+            return "export-libs";
           }
           if (
-            id.includes('node_modules/react/') ||
-            id.includes('node_modules/react-dom/') ||
-            id.includes('node_modules/react-router')
+            id.includes("node_modules/react/") ||
+            id.includes("node_modules/react-dom/") ||
+            id.includes("node_modules/react-router")
           ) {
-            return 'vendor-react';
+            return "vendor-react";
           }
         },
       },

@@ -29,6 +29,7 @@
   "dependencies": {
     "@types/dompurify": "^3.0.5",
     "@types/leaflet": "^1.9.21",
+    "@vis.gl/react-google-maps": "^1.10.0",
     "@zaad/design-system": "github:asamani092-ux/designSystemFinal#v1.2.11",
     "arabic-persian-reshaper": "^1.0.1",
     "bidi-js": "^1.1.0",
