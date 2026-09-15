@@ -292,9 +292,14 @@ if not DEBUG:
             "SECRET_KEY must be set via environment in production (DEBUG=False)."
         )
 
-    # الثقة بترويسة البروكسي لتحديد HTTPS (Render/Reverse proxy)
+    # الثقة بترويسة البروكسي لتحديد HTTPS (Coolify / Nginx)
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-    SECURE_SSL_REDIRECT = True
+    USE_X_FORWARDED_HOST = True
+    SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "True").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
     # HSTS
     SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30  # 30 يوماً

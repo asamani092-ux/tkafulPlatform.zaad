@@ -7,10 +7,10 @@
 ### 1) لوحة كولفاي
 1. أنشئ **Project** جديد.
 2. أضف مورد **PostgreSQL** واحفظ `DATABASE_URL`.
-3. أضف **Application** من GitHub (`tkafulPlatform.zaad`) على الفرع المطلوب.
-4. اربط النطاق `tkaful.alzaad.org.sa` وفعّل TLS.
-5. البناء: واجهة `frontend` (`npm ci && npm run build`) + باكند `backend` (venv + `migrate` + `collectstatic` + gunicorn).
-6. البروكسي: `/api/` → gunicorn، و`/` → ملفات `frontend/dist` (نفس أسلوب `deploy/nginx.conf.template`).
+3. أضف **Application** من GitHub (`tkafulPlatform.zaad`).
+4. Build Pack = **Dockerfile** (الملف في جذر المستودع). المنفذ المكشوف: **80**.
+5. اربط النطاق `tkaful.alzaad.org.sa` وفعّل TLS.
+6. الصورة تبني الواجهة ثم تشغّل gunicorn + nginx: `/` للواجهة و`/api/` للخادم. عند الإقلاع تُنفَّذ `migrate` و`create_admin` تلقائياً.
 
 ### 2) متغيرات التطبيق
 انسخ من [`deploy/.env.production.example`](deploy/.env.production.example) إلى Environment في كولفاي، مع استبدال:
