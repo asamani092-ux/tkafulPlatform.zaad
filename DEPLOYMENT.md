@@ -8,9 +8,9 @@
 1. أنشئ **Project** جديد.
 2. أضف مورد **PostgreSQL** واحفظ `DATABASE_URL`.
 3. أضف **Application** من GitHub (`tkafulPlatform.zaad`).
-4. Build Pack = **Dockerfile** (الملف في جذر المستودع). المنفذ المكشوف: **80**.
+4. Build Pack = **Dockerfile** (الملف في جذر المستودع). المنفذ المكشوف في كولفاي: **80** (مهم — وإلا Bad Gateway).
 5. اربط النطاق `tkaful.alzaad.org.sa` وفعّل TLS.
-6. الصورة تبني الواجهة ثم تشغّل gunicorn + nginx: `/` للواجهة و`/api/` للخادم. عند الإقلاع تُنفَّذ `migrate` و`create_admin` تلقائياً.
+6. الصورة تبني الواجهة ثم تشغّل gunicorn + nginx: `/` للواجهة و`/api/` للخادم. عند الإقلاع تُنفَّذ `migrate` و`create_admin` تلقائياً. فحص الصحة: `GET /health`.
 
 ### 2) متغيرات التطبيق
 انسخ من [`deploy/.env.production.example`](deploy/.env.production.example) إلى Environment في كولفاي، مع استبدال:
