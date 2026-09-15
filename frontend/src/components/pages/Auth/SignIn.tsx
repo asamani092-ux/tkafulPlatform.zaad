@@ -80,9 +80,21 @@ export default function SignIn() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: formData.email, password: formData.password }),
         });
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          setErrors({ form: "البريد الإلكتروني أو كلمة المرور غير صحيحة" });
+          setErrors({
+            form:
+              (typeof data.detail === "string" && data.detail) ||
+              (res.status === 502
+                ? "تعذّر إرسال رمز التحقق عبر البريد"
+                : "البريد الإلكتروني أو كلمة المرور غير صحيحة"),
+          });
           setIsSubmitting(false);
+          return;
+        }
+        // تجاوز OTP طارئاً: الخادم أعاد التوكن مباشرة
+        if (data.access && data.refresh) {
+          await finishLogin({ access: data.access, refresh: data.refresh });
           return;
         }
         setOtpRequired(true);
