@@ -17,6 +17,9 @@ export default defineConfig({
     chunkSizeWarningLimit: 250,
     rollupOptions: {
       output: {
+        // لا نقسم صفحات التطبيق يدوياً (projects/admin/saqya) — كانت تسبب
+        // اعتماداً دائرياً وخطأ: Cannot access '…' before initialization
+        // التقسيم يتم عبر React.lazy في App.tsx؛ هنا فقط مكتبات الطرف الثالث.
         manualChunks(id) {
           if (id.includes('node_modules/leaflet') || id.includes('node_modules/react-leaflet')) {
             return 'leaflet';
@@ -24,19 +27,11 @@ export default defineConfig({
           if (id.includes('node_modules/jspdf') || id.includes('node_modules/xlsx')) {
             return 'export-libs';
           }
-          if (id.includes('/components/pages/saqya/')) {
-            return 'saqya';
-          }
-          if (id.includes('/components/pages/projects/')) {
-            return 'projects';
-          }
-          if (id.includes('/components/pages/admin/')) {
-            return 'admin';
-          }
-          if (id.includes('/components/pages/ExecutiveDashboard') || id.includes('/components/pages/ManageDashboard')) {
-            return 'executive';
-          }
-          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router')) {
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('node_modules/react-router')
+          ) {
             return 'vendor-react';
           }
         },
