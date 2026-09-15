@@ -9,6 +9,7 @@ from core.roles import (
     CAP_DELETE_PROJECT,
     CAP_MANAGE_SETTINGS,
     CAP_MANAGE_USERS,
+    PRIMARY_ROLE_IDS,
     ROLE_CAPABILITIES,
     ROLE_LABELS,
     has_capability,
@@ -30,12 +31,13 @@ class RoleCatalogTests(APITestCase):
         self.admin = self.users["admin"]
         self.project = Project.objects.create(name="م", slug="cap-p")
 
-    def test_catalog_covers_profile_roles(self):
+    def test_catalog_covers_primary_roles_and_profile_choices(self):
         choice_ids = {c[0] for c in Profile.ROLE_CHOICES}
         self.assertEqual(set(ROLE_CAPABILITIES), choice_ids)
         self.assertEqual(set(ROLE_LABELS), choice_ids)
+        self.assertEqual(set(PRIMARY_ROLE_IDS), {"admin", "employee", "user"})
         payload = role_catalog()
-        self.assertEqual({r["id"] for r in payload["roles"]}, choice_ids)
+        self.assertEqual({r["id"] for r in payload["roles"]}, set(PRIMARY_ROLE_IDS))
         self.assertTrue(payload["capabilities"])
         admin_caps = next(r["capabilities"] for r in payload["roles"] if r["id"] == "admin")
         self.assertIn(CAP_MANAGE_USERS, admin_caps)
@@ -46,7 +48,12 @@ class RoleCatalogTests(APITestCase):
         self.client.force_authenticate(self.admin)
         res = self.client.get("/api/roles/")
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(len(res.data["roles"]), len(ROLE_LABELS))
+        self.assertEqual(len(res.data["roles"]), len(PRIMARY_ROLE_IDS))
+
+    def test_manager_aliased_to_employee_capabilities(self):
+        self.assertTrue(has_capability(self.users["manager"], CAP_APPROVE_SPONSORSHIP))
+        self.assertTrue(has_capability(self.users["employee"], CAP_APPROVE_SPONSORSHIP))
+        self.assertTrue(has_capability(self.users["manager"], CAP_CREATE_SPONSORSHIP))
 
     def _assert_denied(self, role, method, url, body=None):
         self.client.force_authenticate(self.users[role])
@@ -63,8 +70,7 @@ class RoleCatalogTests(APITestCase):
         ]
         for cap, method, url, body in probes:
             for role in ROLE_LABELS:
-                documented = cap in ROLE_CAPABILITIES[role]
-                self.assertEqual(has_capability(self.users[role], cap), documented)
+                documented = has_capability(self.users[role], cap)
                 if documented:
                     continue
                 self._assert_denied(role, method, url, body)

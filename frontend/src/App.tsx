@@ -129,7 +129,7 @@ function AppContent() {
           <Route path="/Admin/projects" element={<Lazy><ProtectedRoute requiredRole="staff"><PlatformProjects /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/projects/:slug/sponsorships" element={<Lazy><ProtectedRoute requiredRole="staff"><ProjectSponsorshipsAdmin /></ProtectedRoute></Lazy>} />
 
-          {/* 2. المستخدمون */}
+          {/* 2. إدارة المستخدمين */}
           <Route path="/Admin/users" element={<Lazy><ProtectedRoute requiredRole="admin"><UsersAdmin /></ProtectedRoute></Lazy>} />
 
           {/* 3. المتطوعون — صفحة موحّدة بثلاثة أقسام (المسارات القديمة تفتح القسم المناسب) */}

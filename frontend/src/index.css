@@ -36,16 +36,6 @@ body {
   border-radius: var(--radius-full);
 }
 
-/* Leaflet Map Styles */
-.leaflet-container {
-  height: 100%;
-  width: 100%;
-  z-index: var(--z-base);
-}
-.leaflet-control-container {
-  z-index: var(--z-dropdown);
-}
-
 /* ── حالات الصفحة (تنفيذ عقد EmptyState / Spinner) ── */
 .state-panel {
   display: flex;

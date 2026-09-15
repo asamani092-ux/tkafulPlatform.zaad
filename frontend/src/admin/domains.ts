@@ -34,7 +34,7 @@ export interface AdminDomain {
 
 /**
  * ترتيب الشريط (نظرة عامة رابط منفصل في AdminShell):
- * المشاريع → الطلبات → الخرائط → التقارير → إدارة المتطوعين → المستخدمون → الكادر → الإعدادات
+ * المشاريع → الطلبات → الخرائط → التقارير → إدارة المتطوعين → إدارة المستخدمين → الكادر → الإعدادات
  */
 export const ADMIN_DOMAINS: AdminDomain[] = [
   {
@@ -82,16 +82,14 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     blurb: "إدارة المتطوعين وطلبات المشاريع وطلبات الانضمام",
     superAdminOnly: true,
     links: [
-      { to: "/Admin/volunteers", label: "المتطوعون" },
-      { to: "/Admin/volunteers/applications", label: "طلبات المشاريع" },
-      { to: "/Admin/volunteers/join-requests", label: "طلبات الانضمام" },
+      { to: "/Admin/volunteers", label: "إدارة المتطوعين" },
     ],
   },
   {
     id: "users",
-    label: "المستخدمون",
+    label: "إدارة المستخدمين",
     to: "/Admin/users",
-    blurb: "حسابات المنصّة والأدوار (مستخدم/مشرف/متبرّع…) — ليست أقسام الكادر التشغيلية",
+    blurb: "حسابات المنصّة والأدوار (مدير النظام/موظف/متطوع) — ليست أقسام الكادر التشغيلية",
     superAdminOnly: true,
     links: [
       { to: "/Admin/users", label: "إدارة المستخدمين" },

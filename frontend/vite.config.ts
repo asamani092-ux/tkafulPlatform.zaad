@@ -18,8 +18,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules/leaflet') || id.includes('node_modules/react-leaflet')) {
-            return 'leaflet';
+          if (id.includes('node_modules/@vis.gl/react-google-maps')) {
+            return 'google-maps';
           }
           if (id.includes('node_modules/jspdf') || id.includes('node_modules/xlsx')) {
             return 'export-libs';

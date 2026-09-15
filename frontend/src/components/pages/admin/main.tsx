@@ -110,7 +110,7 @@ export default function AdminMain() {
           },
           {
             key: "users",
-            label: "المستخدمون",
+            label: "إدارة المستخدمين",
             hint: "حسابات المنصّة المسجّلة",
             to: "/Admin/users",
             value: users,
