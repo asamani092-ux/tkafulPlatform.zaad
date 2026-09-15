@@ -65,7 +65,7 @@ function clearDraft() {
   sessionStorage.removeItem(DRAFT_KEY);
 }
 
-/** صفحة انضمام عامة لفرصة التطوع — مستخدم حالي / زائر + OTP + تأكيد. */
+/** صفحة انضمام عامة لفرصة التطوع — مستخدم حالي / متطوع جديد + OTP + تأكيد. */
 export default function ProjectVolunteerJoin() {
   const { slug = "" } = useParams();
   const navigate = useNavigate();
@@ -253,7 +253,7 @@ export default function ProjectVolunteerJoin() {
                     لدي حساب — تسجيل الدخول
                   </Button>
                   <Button type="button" variant="secondary" className="flex-1" onClick={() => setMode("guest")}>
-                    زائر جديد — تسجيل بدون حساب فوري
+                    متطوع جديد — تسجيل بدون حساب فوري
                   </Button>
                 </div>
               </>
@@ -261,7 +261,7 @@ export default function ProjectVolunteerJoin() {
 
             {mode === "guest" && (
               <>
-                <h2 className="text-xl font-bold text-primary">تسجيل زائر</h2>
+                <h2 className="text-xl font-bold text-primary">تسجيل متطوع</h2>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Input label="الاسم الكامل" value={guest.full_name} onChange={(e) => setGuest({ ...guest, full_name: e.target.value })} required />
                   <Input type="email" dir="ltr" label="البريد الإلكتروني" value={guest.email} onChange={(e) => setGuest({ ...guest, email: e.target.value })} required />

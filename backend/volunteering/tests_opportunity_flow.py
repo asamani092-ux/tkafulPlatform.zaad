@@ -1,5 +1,5 @@
 """
-اختبارات مسار فرصة التطوع: OTP، تكرار الهوية+جوال، تأكيد مستخدم/ضيف، اعتماد بعد الانتهاء.
+اختبارات مسار فرصة التطوع: OTP، تكرار الهوية+جوال، تأكيد مستخدم/متطوع، اعتماد بعد الانتهاء.
 التعقيد: كل اختبار O(1) لعمليات قاعدة البيانات المحدودة.
 """
 from datetime import timedelta
@@ -79,7 +79,7 @@ class OpportunityFlowTests(APITestCase):
         self.assertEqual(res.status_code, 200)
         otp = EmailOTP.objects.filter(email="guest1@test.com", purpose=EmailOTP.PURPOSE_REGISTER).latest("created_at")
         payload = {
-            "full_name": "زائر واحد",
+            "full_name": "متطوع واحد",
             "email": "guest1@test.com",
             "phone": "522222222",
             "national_id": "2222222222",
@@ -128,7 +128,7 @@ class OpportunityFlowTests(APITestCase):
     def test_approve_guest_only_after_end(self):
         reg = OpportunityRegistration.objects.create(
             project=self.project,
-            full_name="ضيف اعتماد",
+            full_name="متطوع اعتماد",
             email="promote@test.com",
             phone="533333333",
             national_id="3333333333",

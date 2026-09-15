@@ -235,7 +235,7 @@ class VolunteerApplication(models.Model):
 
 class OpportunityRegistration(models.Model):
     """
-    تسجيل على فرصة تطوع لمشروع — زائر (بدون حساب فوري) أو مستخدم حالي.
+    تسجيل على فرصة تطوع لمشروع — متطوع (بدون حساب فوري) أو مستخدم حالي.
     الاعتماد كمستخدم للمنصة يتم لاحقاً بعد انتهاء الفرصة (مسار منفصل).
     التعقيد: إنشاء/فحص تكرار O(1) عبر القيد الفريد.
     """
@@ -244,7 +244,7 @@ class OpportunityRegistration(models.Model):
     SOURCE_GUEST = "guest"
     SOURCE_CHOICES = [
         (SOURCE_EXISTING, "مستخدم حالي"),
-        (SOURCE_GUEST, "زائر"),
+        (SOURCE_GUEST, "متطوع"),
     ]
 
     STATUS_PENDING = "pending"

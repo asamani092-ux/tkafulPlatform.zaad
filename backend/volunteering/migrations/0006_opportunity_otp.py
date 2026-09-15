@@ -26,7 +26,7 @@ class Migration(migrations.Migration):
                 ('gender', models.CharField(blank=True, max_length=10)),
                 ('age', models.PositiveSmallIntegerField(blank=True, null=True)),
                 ('qualification', models.CharField(blank=True, max_length=100)),
-                ('source', models.CharField(choices=[('existing_user', 'مستخدم حالي'), ('guest', 'زائر')], max_length=20)),
+                ('source', models.CharField(choices=[('existing_user', 'مستخدم حالي'), ('guest', 'متطوع')], max_length=20)),
                 ('status', models.CharField(choices=[('pending', 'قيد التحقق'), ('confirmed', 'مؤكَّد'), ('approved', 'معتمد كمستخدم'), ('rejected', 'مرفوض')], default='pending', max_length=20)),
                 ('email_verified_at', models.DateTimeField(blank=True, null=True)),
                 ('confirmed_at', models.DateTimeField(blank=True, null=True)),

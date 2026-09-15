@@ -333,7 +333,7 @@ export default function VolunteersAdmin({ defaultTab = "volunteers" }: { default
       {tab === "opportunity_regs" && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {oppRegs.length === 0 ? (
-            <Card><p className="text-center text-sm text-brand-gray">لا توجد تسجيلات ضيوف.</p></Card>
+            <Card><p className="text-center text-sm text-brand-gray">لا توجد تسجيلات متطوعين.</p></Card>
           ) : (
             oppRegs.map((r) => (
               <Card key={r.id}>
