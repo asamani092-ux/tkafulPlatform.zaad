@@ -46,6 +46,7 @@ const SaqyaHome = lazy(() => import("./components/pages/saqya"));
 
 const ProjectLanding = lazy(() => import("./components/pages/projects/ProjectLanding"));
 const ProjectMapPage = lazy(() => import("./components/pages/projects/ProjectMapPage"));
+const ProjectVolunteerJoin = lazy(() => import("./components/pages/projects/ProjectVolunteerJoin"));
 const MapsAggregator = lazy(() => import("./components/pages/projects/MapsAggregator"));
 const PlatformProjects = lazy(() => import("./components/pages/admin/PlatformProjects"));
 const ProjectSponsorshipsAdmin = lazy(() => import("./components/pages/admin/ProjectSponsorshipsAdmin"));
@@ -169,6 +170,7 @@ function AppContent() {
           {/* —— صفحات المشاريع العامة —— */}
           <Route path="/projects/:slug" element={<Lazy><ProjectLanding /></Lazy>} />
           <Route path="/projects/:slug/map" element={<Lazy><ProjectMapPage /></Lazy>} />
+          <Route path="/projects/:slug/volunteer" element={<Lazy><ProjectVolunteerJoin /></Lazy>} />
           <Route path="/projects/:slug/sponsorships" element={<Lazy><SaqyaHome /></Lazy>} />
           <Route path="/map" element={<Lazy><MapsAggregator /></Lazy>} />
           <Route path="/forms/:slug" element={<Lazy><DynamicFormPage /></Lazy>} />

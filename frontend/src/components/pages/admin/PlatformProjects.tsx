@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import QRCode from "qrcode";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
@@ -699,6 +700,9 @@ export default function PlatformProjects() {
                           حفظ الإعدادات
                         </Button>
                       </div>
+                      {toolKey === "volunteering" && (
+                        <VolunteerQrBlock slug={wizardProject.slug} />
+                      )}
                     </div>
                   )}
                 </div>
@@ -761,5 +765,45 @@ export default function PlatformProjects() {
         {wizardNav}
       </Modal>
     </AdminShell>
+  );
+}
+
+/** رمز QR لرابط صفحة الانضمام العامة لأداة التطوع. */
+function VolunteerQrBlock({ slug }: { slug: string }) {
+  const [qrUrl, setQrUrl] = useState("");
+  const joinUrl = `${window.location.origin}/projects/${slug}/volunteer`;
+
+  useEffect(() => {
+    let cancelled = false;
+    void QRCode.toDataURL(joinUrl, { margin: 1, width: 200 })
+      .then((url) => { if (!cancelled) setQrUrl(url); })
+      .catch(() => { if (!cancelled) setQrUrl(""); });
+    return () => { cancelled = true; };
+  }, [joinUrl]);
+
+  return (
+    <div className="mt-3 rounded-lg border border-surface-border p-3">
+      <p className="mb-2 text-xs font-bold text-brand-gray">رمز QR لصفحة الانضمام</p>
+      <p className="mb-2 break-all text-xs text-brand-gray" dir="ltr">{joinUrl}</p>
+      {qrUrl ? (
+        <img src={qrUrl} alt="رمز QR للانضمام" width={200} height={200} className="mx-auto" />
+      ) : (
+        <p className="text-xs text-brand-gray">جاري توليد الرمز…</p>
+      )}
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => void navigator.clipboard.writeText(joinUrl)}
+        >
+          نسخ الرابط
+        </Button>
+        {qrUrl && (
+          <a href={qrUrl} download={`volunteer-qr-${slug}.png`} className="btn-secondary inline-flex items-center px-3 text-sm">
+            تنزيل QR
+          </a>
+        )}
+      </div>
+    </div>
   );
 }

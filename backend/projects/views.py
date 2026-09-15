@@ -75,8 +75,11 @@ def public_projects(request):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
-@cache_page(60)
 def public_project_detail(request, slug):
+    """
+    تفصيل مشروع عام — بلا cache_page حتى لا تُخزَّن استجابة 404
+    قبل تفعيل المشروع وتُعاد لمدة دقيقة بعد النشر.
+    """
     project = (
         services.public_projects_queryset().filter(slug=slug).first()
     )
@@ -274,4 +277,29 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 "config": config,
             },
         )
+        # مزامنة تفاصيل فرصة التطوع إلى VolunteeringProfile عند حفظ الأداة
+        if tool_key == "volunteering" and tool.is_enabled:
+            from volunteering.models import VolunteeringProfile
+
+            profile, _ = VolunteeringProfile.objects.get_or_create(project=project)
+            updates = []
+            if "location" in config:
+                profile.location = str(config.get("location") or "")[:200]
+                updates.append("location")
+            if "requirements" in config:
+                profile.implementation_requirements = str(config.get("requirements") or "")
+                updates.append("implementation_requirements")
+            if "estimated_hours" in config:
+                try:
+                    profile.estimated_hours = max(0, int(config.get("estimated_hours") or 0))
+                except (TypeError, ValueError):
+                    profile.estimated_hours = 0
+                updates.append("estimated_hours")
+            if "duration" in config:
+                profile.duration = str(config.get("duration") or "")[:100]
+                updates.append("duration")
+            if updates:
+                profile.volunteer_status = "ACTIVE"
+                updates.append("volunteer_status")
+                profile.save(update_fields=[*updates, "updated_at"])
         return Response(ProjectToolSerializer(tool).data)
