@@ -28,7 +28,6 @@
   },
   "dependencies": {
     "@types/dompurify": "^3.0.5",
-    "@types/leaflet": "^1.9.21",
     "@vis.gl/react-google-maps": "^1.10.0",
     "@zaad/design-system": "github:asamani092-ux/designSystemFinal#v1.2.11",
     "arabic-persian-reshaper": "^1.0.1",
@@ -38,14 +37,12 @@
     "html2pdf.js": "^0.14.0",
     "jspdf": "^4.0.0",
     "jspdf-autotable": "^5.0.7",
-    "leaflet": "^1.9.4",
     "lines-and-columns": "^2.0.4",
     "lucide-react": "^0.544.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-icons": "^5.5.0",
-    "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.9.4",
     "validator": "^13.15.20",
     "xlsx": "^0.18.5"
