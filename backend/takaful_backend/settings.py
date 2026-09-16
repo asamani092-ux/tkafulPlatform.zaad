@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     "volunteering",  # التطوع (منقول من takaful_app — D-02)
     "services",      # الخدمات (Phase A4)
     "reporting",     # التقارير والإحصائيات (Phase A4)
+    "projectdocs",   # ملف المشروع الداخلي (بطاقة/وثيقة/خطة/إغلاق)
 ]
 
 

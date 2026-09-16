@@ -538,6 +538,12 @@ export default function PlatformProjects() {
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
+                <Link
+                  to={`/Admin/projects/${p.slug}/dossier`}
+                  className="inline-flex items-center rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm font-bold text-primary hover:underline"
+                >
+                  ملف المشروع
+                </Link>
                 {sponEnabled && (
                   <Link
                     to={`/Admin/projects/${p.slug}/sponsorships`}
