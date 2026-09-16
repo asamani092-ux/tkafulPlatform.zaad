@@ -2,7 +2,7 @@
  * اختبارات عارض مخطط الأقسام وشريط المراحل (منطق عرض).
  */
 import { describe, expect, it } from "vitest";
-import { STAGE_STATUS_AR, SECTION_STATUS_AR } from "../components/dossier/types";
+import { STAGE_STATUS_AR, SECTION_STATUS_AR } from "./types";
 
 describe("dossier labels", () => {
   it("covers stage statuses", () => {
