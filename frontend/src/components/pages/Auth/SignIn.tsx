@@ -14,13 +14,13 @@ function safeNext(raw: string | null): string | null {
   return null;
 }
 
+/** دخول موحّد: بريد + كلمة مرور → JWT (بدون OTP). OTP يبقى لمسار تسجيل فرصة التطوع فقط. */
 export default function SignIn() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const next = safeNext(searchParams.get("next"));
   const { login } = useAuth();
-  const [formData, setFormData] = useState({ email: "", password: "", otp: "" });
-  const [otpRequired, setOtpRequired] = useState(false);
+  const [formData, setFormData] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -30,7 +30,6 @@ export default function SignIn() {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) e.email = "يرجى إدخال بريد إلكتروني صحيح";
     if (!formData.password) e.password = "كلمة السر مطلوبة";
     else if (formData.password.length < 6) e.password = "كلمة السر يجب أن تكون 6 أحرف على الأقل";
-    if (otpRequired && !formData.otp) e.otp = "رمز التحقق مطلوب";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -46,7 +45,11 @@ export default function SignIn() {
     }
     const userData = await profileRes.json();
     const role = userData.profile?.role || "user";
-    login({ name: userData.profile?.name || userData.username, email: userData.email, role }, tokenData.access, tokenData.refresh);
+    login(
+      { name: userData.profile?.name || userData.username, email: userData.email, role },
+      tokenData.access,
+      tokenData.refresh,
+    );
     if (next) {
       navigate(next, { replace: true });
       return;
@@ -74,51 +77,22 @@ export default function SignIn() {
     setIsSubmitting(true);
     setErrors({});
     try {
-      if (!otpRequired) {
-        const res = await fetch(`${API_BASE_URL}/api/accounts/auth/otp/request/`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: formData.email, password: formData.password }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setErrors({
-            form:
-              (typeof data.detail === "string" && data.detail) ||
-              (res.status === 502
-                ? "تعذّر إرسال رمز التحقق عبر البريد"
-                : "البريد الإلكتروني أو كلمة المرور غير صحيحة"),
-          });
-          setIsSubmitting(false);
-          return;
-        }
-        // تجاوز OTP طارئاً: الخادم أعاد التوكن مباشرة
-        if (data.access && data.refresh) {
-          await finishLogin({ access: data.access, refresh: data.refresh });
-          return;
-        }
-        setOtpRequired(true);
-        setIsSubmitting(false);
-        return;
-      }
-
-      const res = await fetch(`${API_BASE_URL}/api/accounts/auth/otp/verify/`, {
+      const res = await fetch(`${API_BASE_URL}/api/accounts/auth/token/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          otp: formData.otp,
-        }),
+        body: JSON.stringify({ username: formData.email, password: formData.password }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setErrors({ form: data.detail || "رمز التحقق غير صحيح أو منتهٍ" });
+        setErrors({
+          form:
+            (typeof data.detail === "string" && data.detail) ||
+            "البريد الإلكتروني أو كلمة المرور غير صحيحة",
+        });
         setIsSubmitting(false);
         return;
       }
-      const tokenData = await res.json();
-      await finishLogin(tokenData);
+      await finishLogin({ access: data.access, refresh: data.refresh });
     } catch {
       setErrors({ form: "حدث خطأ غير متوقع، حاول مرة أخرى." });
       setIsSubmitting(false);
@@ -134,34 +108,44 @@ export default function SignIn() {
           </div>
           <h2 className="mb-6 text-center text-2xl font-bold text-primary">الدخول الموحّد — تكافل وأثر</h2>
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            <Input type="email" dir="ltr" label="البريد الإلكتروني" placeholder="example@mail.com"
-              value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} error={errors.email} required disabled={otpRequired} />
-            <Input type="password" label="كلمة السر" placeholder="••••••••"
-              value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} error={errors.password} required disabled={otpRequired} />
-            {otpRequired && (
-              <Input dir="ltr" label="رمز التحقق المرسل إلى بريدك" placeholder="000000"
-                value={formData.otp} onChange={(e) => setFormData({ ...formData, otp: e.target.value })} error={errors.otp} required />
-            )}
+            <Input
+              type="email"
+              dir="ltr"
+              label="البريد الإلكتروني"
+              placeholder="example@mail.com"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              error={errors.email}
+              required
+            />
+            <Input
+              type="password"
+              label="كلمة السر"
+              placeholder="••••••••"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              error={errors.password}
+              required
+            />
             {errors.form && (
-              <div className="rounded-lg px-4 py-3 text-sm" style={{ background: "var(--tmkeen-danger-bg)", color: "var(--tmkeen-danger)" }}>
+              <div
+                className="rounded-lg px-4 py-3 text-sm"
+                style={{ background: "var(--tmkeen-danger-bg)", color: "var(--tmkeen-danger)" }}
+              >
                 {errors.form}
               </div>
             )}
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? "جاري المعالجة..." : otpRequired ? "تأكيد الرمز وتسجيل الدخول" : "متابعة"}
+              {isSubmitting ? "جاري الدخول..." : "تسجيل الدخول"}
             </Button>
-            {otpRequired && (
-              <button
-                type="button"
-                className="w-full text-sm text-brand-gray hover:underline"
-                onClick={() => { setOtpRequired(false); setFormData({ ...formData, otp: "" }); }}
-              >
-                تعديل البريد أو كلمة المرور
-              </button>
-            )}
           </form>
           <div className="mt-4 space-y-1 text-center text-sm text-brand-gray">
-            <p>ليس لديك حساب؟ <Link to="/signup" className="font-semibold text-primary">تسجيل جديد</Link></p>
+            <p>
+              ليس لديك حساب؟{" "}
+              <Link to="/signup" className="font-semibold text-primary">
+                تسجيل جديد
+              </Link>
+            </p>
           </div>
         </Card>
       </main>

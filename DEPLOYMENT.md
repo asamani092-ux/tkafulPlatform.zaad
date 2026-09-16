@@ -18,35 +18,38 @@
 - `DATABASE_URL` من مورد PostgreSQL
 - `EMAIL_HOST_PASSWORD` بكلمة مرور تطبيق أوتلوك لحساب `tkaful@alzaad.org.sa`
 
+**Build Arguments** (لا Runtime فقط — Vite يدمجها وقت البناء):
+- `VITE_GOOGLE_MAPS_API_KEY` = مفتاح Google Maps JavaScript API (مقيّد بنطاق `tkaful.alzaad.org.sa`)
+
 لا تفعّل `VITE_ENABLE_UAT` ولا `UAT_ENABLED` في الإنتاج. اترك `VITE_API_BASE_URL` فارغاً إذا الواجهة والـ API على نفس النطاق.
-أضف `localhost,127.0.0.1` إلى `ALLOWED_HOSTS` (أو اعتمد الإضافة التلقائية في الكود) واضبط `SECURE_SSL_REDIRECT=False` لأن Coolify ينهي TLS خارج الحاوية.
+أضف `localhost,127.0.0.1` إلى `ALLOWED_HOSTS` واضبط `SECURE_SSL_REDIRECT=False`.
 
-### 3) قاعدة البيانات
-بعد أول نشر:
+### 3) ثبات المرفقات بعد إعادة النشر
+في كولفاي → Storage / Persistent Storage اربط مجلداً دائماً بالمسار داخل الحاوية:
 
-```bash
-cd backend
-./venv/bin/python manage.py migrate --noinput
-./venv/bin/python manage.py collectstatic --noinput
+```text
+/app/backend/media
 ```
 
-### 4) البريد (أوت لوك)
+بدون هذا المجلد تُحذف الفواتير والمرفقات عند كل نشر جديد (قاعدة Postgres تبقى، والملفات تختفي).
+
+### 4) قاعدة البيانات ومدير النظام
+عند الإقلاع تُنفَّذ `migrate` و`create_admin`. لإعادة زرع/تحديث المشرف من طرفية الحاوية:
+
+```bash
+python manage.py create_admin --email td@alzaad.org.sa --username td --password '12341234'
+```
+
+أو عبر البيئة `ADMIN_EMAIL` / `ADMIN_USERNAME` / `ADMIN_PASSWORD` ثم `python manage.py create_admin`.
+
+الدخول من الواجهة: **بريد + كلمة مرور فقط** (بدون OTP). OTP يبقى لتسجيل فرصة التطوع للضيف.
+
+### 5) البريد (أوت لوك) — للإشعارات وOTP فرص التطوع
 - المضيف: `smtp.office365.com` — المنفذ `587` — TLS مفعّل
 - المستخدم / المرسل: `tkaful@alzaad.org.sa`
 - استخدم **كلمة مرور تطبيق** من حساب مايكروسوفت إن كان التحقق بخطوتين مفعّلاً
-- يُستخدم لـ OTP والإشعارات عبر `DEFAULT_FROM_EMAIL`
-- إذا فشل إرسال الرمز مؤقتاً: ضع `LOGIN_OTP_DISABLED=True` في Environment ثم أعد النشر للدخول بالبريد/كلمة المرور فقط — وأعده إلى `False` بعد استقرار SMTP
-
-### 5) مدير النظام
-بعد تعيين `ADMIN_*` في البيئة:
-
-```bash
-cd backend && ./venv/bin/python manage.py create_admin
-```
-
-- الدخول من الواجهة بالبريد: `td@alzaad.org.sa`
-- كلمة المرور الأولية: كما في `ADMIN_PASSWORD` (يُفضَّل تغييرها بعد أول دخول)
-- تحقق: `GET https://tkaful.alzaad.org.sa/api/ping/`
+- يُستخدم لإشعارات المنصة وOTP تسجيل فرصة التطوع عبر `DEFAULT_FROM_EMAIL`
+- تحقق الصحة: `GET https://tkaful.alzaad.org.sa/api/ping/`
 
 ---
 
