@@ -52,7 +52,6 @@ const PlatformProjects = lazy(() => import("./components/pages/admin/PlatformPro
 const ProjectSponsorshipsAdmin = lazy(() => import("./components/pages/admin/ProjectSponsorshipsAdmin"));
 const MapsAdmin = lazy(() => import("./components/pages/admin/MapsAdmin"));
 const PlatformSettingsPage = lazy(() => import("./components/pages/admin/PlatformSettings"));
-const BroadcastAdmin = lazy(() => import("./components/pages/admin/BroadcastAdmin"));
 const RolesAdmin = lazy(() => import("./components/pages/admin/RolesAdmin"));
 const ActivityLogAdmin = lazy(() => import("./components/pages/admin/ActivityLogAdmin"));
 const ProjectTypesAdmin = lazy(() => import("./components/pages/admin/ProjectTypesAdmin"));
@@ -131,7 +130,7 @@ function AppContent() {
           <Route path="/Admin/projects" element={<Lazy><ProtectedRoute requiredRole="staff"><PlatformProjects /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/projects/:slug/sponsorships" element={<Lazy><ProtectedRoute requiredRole="staff"><ProjectSponsorshipsAdmin /></ProtectedRoute></Lazy>} />
 
-          {/* 2. المستخدمون */}
+          {/* 2. إدارة المستخدمين */}
           <Route path="/Admin/users" element={<Lazy><ProtectedRoute requiredRole="admin"><UsersAdmin /></ProtectedRoute></Lazy>} />
 
           {/* 3. المتطوعون — صفحة موحّدة بثلاثة أقسام (المسارات القديمة تفتح القسم المناسب) */}
@@ -157,7 +156,6 @@ function AppContent() {
 
           {/* 9. إعدادات المنصّة */}
           <Route path="/Admin/settings" element={<Lazy><ProtectedRoute requiredRole="admin"><PlatformSettingsPage /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/settings/broadcast" element={<Lazy><ProtectedRoute requiredRole="admin"><BroadcastAdmin /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/settings/roles" element={<Lazy><ProtectedRoute requiredRole="admin"><RolesAdmin /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/settings/activity" element={<Lazy><ProtectedRoute requiredRole="admin"><ActivityLogAdmin /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/settings/project-types" element={<Lazy><ProtectedRoute requiredRole="admin"><ProjectTypesAdmin /></ProtectedRoute></Lazy>} />

@@ -1,15 +1,10 @@
 import { ROLE_AR } from "../i18n/labels";
 
-/** الأدوار الثمانية لملفّات المستخدمين (بدون أدوار المشروع project_*). */
+/** الأدوار الثلاثة الأساسية لتعيين ملفّات المستخدمين (بدون أدوار المشروع project_*). */
 export const PLATFORM_ROLE_IDS = [
   "admin",
-  "manager",
   "employee",
   "user",
-  "beneficiary",
-  "donor",
-  "supplier",
-  "representative",
 ] as const;
 
 export type PlatformRoleId = (typeof PLATFORM_ROLE_IDS)[number];

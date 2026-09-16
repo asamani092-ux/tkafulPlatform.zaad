@@ -1,5 +1,6 @@
 """
 مصدر حقيقة واحد لأدوار المنصّة وقدراتها (ثابتة في الكود — D-41).
+ثلاثة أدوار أساسية للتعيين والعرض؛ الأدوار القديمة تبقى للتوافق مع الحسابات الحالية.
 التعقيد: has_capability O(1)؛ بناء الكتالوج O(R·C).
 """
 from __future__ import annotations
@@ -43,11 +44,20 @@ CAPABILITY_LABELS: dict[str, str] = {
     CAP_VIEW_AUDIT: "عرض سجل النشاط",
 }
 
+# الأدوار الثلاثة المعروضة للتعيين في الواجهة والكتالوج
+PRIMARY_ROLE_IDS: tuple[str, ...] = ("admin", "employee", "user")
+
+# توافق تراكمي: المدير القديم يُعامل كموظف من حيث القدرات
+ROLE_ALIASES: dict[str, str] = {
+    "manager": "employee",
+}
+
 ROLE_LABELS: dict[str, str] = {
-    "admin": "مشرف عام",
-    "manager": "مدير",
+    "admin": "مدير النظام",
     "employee": "موظف",
-    "user": "متطوّع",
+    "user": "متطوع",
+    # تسميات توافقية لعرض الحسابات القديمة دون حذف التاريخ
+    "manager": "موظف (قديم: مدير)",
     "beneficiary": "مستفيد",
     "donor": "متبرّع",
     "supplier": "مورّد",
@@ -55,14 +65,14 @@ ROLE_LABELS: dict[str, str] = {
 }
 
 ROLE_DESCRIPTIONS: dict[str, str] = {
-    "admin": "يشغّل الطبقة الأفقية للمشرف: المستخدمون والإعدادات والمشاريع والطلبات والكفالات.",
-    "manager": "طاقم المؤسسة — يغذّي لوحة الكادر دون صلاحيات المشرف العام.",
-    "employee": "موظف كادر — يغذّي لوحة الكادر دون إدارة المستخدمين أو المشاريع.",
-    "user": "متطوّع — يتقدّم للفرص ويتابع مهامه داخل حسابه.",
-    "beneficiary": "مستفيد من الخدمات — بلا صلاحيات إدارة.",
-    "donor": "متبرّع — ينشئ كفالة ويدفعها؛ لا يعتمدها.",
-    "supplier": "مورّد — يجهّز الطلب ويرفع التوثيق؛ لا يحذف مشروعاً ولا يعتمد كفالة.",
-    "representative": "مندوب ميداني — يسلّم الطلب ويرفع التوثيق.",
+    "admin": "مدير النظام — المستخدمون والإعدادات والمشاريع والطلبات والكفالات.",
+    "employee": "موظف — يغذّي لوحة الكادر ويساهم في تشغيل المشاريع عبر العضوية؛ دون صلاحيات المشرف العام.",
+    "user": "متطوع — يتقدّم للفرص ويتابع مهامه داخل حسابه.",
+    "manager": "توافق: يُعامل كموظف.",
+    "beneficiary": "مستفيد من الخدمات — بلا صلاحيات إدارة (حسابات قديمة).",
+    "donor": "متبرّع — ينشئ كفالة ويدفعها (حسابات قديمة).",
+    "supplier": "مورّد — يجهّز الطلب ويرفع التوثيق (حسابات قديمة).",
+    "representative": "مندوب ميداني — يسلّم الطلب ويرفع التوثيق (حسابات قديمة).",
 }
 
 _ADMIN = frozenset({
@@ -83,16 +93,30 @@ _ADMIN = frozenset({
     CAP_VIEW_AUDIT,
 })
 
+# الموظف يستوعب قدرات المدير القديمة (manager → employee)
+_EMPLOYEE = frozenset({
+    CAP_MANAGE_STAFF,
+    CAP_CREATE_SPONSORSHIP,
+    CAP_APPROVE_SPONSORSHIP,
+})
+
 ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
     "admin": _ADMIN | frozenset({CAP_CREATE_SPONSORSHIP}),
-    "manager": frozenset({CAP_MANAGE_STAFF, CAP_CREATE_SPONSORSHIP, CAP_APPROVE_SPONSORSHIP}),
-    "employee": frozenset({CAP_MANAGE_STAFF}),
+    "employee": _EMPLOYEE,
     "user": frozenset({CAP_APPLY_VOLUNTEER}),
+    # قدرات توافقية للحسابات التي لم تُرحَّل بعد
+    "manager": _EMPLOYEE,
     "beneficiary": frozenset(),
     "donor": frozenset({CAP_CREATE_SPONSORSHIP}),
     "supplier": frozenset({CAP_PREPARE_ORDER, CAP_UPLOAD_DOCUMENTATION}),
     "representative": frozenset({CAP_DELIVER_ORDER, CAP_UPLOAD_DOCUMENTATION}),
 }
+
+
+def canonical_role(role: str | None) -> str | None:
+    if not role:
+        return None
+    return ROLE_ALIASES.get(role, role)
 
 
 def role_of(user) -> str | None:
@@ -105,7 +129,7 @@ def role_of(user) -> str | None:
 
 
 def has_capability(user, cap: str) -> bool:
-    role = role_of(user)
+    role = canonical_role(role_of(user))
     if not role:
         return False
     return cap in ROLE_CAPABILITIES.get(role, frozenset())
@@ -116,14 +140,14 @@ def roles_with(cap: str) -> frozenset[str]:
 
 
 def role_catalog() -> dict:
-    """حمولة قراءة فقط للمشرف — O(R·C)."""
+    """حمولة قراءة فقط للمشرف — الأدوار الثلاثة الأساسية + القدرات. O(R·C)."""
     capabilities = [{"id": key, "label": label} for key, label in CAPABILITY_LABELS.items()]
     roles = []
-    for role_id, label in ROLE_LABELS.items():
+    for role_id in PRIMARY_ROLE_IDS:
         caps = sorted(ROLE_CAPABILITIES.get(role_id, frozenset()))
         roles.append({
             "id": role_id,
-            "label": label,
+            "label": ROLE_LABELS[role_id],
             "description": ROLE_DESCRIPTIONS.get(role_id, ""),
             "capabilities": caps,
         })
