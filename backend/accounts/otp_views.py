@@ -1,4 +1,5 @@
-"""واجهات OTP للدخول — لا يُصدر JWT قبل نجاح الرمز."""
+"""واجهات OTP للدخول — لا يُصدر JWT قبل نجاح الرمز (ما لم يُعطَّل OTP طارئاً)."""
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from rest_framework import status
@@ -24,6 +25,15 @@ def _resolve_user(email: str, password: str):
     return authenticate(username=user.username, password=password)
 
 
+def _issue_tokens(user):
+    refresh = RefreshToken.for_user(user)
+    return {
+        "access": str(refresh.access_token),
+        "refresh": str(refresh),
+        "email": user.email,
+    }
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @throttle_classes([AuthRateThrottle])
@@ -42,10 +52,23 @@ def login_request_otp(request):
             {"detail": "تسجيل الدخول غير مفعّل لهذا الدور على هذه المنصّة"},
             status=status.HTTP_403_FORBIDDEN,
         )
+
+    # تجاوز طارئ أثناء ضبط SMTP — يُفضَّل تعطيله بعد استقرار البريد
+    if getattr(settings, "LOGIN_OTP_DISABLED", False):
+        return Response({**_issue_tokens(user), "otp_required": False})
+
     try:
         request_otp(user.email or email, EmailOTP.PURPOSE_LOGIN)
     except Exception:
-        return Response({"detail": "تعذّر إرسال رمز التحقق"}, status=502)
+        return Response(
+            {
+                "detail": (
+                    "تعذّر إرسال رمز التحقق عبر البريد. "
+                    "تحقق من EMAIL_HOST_PASSWORD وإعدادات أوتلوك (SMTP)."
+                )
+            },
+            status=502,
+        )
     return Response({
         "detail": "تم إرسال رمز التحقق إلى بريدك",
         "email": (user.email or email).lower(),
@@ -72,12 +95,9 @@ def login_verify_otp(request):
             {"detail": "تسجيل الدخول غير مفعّل لهذا الدور على هذه المنصّة"},
             status=status.HTTP_403_FORBIDDEN,
         )
+    if getattr(settings, "LOGIN_OTP_DISABLED", False):
+        return Response(_issue_tokens(user))
     if not verify_otp(user.email or email, EmailOTP.PURPOSE_LOGIN, code):
         return Response({"detail": "رمز التحقق غير صحيح أو منتهٍ"}, status=400)
 
-    refresh = RefreshToken.for_user(user)
-    return Response({
-        "access": str(refresh.access_token),
-        "refresh": str(refresh),
-        "email": user.email,
-    })
+    return Response(_issue_tokens(user))

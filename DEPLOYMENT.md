@@ -47,6 +47,9 @@ python manage.py create_admin --email td@alzaad.org.sa --username td --password 
 ### 5) البريد (أوت لوك) — للإشعارات وOTP فرص التطوع
 - المضيف: `smtp.office365.com` — المنفذ `587` — TLS مفعّل
 - المستخدم / المرسل: `tkaful@alzaad.org.sa`
+- استخدم **كلمة مرور تطبيق** من حساب مايكروسوفت إن كان التحقق بخطوتين مفعّلاً
+- يُستخدم لإشعارات المنصة وOTP تسجيل فرصة التطوع عبر `DEFAULT_FROM_EMAIL`
+- تحقق الصحة: `GET https://tkaful.alzaad.org.sa/api/ping/`
 
 ---
 
