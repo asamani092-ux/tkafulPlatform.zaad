@@ -13,6 +13,7 @@ import StageBar from "../../dossier/StageBar";
 import ActivitiesPanel from "../../dossier/ActivitiesPanel";
 import DossierDashboard from "../../dossier/DossierDashboard";
 import {
+  DOSSIER_STATUS_AR,
   SECTION_STATUS_AR,
   type DossierSchema,
   type ProjectDossier,
@@ -345,7 +346,7 @@ export default function ProjectDossierWorkspace() {
             <Card>
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <Badge>{dossier.code}</Badge>
-                <Badge variant="warning">{dossier.status}</Badge>
+                <Badge variant="warning">{DOSSIER_STATUS_AR[dossier.status] || dossier.status}</Badge>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {(

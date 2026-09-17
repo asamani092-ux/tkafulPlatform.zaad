@@ -121,3 +121,19 @@ export const AUTO_STATUS_AR: Record<string, string> = {
   delayed: "متعثر",
   stopped: "موقوف",
 };
+
+export const DOSSIER_STATUS_AR: Record<string, string> = {
+  draft: "مسودة",
+  in_progress: "قيد التنفيذ",
+  pending_approval: "بانتظار الاعتماد",
+  approved: "معتمد",
+  closed: "مغلق",
+};
+
+export const STAGE_KEY_AR: Record<string, string> = {
+  define: "التعريف",
+  prepare: "التجهيز",
+  plan: "التخطيط",
+  execute: "التنفيذ",
+  close: "الإغلاق",
+};

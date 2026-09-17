@@ -248,7 +248,35 @@ def submit_stage(*, dossier: ProjectDossier, order: int, user, request=None) -> 
         request=request,
         target=stage,
     )
+    _notify_dossier_event(
+        dossier=dossier,
+        message=f"طُلب اعتماد مرحلة «{_stage_label(stage.key)}» لمشروع {dossier.code}",
+        link=f"/Admin/projects/{dossier.project.slug}/dossier",
+        users=[u for u in [dossier.manager] if u],
+        roles=["admin"],
+    )
     return approval
+
+
+def _stage_label(key: str) -> str:
+    return next((s["label"] for s in catalog.STAGES if s["key"] == key), key)
+
+
+def _notify_dossier_event(*, dossier, message: str, link: str, users=None, roles=None):
+    try:
+        from notifications.services import EVENT_PROJECT, notify
+
+        notify(
+            message=message,
+            users=users or [],
+            roles=roles or [],
+            notification_type="info",
+            link=link,
+            event_type=EVENT_PROJECT,
+        )
+    except Exception:
+        # لا نكسر مسار الاعتماد إن تعطّل مركز الإشعارات
+        pass
 
 
 @transaction.atomic
@@ -300,6 +328,19 @@ def apply_approval_decision(
         summary=f"قرار اعتماد {decision} لـ {dossier.code}",
         request=request,
         target=locked,
+    )
+    stage_key = stage.key if stage else locked.scope
+    if decision == "approved":
+        msg = f"اعتُمدت مرحلة «{_stage_label(stage_key)}» لمشروع {dossier.code}"
+    else:
+        msg = f"أُعيدت مرحلة «{_stage_label(stage_key)}» للتعديل — {dossier.code}"
+    recipients = [u for u in [dossier.manager] if u]
+    _notify_dossier_event(
+        dossier=dossier,
+        message=msg,
+        link=f"/Admin/projects/{dossier.project.slug}/dossier",
+        users=recipients,
+        roles=["admin"],
     )
     return locked
 

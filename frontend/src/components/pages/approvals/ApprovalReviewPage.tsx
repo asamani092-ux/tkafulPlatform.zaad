@@ -6,6 +6,7 @@ import Button from "../../ui/Button";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import SectionRenderer from "../../dossier/SectionRenderer";
 import type { SchemaSection } from "../../dossier/types";
+import { STAGE_KEY_AR } from "../../dossier/types";
 
 type ApprovalPayload = {
   token: string;
@@ -97,8 +98,19 @@ export default function ApprovalReviewPage() {
           {payload.dossier.project_name} · {payload.dossier.code}
         </p>
         <p className="text-sm text-brand-gray">
-          الراعي: {payload.dossier.sponsor_name || "—"} · النطاق: {payload.scope}
-          {payload.stage ? ` · المرحلة: ${payload.stage.key}` : ""}
+          الراعي: {payload.dossier.sponsor_name || "—"} · النطاق:{" "}
+          {payload.scope === "stage"
+            ? "مرحلة"
+            : payload.scope === "card"
+              ? "البطاقة"
+              : payload.scope === "document"
+                ? "الوثيقة"
+                : payload.scope === "closure"
+                  ? "الإغلاق"
+                  : payload.scope}
+          {payload.stage
+            ? ` · المرحلة: ${STAGE_KEY_AR[payload.stage.key] || payload.stage.key}`
+            : ""}
         </p>
         {done && <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">{done}</p>}
         {error && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
