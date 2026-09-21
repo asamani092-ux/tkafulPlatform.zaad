@@ -44,7 +44,9 @@ export default function StageBar({ stages, currentKey }: Props) {
       </ol>
       {active && (
         <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900">
-          اعتماد هذه المرحلة فقط ({STAGE_LABEL[active.key] || active.key}) — عبر بريد الراعي أو زر المشرف.
+          {active.status === "submitted"
+            ? `بانتظار اعتماد المدير لهذه المرحلة فقط (${STAGE_LABEL[active.key] || active.key}) — المرحلة التالية تبقى مقفلة.`
+            : `اعتماد هذه المرحلة فقط (${STAGE_LABEL[active.key] || active.key}) — المرحلة التالية لا تُفتح إلا بعد اعتماد المدير عبر البريد أو زر المشرف.`}
         </p>
       )}
     </div>

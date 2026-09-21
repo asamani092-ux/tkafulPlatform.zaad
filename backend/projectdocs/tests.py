@@ -269,6 +269,54 @@ class DossierRestructureTests(APITestCase):
         self.assertTrue(Project.objects.filter(slug=res.data["project_slug"]).exists())
         self.assertEqual(len(res.data["stages"]), 5)
 
+    def test_locked_stage_blocks_work_until_manager_approval(self):
+        """لا أنشطة ولا أقسام مرحلة لاحقة قبل اعتماد المدير. O(1)."""
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/projectdocs/dossiers/",
+            {
+                "name": "تراتبية",
+                "sponsor_email": "gate@test.com",
+                "sponsor_name": "مدير",
+                "manager_id": self.manager.id,
+            },
+            format="json",
+        )
+        dossier_id = res.data["id"]
+        locked = next(s for s in res.data["stages"] if s["order"] == 2)
+        self.assertEqual(locked["status"], "locked")
+
+        # قسم مرحلة التجهيز مرفوض (حتى للمشرف لا يتجاوز المرحلة المقفلة)
+        self.client.force_authenticate(self.admin)
+        deny_sec = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/team/",
+            {"data": {"members": []}},
+            format="json",
+        )
+        self.assertEqual(deny_sec.status_code, 400, deny_sec.content)
+
+        # نشاط على مرحلة مقفلة مرفوض
+        deny_act = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/",
+            {"stage": locked["id"], "code": "X1", "title": "محظور"},
+            format="json",
+        )
+        self.assertEqual(deny_act.status_code, 400, deny_act.content)
+
+        # بعد الاعتماد تُفتح التالية
+        with patch("projectdocs.services.send_approval_email", return_value=True):
+            sub = self.client.post(f"/api/projectdocs/dossiers/{dossier_id}/stages/1/submit/", {}, format="json")
+            self.assertEqual(sub.status_code, 201, sub.content)
+        dec = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/stages/1/decide/",
+            {"decision": "approved"},
+            format="json",
+        )
+        self.assertEqual(dec.status_code, 200, dec.content)
+        dossier = ProjectDossier.objects.get(pk=dossier_id)
+        self.assertEqual(dossier.stages.get(order=2).status, "active")
+        self.assertEqual(dossier.stages.get(order=3).status, "locked")
+
     def test_budget_lines_cumulative_allocate_spend(self):
         dossier = create_project_with_dossier(
             name="ميزانية",

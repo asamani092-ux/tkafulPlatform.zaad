@@ -174,6 +174,22 @@ def active_stage(dossier: ProjectDossier) -> DossierStage | None:
     return dossier.stages.filter(status__in=["active", "returned", "submitted"]).order_by("order").first()
 
 
+def assert_stage_open_for_work(stage: DossierStage | None, *, allow_submitted: bool = False) -> DossierStage:
+    """المرحلة المقفلة/المعتمدة لا تُفتح للعمل قبل اعتماد المدير للمرحلة السابقة. O(1)."""
+    if not stage:
+        raise ValidationError({"stage": "مرحلة غير موجودة"})
+    allowed = ("active", "returned")
+    if allow_submitted:
+        allowed = ("active", "returned", "submitted")
+    if stage.status not in allowed:
+        raise ValidationError(
+            {
+                "stage": "لا يمكن العمل على هذه المرحلة قبل اعتماد المدير للمرحلة السابقة أو أثناء انتظار الاعتماد",
+            }
+        )
+    return stage
+
+
 @transaction.atomic
 def create_project_with_dossier(
     *,
@@ -234,16 +250,12 @@ def update_section(
         raise ValidationError({"kind": "قسم الإغلاق يُعبَّأ في وثيقة الإغلاق فقط"})
     if kind == "closure":
         close_stage = dossier.stages.filter(key="close").first()
-        if not close_stage or close_stage.status not in ("active", "returned"):
-            if not is_super_admin(user):
-                raise ValidationError({"stage": "وثيقة الإغلاق تُفتح بعد مرحلة الإغلاق فقط"})
-    if not stage or stage.status not in ("active", "returned"):
-        if not is_super_admin(user):
-            raise ValidationError({"stage": "القسم خارج المرحلة النشطة"})
+        assert_stage_open_for_work(close_stage)
+    assert_stage_open_for_work(stage)
     cleaned = catalog.validate_section_data(kind, key, data)
     section = dossier.sections.get(kind=kind, key=key)
-    if section.status == "approved" and not is_super_admin(user):
-        raise ValidationError({"status": "القسم معتمد ولا يُعدَّل"})
+    if section.status == "approved":
+        raise ValidationError({"status": "القسم معتمد ولا يُعدَّل إلا بإعادة المرحلة للتعديل"})
     section.data = cleaned
     section.status = "filled" if catalog.section_is_filled(cleaned) else "empty"
     section.updated_by = user
@@ -388,6 +400,7 @@ def complete_activity(
 ) -> StageActivity:
     """إتمام نشاط مع شاهد إلزامي ودرس مستفاد. O(1)."""
     assert_can_edit(user, dossier)
+    assert_stage_open_for_work(activity.stage)
     has_file = bool(evidence_file)
     has_url = bool((evidence_url or "").strip())
     if not has_file and not has_url:

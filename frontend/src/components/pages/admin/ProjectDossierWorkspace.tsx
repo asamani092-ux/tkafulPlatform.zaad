@@ -260,11 +260,25 @@ export default function ProjectDossierWorkspace() {
   const sectionsFor = (kind: "document" | "closure"): Array<{ def: SchemaSection; status: string }> => {
     if (!schema || !dossier) return [];
     const defs = kind === "document" ? schema.document : schema.closure;
-    return defs.map((def) => {
-      const row = dossier.sections.find((s) => s.kind === kind && s.key === def.key);
-      return { def, status: row?.status || "empty" };
-    });
+    const stageFilter =
+      kind === "document"
+        ? activeStage?.key
+        : dossier.stages.find((s) => s.key === "close")?.status === "locked"
+          ? null
+          : "close";
+    return defs
+      .filter((def) => (stageFilter ? def.stage === stageFilter : false))
+      .map((def) => {
+        const row = dossier.sections.find((s) => s.kind === kind && s.key === def.key);
+        return { def, status: row?.status || "empty" };
+      });
   };
+
+  const closeStage = useMemo(
+    () => dossier?.stages.find((s) => s.key === "close"),
+    [dossier],
+  );
+  const closureUnlocked = !!closeStage && closeStage.status !== "locked";
 
   const canEditSection = (stageKey: string) => {
     if (!activeStage) return false;
@@ -431,15 +445,24 @@ export default function ProjectDossierWorkspace() {
             <div className="space-y-3">
               {tab === "document" && (
                 <p className="text-sm text-brand-gray">
-                  أقسام المرحلة النشطة فقط قابلة للتعبئة. الإغلاق له تبويب منفصل بعد فتح مرحلته.
+                  تُعرض أقسام المرحلة النشطة فقط. المرحلة التالية تُفتح بعد اعتماد المدير (الراعي).
                 </p>
               )}
-              {tab === "closure" && comparison && (
+              {tab === "closure" && !closureUnlocked && (
+                <Card>
+                  <p className="text-sm text-brand-gray">
+                    وثيقة الإغلاق مقفلة حتى اعتماد المراحل السابقة وفتح مرحلة الإغلاق من قبل المدير.
+                  </p>
+                </Card>
+              )}
+              {tab === "closure" && closureUnlocked && comparison && (
                 <Card>
                   <h3 className="mb-2 font-bold text-primary">مقارنة الوثيقة والإغلاق</h3>
                   <ClosureComparison pairs={comparison.pairs} budgetLines={comparison.budget_lines} />
                 </Card>
               )}
+              {((tab === "document") || (tab === "closure" && closureUnlocked)) && (
+                <>
               <div className="flex justify-end">
                 <Button type="button" variant="secondary" onClick={() => void exportKind(tab === "document" ? "document" : "closure")}>
                   تصدير PDF
@@ -449,7 +472,6 @@ export default function ProjectDossierWorkspace() {
                 const kind = tab === "document" ? "document" : "closure";
                 const draftKey = `${kind}:${def.key}`;
                 const editable = canEditSection(def.stage);
-                const dimmed = kind === "document" && activeStage && def.stage !== activeStage.key && activeStage.key !== "close";
                 return (
                   <Card key={def.key}>
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -457,7 +479,6 @@ export default function ProjectDossierWorkspace() {
                         <h3 className="font-bold text-primary">{def.label}</h3>
                         <p className="text-xs text-brand-gray">
                           المرحلة: {def.stage} · {SECTION_STATUS_AR[status] || status}
-                          {dimmed ? " · خارج المرحلة الحالية" : ""}
                         </p>
                       </div>
                       {editable && (
@@ -479,6 +500,11 @@ export default function ProjectDossierWorkspace() {
                   </Card>
                 );
               })}
+              {sectionsFor(tab === "document" ? "document" : "closure").length === 0 && tab === "document" && (
+                <p className="text-sm text-brand-gray">لا أقسام قابلة للعرض في المرحلة الحالية، أو بانتظار اعتماد المدير.</p>
+              )}
+                </>
+              )}
             </div>
           )}
 

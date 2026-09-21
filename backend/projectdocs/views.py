@@ -4,6 +4,7 @@ from __future__ import annotations
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -208,8 +209,13 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         services.assert_can_edit(request.user, dossier)
         data = {**request.data}
         stage_id = data.get("stage")
-        if stage_id and not dossier.stages.filter(pk=stage_id).exists():
+        stage = dossier.stages.filter(pk=stage_id).first() if stage_id else None
+        if stage_id and not stage:
             return Response({"stage": "مرحلة لا تتبع هذا الملف"}, status=400)
+        try:
+            services.assert_stage_open_for_work(stage)
+        except ValidationError as exc:
+            return Response(exc.detail, status=400)
         ser = StageActivitySerializer(data=data)
         ser.is_valid(raise_exception=True)
         obj = ser.save()
@@ -224,6 +230,10 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         dossier = self.get_object()
         services.assert_can_edit(request.user, dossier)
         activity = get_object_or_404(StageActivity, pk=activity_id, stage__dossier=dossier)
+        try:
+            services.assert_stage_open_for_work(activity.stage)
+        except ValidationError as exc:
+            return Response(exc.detail, status=400)
         if request.method == "DELETE":
             activity.delete()
             return Response(status=204)

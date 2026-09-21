@@ -24,8 +24,9 @@ export default function ActivitiesPanel({
   onComplete,
   onDelete,
 }: Props) {
+  const openStages = stages.filter((s) => s.status === "active" || s.status === "returned");
   const [form, setForm] = useState({
-    stage: stages.find((s) => s.status === "active" || s.status === "returned")?.id || stages[0]?.id || 0,
+    stage: openStages[0]?.id || 0,
     code: "",
     title: "",
     responsible: "",
@@ -76,14 +77,14 @@ export default function ActivitiesPanel({
 
   return (
     <div className="space-y-4" dir="rtl">
-      {canEdit && (
+      {canEdit && openStages.length > 0 && (
         <form className="grid grid-cols-1 gap-2 sm:grid-cols-3" onSubmit={submit}>
           <Select
             label="المرحلة"
             value={String(form.stage)}
             onChange={(e) => setForm({ ...form, stage: Number(e.target.value) })}
           >
-            {stages.map((s) => (
+            {openStages.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.order}. {STAGE_KEY_AR[s.key] || s.key}
               </option>
