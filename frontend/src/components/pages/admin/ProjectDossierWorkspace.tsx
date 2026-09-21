@@ -12,6 +12,7 @@ import SectionRenderer from "../../dossier/SectionRenderer";
 import StageBar from "../../dossier/StageBar";
 import ActivitiesPanel from "../../dossier/ActivitiesPanel";
 import DossierDashboard from "../../dossier/DossierDashboard";
+import ClosureComparison from "../../dossier/ClosureComparison";
 import {
   DOSSIER_STATUS_AR,
   SECTION_STATUS_AR,
@@ -42,6 +43,25 @@ export default function ProjectDossierWorkspace() {
   const [schema, setSchema] = useState<DossierSchema | null>(null);
   const [activities, setActivities] = useState<StageActivity[]>([]);
   const [dash, setDash] = useState<Record<string, unknown> | null>(null);
+  const [comparison, setComparison] = useState<{
+    pairs: Array<{
+      label: string;
+      document_key: string;
+      closure_key: string;
+      document_status: string;
+      closure_status: string;
+      document_data: Record<string, unknown>;
+      closure_data: Record<string, unknown>;
+    }>;
+    budget_lines: Array<{
+      id: number;
+      title: string;
+      proposed: string;
+      allocated: string;
+      spent: string;
+      remaining: string;
+    }>;
+  } | null>(null);
   const [projectId, setProjectId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [sectionDrafts, setSectionDrafts] = useState<Record<string, Record<string, unknown>>>({});
@@ -111,12 +131,14 @@ export default function ProjectDossierWorkspace() {
       });
       setSectionDrafts(drafts);
 
-      const [actRes, dashRes] = await Promise.all([
+      const [actRes, dashRes, cmpRes] = await Promise.all([
         authFetch(`/api/projectdocs/dossiers/${d.id}/activities/`),
         authFetch(`/api/projectdocs/dossiers/${d.id}/dashboard/`),
+        authFetch(`/api/projectdocs/dossiers/${d.id}/comparison/`),
       ]);
       if (actRes.ok) setActivities(await actRes.json());
       if (dashRes.ok) setDash(await dashRes.json());
+      if (cmpRes.ok) setComparison(await cmpRes.json());
     } catch {
       setError(true);
     } finally {
@@ -284,9 +306,9 @@ export default function ProjectDossierWorkspace() {
 
       {!dossier ? (
         <Card>
-          <h2 className="mb-2 text-lg font-bold text-primary">إنشاء ملف داخلي</h2>
+          <h2 className="mb-2 text-lg font-bold text-primary">لا يوجد ملف لهذا المشروع</h2>
           <p className="mb-4 text-sm text-brand-gray">
-            يُنشئ وثيقة كاملة مفرغة دفعة واحدة مع مراحل الاعتماد الخمس. للمشرف فقط.
+            أنشئ ملف مشروع جديد من قائمة المشاريع عبر «إنشاء ملف مشروع» (اسم + راعي)، أو أنشئ ملفاً هنا إن كان المشروع موجوداً مسبقاً.
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input
@@ -312,7 +334,7 @@ export default function ProjectDossierWorkspace() {
           </div>
           <div className="mt-4">
             <Button type="button" onClick={() => void createDossier()} disabled={creating}>
-              إنشاء ملف المشروع
+              إنشاء ملف على المشروع الحالي
             </Button>
           </div>
         </Card>
@@ -407,6 +429,17 @@ export default function ProjectDossierWorkspace() {
 
           {(tab === "document" || tab === "closure") && (
             <div className="space-y-3">
+              {tab === "document" && (
+                <p className="text-sm text-brand-gray">
+                  أقسام المرحلة النشطة فقط قابلة للتعبئة. الإغلاق له تبويب منفصل بعد فتح مرحلته.
+                </p>
+              )}
+              {tab === "closure" && comparison && (
+                <Card>
+                  <h3 className="mb-2 font-bold text-primary">مقارنة الوثيقة والإغلاق</h3>
+                  <ClosureComparison pairs={comparison.pairs} budgetLines={comparison.budget_lines} />
+                </Card>
+              )}
               <div className="flex justify-end">
                 <Button type="button" variant="secondary" onClick={() => void exportKind(tab === "document" ? "document" : "closure")}>
                   تصدير PDF
@@ -416,6 +449,7 @@ export default function ProjectDossierWorkspace() {
                 const kind = tab === "document" ? "document" : "closure";
                 const draftKey = `${kind}:${def.key}`;
                 const editable = canEditSection(def.stage);
+                const dimmed = kind === "document" && activeStage && def.stage !== activeStage.key && activeStage.key !== "close";
                 return (
                   <Card key={def.key}>
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -423,6 +457,7 @@ export default function ProjectDossierWorkspace() {
                         <h3 className="font-bold text-primary">{def.label}</h3>
                         <p className="text-xs text-brand-gray">
                           المرحلة: {def.stage} · {SECTION_STATUS_AR[status] || status}
+                          {dimmed ? " · خارج المرحلة الحالية" : ""}
                         </p>
                       </div>
                       {editable && (
@@ -465,15 +500,25 @@ export default function ProjectDossierWorkspace() {
                   toast.success({ title: "أُضيف النشاط" });
                   await load();
                 }}
-                onUpdate={async (id, payload) => {
-                  const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/activities/${id}/`, {
-                    method: "PATCH",
-                    body: JSON.stringify(payload),
-                  });
+                onComplete={async (id, payload) => {
+                  const fd = new FormData();
+                  fd.append("lessons", payload.lessons);
+                  fd.append("notes", payload.notes);
+                  fd.append("evidence_url", payload.evidence_url);
+                  fd.append("evidence_title", payload.evidence_title);
+                  if (payload.file) fd.append("file", payload.file);
+                  const res = await authFetch(
+                    `/api/projectdocs/dossiers/${dossier.id}/activities/${id}/complete/`,
+                    { method: "POST", body: fd },
+                  );
+                  const data = await res.json().catch(() => ({}));
                   if (!res.ok) {
-                    toast.error({ title: "تعذّر التحديث" });
+                    toast.error({
+                      title: data.evidence || data.lessons || data.detail || "تعذّر الإتمام",
+                    });
                     return;
                   }
+                  toast.success({ title: "تم إتمام النشاط مع الشاهد" });
                   await load();
                 }}
                 onDelete={async (id) => {
@@ -492,7 +537,37 @@ export default function ProjectDossierWorkspace() {
 
           {tab === "board" && (
             <Card>
-              <DossierDashboard data={dash as never} />
+              <DossierDashboard
+                data={dash as never}
+                canAllocate
+                canSpend={!!activeStage && (activeStage.status === "active" || activeStage.status === "returned")}
+                onAllocate={async (lineId, amount) => {
+                  const res = await authFetch(
+                    `/api/projectdocs/dossiers/${dossier.id}/budget-lines/${lineId}/allocate/`,
+                    { method: "POST", body: JSON.stringify({ amount }) },
+                  );
+                  if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    toast.error({ title: data.detail || data.amount || "تعذّر المخصص" });
+                    return;
+                  }
+                  toast.success({ title: "حُدّث المخصص" });
+                  await load();
+                }}
+                onSpend={async (lineId, amount) => {
+                  const res = await authFetch(
+                    `/api/projectdocs/dossiers/${dossier.id}/budget-lines/${lineId}/spend/`,
+                    { method: "POST", body: JSON.stringify({ amount }) },
+                  );
+                  if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    toast.error({ title: data.detail || data.amount || "تعذّر الخصم" });
+                    return;
+                  }
+                  toast.success({ title: "تم الخصم من البند" });
+                  await load();
+                }}
+              />
             </Card>
           )}
         </>

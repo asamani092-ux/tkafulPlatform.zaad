@@ -273,6 +273,13 @@ class DossierAttachment(models.Model):
         on_delete=models.SET_NULL,
         related_name="attachments",
     )
+    activity = models.ForeignKey(
+        StageActivity,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="attachments",
+    )
     section_key = models.CharField(max_length=64, blank=True)
     title = models.CharField(max_length=200, blank=True)
     file = models.FileField(upload_to=dossier_attachment_path, blank=True)
@@ -291,3 +298,63 @@ class DossierAttachment(models.Model):
 
     def __str__(self):
         return self.title or f"attachment-{self.pk}"
+
+
+class BudgetLine(models.Model):
+    """بند تكلفة مقترح من الوثيقة — الخصم تراكمي عبر BudgetTxn."""
+
+    dossier = models.ForeignKey(ProjectDossier, on_delete=models.CASCADE, related_name="budget_lines")
+    title = models.CharField(max_length=300)
+    source = models.CharField(max_length=100, blank=True)
+    notes = models.CharField(max_length=500, blank=True)
+    proposed_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    allocated_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    spent_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        indexes = [models.Index(fields=["dossier", "sort_order"])]
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def remaining(self):
+        base = self.allocated_amount if self.allocated_amount else self.proposed_amount
+        return (base or 0) - (self.spent_amount or 0)
+
+
+class BudgetTxn(models.Model):
+    """حركة مالية تراكمية على بند (خصم أو تعديل مخصص)."""
+
+    KIND_CHOICES = [
+        ("spend", "صرف"),
+        ("allocate", "مخصص"),
+        ("adjust", "تعديل مقترح"),
+    ]
+
+    line = models.ForeignKey(BudgetLine, on_delete=models.CASCADE, related_name="txns")
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    note = models.CharField(max_length=500, blank=True)
+    activity = models.ForeignKey(
+        StageActivity,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="budget_txns",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]

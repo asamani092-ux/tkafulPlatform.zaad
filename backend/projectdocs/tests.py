@@ -1,16 +1,33 @@
 """
-اختبارات ملف المشروع: أقسام، بوابات، توكن اعتماد، صلاحيات، أنشطة.
+اختبارات ملف المشروع: أقسام، بوابات، توكن اعتماد، صلاحيات، أنشطة، بنود، شواهد.
 """
 from datetime import timedelta
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from projectdocs.models import ApprovalRequest, ProjectDossier, StageActivity
+from projectdocs.models import (
+    ApprovalRequest,
+    BudgetLine,
+    BudgetTxn,
+    DossierAttachment,
+    ProjectDossier,
+    StageActivity,
+)
 from projectdocs.sections import DOCUMENT_SECTIONS, CLOSURE_SECTIONS, schema_payload, validate_section_data
-from projectdocs.services import compute_auto_status, create_dossier_for_project
+from projectdocs.services import (
+    allocate_budget_line,
+    complete_activity,
+    compute_auto_status,
+    create_dossier_for_project,
+    create_project_with_dossier,
+    document_closure_comparison,
+    spend_budget_line,
+    sync_budget_lines_from_section,
+)
 from projects.models import Project
 
 
@@ -226,3 +243,155 @@ class DossierApiTests(APITestCase):
         stage = ProjectDossier.objects.get(pk=dossier_id).stages.get(order=1)
         self.assertEqual(stage.status, "returned")
         self.assertIn("المؤشرات", stage.return_note)
+
+
+class DossierRestructureTests(APITestCase):
+    """مسار الهيكل الجديد: إنشاء بالاسم+الراعي، بنود، خصم، شواهد، مقارنة، بلا Excel."""
+
+    def setUp(self):
+        self.admin = make_user("admin2", role="admin")
+        self.manager = make_user("mgr2", role="user")
+
+    def test_create_by_name_and_sponsor(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/projectdocs/dossiers/",
+            {
+                "name": "مشروع راعي جديد",
+                "sponsor_name": "مدير الإدارة",
+                "sponsor_email": "sponsor2@test.com",
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertTrue(res.data["project_slug"])
+        self.assertEqual(res.data["sponsor_email"], "sponsor2@test.com")
+        self.assertTrue(Project.objects.filter(slug=res.data["project_slug"]).exists())
+        self.assertEqual(len(res.data["stages"]), 5)
+
+    def test_budget_lines_cumulative_allocate_spend(self):
+        dossier = create_project_with_dossier(
+            name="ميزانية",
+            sponsor_name="راعٍ",
+            sponsor_email="sponsor@test.com",
+            actor=self.admin,
+        )
+        # فتح مرحلة التخطيط يدوياً للاختبار الداخلي للمزامنة
+        sync_budget_lines_from_section(
+            dossier,
+            {
+                "association_budget": 1000,
+                "donation_budget": 500,
+                "total_budget": 1500,
+                "lines": [
+                    {"item": "تجهيز", "amount": 400, "source": "جمعية"},
+                    {"item": "نقل", "amount": 200},
+                ],
+            },
+            user=self.admin,
+        )
+        self.assertEqual(dossier.budget_lines.count(), 2)
+        # إضافة تراكمية: بند جديد لا يستبدل القديم
+        sync_budget_lines_from_section(
+            dossier,
+            {"lines": [{"item": "تجهيز", "amount": 400}, {"item": "ضيافة", "amount": 100}]},
+            user=self.admin,
+        )
+        self.assertEqual(dossier.budget_lines.count(), 3)
+
+        line = dossier.budget_lines.get(title="تجهيز")
+        allocate_budget_line(dossier=dossier, line_id=line.id, amount=350, user=self.admin)
+        line.refresh_from_db()
+        self.assertEqual(line.allocated_amount, Decimal("350"))
+
+        spend_budget_line(dossier=dossier, line_id=line.id, amount=100, user=self.admin, note="دفعة1")
+        spend_budget_line(dossier=dossier, line_id=line.id, amount=50, user=self.admin, note="دفعة2")
+        line.refresh_from_db()
+        self.assertEqual(line.spent_amount, Decimal("150"))
+        self.assertEqual(BudgetTxn.objects.filter(line=line, kind="spend").count(), 2)
+
+        with self.assertRaises(Exception):
+            spend_budget_line(dossier=dossier, line_id=line.id, amount=300, user=self.admin)
+
+    def test_allocate_permission_sponsor_or_admin(self):
+        dossier = create_project_with_dossier(
+            name="صلاحية مخصص",
+            sponsor_name="راعٍ",
+            sponsor_email="sponsor@test.com",
+            actor=self.admin,
+        )
+        line = BudgetLine.objects.create(dossier=dossier, title="بند", proposed_amount=100)
+        other = make_user("outsider", role="user")
+        with self.assertRaises(Exception):
+            allocate_budget_line(dossier=dossier, line_id=line.id, amount=80, user=other)
+
+        sponsor_user = make_user("sponsoru", role="user")
+        sponsor_user.email = "sponsor@test.com"
+        sponsor_user.save(update_fields=["email"])
+        allocate_budget_line(dossier=dossier, line_id=line.id, amount=80, user=sponsor_user)
+        line.refresh_from_db()
+        self.assertEqual(line.allocated_amount, Decimal("80"))
+
+    def test_complete_activity_requires_evidence_and_lessons(self):
+        dossier = create_dossier_for_project(
+            project=Project.objects.create(name="شواهد", slug="ev-demo", status="active"),
+            actor=self.admin,
+            card={"sponsor_email": "s@test.com", "manager_id": self.manager.id},
+        )
+        stage = dossier.stages.get(order=1)
+        act = StageActivity.objects.create(stage=stage, code="E1", title="نشاط", manual_status="in_progress")
+        with self.assertRaises(Exception):
+            complete_activity(dossier=dossier, activity=act, user=self.admin, lessons="درس")
+        with self.assertRaises(Exception):
+            complete_activity(
+                dossier=dossier,
+                activity=act,
+                user=self.admin,
+                evidence_url="https://example.com/proof.pdf",
+            )
+        complete_activity(
+            dossier=dossier,
+            activity=act,
+            user=self.admin,
+            lessons="تعلّمنا التنسيق المبكر",
+            evidence_url="https://example.com/proof.pdf",
+        )
+        act.refresh_from_db()
+        self.assertEqual(act.manual_status, "done")
+        self.assertEqual(act.progress_pct, 100)
+        self.assertTrue(DossierAttachment.objects.filter(activity=act).exists())
+
+    def test_document_closure_comparison_endpoint(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/projectdocs/dossiers/",
+            {"name": "مقارنة", "sponsor_email": "c@test.com", "sponsor_name": "راعٍ"},
+            format="json",
+        )
+        dossier_id = res.data["id"]
+        cmp = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/comparison/")
+        self.assertEqual(cmp.status_code, 200)
+        self.assertIn("pairs", cmp.data)
+        self.assertGreaterEqual(len(cmp.data["pairs"]), 5)
+        payload = document_closure_comparison(ProjectDossier.objects.get(pk=dossier_id))
+        self.assertEqual(payload["pairs"][0]["document_key"], "basics")
+
+    def test_no_excel_routes_in_projectdocs(self):
+        from django.urls import get_resolver
+
+        patterns = []
+
+        def walk(urlpatterns, prefix=""):
+            for p in urlpatterns:
+                if hasattr(p, "url_patterns"):
+                    walk(p.url_patterns, prefix + str(p.pattern))
+                else:
+                    patterns.append(prefix + str(p.pattern))
+
+        walk(get_resolver().url_patterns)
+        joined = "\n".join(patterns).lower()
+        projectdocs_lines = [ln for ln in patterns if "projectdocs" in ln.lower() or "dossier" in ln.lower()]
+        blob = "\n".join(projectdocs_lines).lower()
+        self.assertNotIn("excel", blob)
+        self.assertNotIn("xlsx", blob)
+        self.assertNotIn("import_excel", joined)

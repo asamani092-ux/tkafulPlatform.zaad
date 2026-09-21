@@ -17,6 +17,9 @@ from .models import ApprovalRequest, ProjectDossier, StageActivity
 from .permissions import CanManageDossier
 from .sections import schema_payload
 from .serializers import (
+    AllocateSerializer,
+    BudgetLineSerializer,
+    CompleteActivitySerializer,
     CreateDossierSerializer,
     DecideSerializer,
     DossierAttachmentSerializer,
@@ -25,6 +28,7 @@ from .serializers import (
     ProjectDossierListSerializer,
     ProjectDossierSerializer,
     SectionPatchSerializer,
+    SpendSerializer,
     StageActivitySerializer,
 )
 
@@ -64,7 +68,27 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         ser = CreateDossierSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         data = dict(ser.validated_data)
-        project = get_object_or_404(Project, pk=data.pop("project_id"))
+        # مسار جديد: اسم + راعي → مشروع + ملف
+        if data.get("name") and not data.get("project_id"):
+            dossier = services.create_project_with_dossier(
+                name=data.get("name") or "",
+                sponsor_name=data.get("sponsor_name") or "",
+                sponsor_email=data.get("sponsor_email") or "",
+                description=data.get("description") or "",
+                actor=request.user,
+                request=request,
+            )
+            return Response(
+                ProjectDossierSerializer(dossier).data,
+                status=status.HTTP_201_CREATED,
+            )
+        project_id = data.pop("project_id", None)
+        if not project_id:
+            return Response(
+                {"detail": "project_id أو name مطلوب"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        project = get_object_or_404(Project, pk=project_id)
         dossier = services.create_dossier_for_project(
             project=project,
             actor=request.user,
@@ -223,6 +247,78 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
     def dashboard(self, request, pk=None):
         return Response(services.dashboard_stats(self.get_object()))
 
+    @action(detail=True, methods=["get"], url_path="comparison")
+    def comparison(self, request, pk=None):
+        return Response(services.document_closure_comparison(self.get_object()))
+
+    @action(detail=True, methods=["get"], url_path="budget-lines")
+    def budget_lines(self, request, pk=None):
+        dossier = self.get_object()
+        return Response(BudgetLineSerializer(dossier.budget_lines.all(), many=True).data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"budget-lines/(?P<line_id>[0-9]+)/allocate",
+    )
+    def allocate_line(self, request, pk=None, line_id=None):
+        dossier = self.get_object()
+        ser = AllocateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        line = services.allocate_budget_line(
+            dossier=dossier,
+            line_id=int(line_id),
+            amount=ser.validated_data["amount"],
+            user=request.user,
+            note=ser.validated_data.get("note") or "",
+        )
+        return Response(BudgetLineSerializer(line).data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"budget-lines/(?P<line_id>[0-9]+)/spend",
+    )
+    def spend_line(self, request, pk=None, line_id=None):
+        dossier = self.get_object()
+        ser = SpendSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        activity = None
+        aid = ser.validated_data.get("activity_id")
+        if aid:
+            activity = StageActivity.objects.filter(pk=aid, stage__dossier=dossier).first()
+        line = services.spend_budget_line(
+            dossier=dossier,
+            line_id=int(line_id),
+            amount=ser.validated_data["amount"],
+            user=request.user,
+            activity=activity,
+            note=ser.validated_data.get("note") or "",
+        )
+        return Response(BudgetLineSerializer(line).data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"activities/(?P<activity_id>[0-9]+)/complete",
+    )
+    def complete_activity(self, request, pk=None, activity_id=None):
+        dossier = self.get_object()
+        activity = get_object_or_404(StageActivity, pk=activity_id, stage__dossier=dossier)
+        ser = CompleteActivitySerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        obj = services.complete_activity(
+            dossier=dossier,
+            activity=activity,
+            user=request.user,
+            lessons=ser.validated_data.get("lessons") or "",
+            notes=ser.validated_data.get("notes") or "",
+            evidence_url=ser.validated_data.get("evidence_url") or "",
+            evidence_file=request.FILES.get("file"),
+            evidence_title=ser.validated_data.get("evidence_title") or "",
+        )
+        return Response(StageActivitySerializer(obj).data)
+
     @action(detail=True, methods=["get"], url_path="export-payload")
     def export_payload(self, request, pk=None):
         dossier = self.get_object()
@@ -242,10 +338,10 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
                     {"key": s.key, "status": s.status, "data": s.data}
                     for s in dossier.sections.filter(kind="closure")
                 ],
+                "comparison": services.document_closure_comparison(dossier),
                 "schema": schema_payload(),
             }
         )
-
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
