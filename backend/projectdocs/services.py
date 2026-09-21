@@ -19,6 +19,8 @@ from . import sections as catalog
 from .emails import send_approval_email
 from .models import (
     ApprovalRequest,
+    BudgetLine,
+    BudgetTxn,
     DossierAttachment,
     DossierSection,
     DossierStage,
@@ -172,6 +174,63 @@ def active_stage(dossier: ProjectDossier) -> DossierStage | None:
     return dossier.stages.filter(status__in=["active", "returned", "submitted"]).order_by("order").first()
 
 
+def assert_stage_open_for_work(stage: DossierStage | None, *, allow_submitted: bool = False) -> DossierStage:
+    """المرحلة المقفلة/المعتمدة لا تُفتح للعمل قبل اعتماد المدير للمرحلة السابقة. O(1)."""
+    if not stage:
+        raise ValidationError({"stage": "مرحلة غير موجودة"})
+    allowed = ("active", "returned")
+    if allow_submitted:
+        allowed = ("active", "returned", "submitted")
+    if stage.status not in allowed:
+        raise ValidationError(
+            {
+                "stage": "لا يمكن العمل على هذه المرحلة قبل اعتماد المدير للمرحلة السابقة أو أثناء انتظار الاعتماد",
+            }
+        )
+    return stage
+
+
+@transaction.atomic
+def create_project_with_dossier(
+    *,
+    name: str,
+    sponsor_name: str,
+    sponsor_email: str,
+    actor: User | None,
+    description: str = "",
+    request=None,
+) -> ProjectDossier:
+    """إنشاء مشروع + ملف دفعة واحدة بعد الاسم والراعي. O(S)."""
+    from projects.models import Project
+    from projects.slug_utils import unique_slug_from_name
+
+    name = (name or "").strip()
+    sponsor_email = (sponsor_email or "").strip()
+    sponsor_name = (sponsor_name or "").strip()
+    if not name:
+        raise ValidationError({"name": "اسم المشروع مطلوب"})
+    if not sponsor_email:
+        raise ValidationError({"sponsor_email": "بريد الراعي مطلوب"})
+    project = Project.objects.create(
+        name=name,
+        slug=unique_slug_from_name(Project, name),
+        description=description or "",
+        status="draft",
+        is_active=True,
+        created_by=actor,
+    )
+    return create_dossier_for_project(
+        project=project,
+        actor=actor,
+        card={
+            "marketing_name": name,
+            "sponsor_name": sponsor_name,
+            "sponsor_email": sponsor_email,
+        },
+        request=request,
+    )
+
+
 def update_section(
     *,
     dossier: ProjectDossier,
@@ -184,20 +243,235 @@ def update_section(
     section_def = catalog.get_section_def(kind, key)
     if not section_def:
         raise ValidationError({"key": "قسم غير معروف"})
+
+    # فصل الوثيقة عن الإغلاق: لا يُكتب نوع في مرحلة النوع الآخر
     stage = dossier.stages.filter(key=section_def["stage"]).first()
-    if not stage or stage.status not in ("active", "returned"):
-        # المشرف يمكنه تعديل البطاقة/الأقسام في المسودة؛ المدير فقط المرحلة النشطة
-        if not is_super_admin(user):
-            raise ValidationError({"stage": "القسم خارج المرحلة النشطة"})
+    if kind == "document" and section_def["stage"] == "close":
+        raise ValidationError({"kind": "قسم الإغلاق يُعبَّأ في وثيقة الإغلاق فقط"})
+    if kind == "closure":
+        close_stage = dossier.stages.filter(key="close").first()
+        assert_stage_open_for_work(close_stage)
+    assert_stage_open_for_work(stage)
     cleaned = catalog.validate_section_data(kind, key, data)
     section = dossier.sections.get(kind=kind, key=key)
-    if section.status == "approved" and not is_super_admin(user):
-        raise ValidationError({"status": "القسم معتمد ولا يُعدَّل"})
+    if section.status == "approved":
+        raise ValidationError({"status": "القسم معتمد ولا يُعدَّل إلا بإعادة المرحلة للتعديل"})
     section.data = cleaned
     section.status = "filled" if catalog.section_is_filled(cleaned) else "empty"
     section.updated_by = user
     section.save(update_fields=["data", "status", "updated_by", "updated_at"])
+    if kind == "document" and key == "budget":
+        sync_budget_lines_from_section(dossier, cleaned, user=user)
     return section
+
+
+def _money_key(amount) -> str:
+    """مفتاح مقارنة موحّد للمبالغ (يتجنب 400 مقابل 400.00)."""
+    try:
+        return format(Decimal(str(amount or 0)).quantize(Decimal("0.01")), "f")
+    except Exception:
+        return "0.00"
+
+
+def sync_budget_lines_from_section(dossier: ProjectDossier, data: dict, user=None) -> list[BudgetLine]:
+    """مزامنة بنود مقترحة من قسم التكلفة — إضافة تراكمية للبنود الجديدة. O(L)."""
+    rows = data.get("lines") or []
+    if not isinstance(rows, list):
+        return list(dossier.budget_lines.all())
+    existing = {(bl.title, _money_key(bl.proposed_amount)): bl for bl in dossier.budget_lines.all()}
+    created = []
+    assoc = Decimal(str(data.get("association_budget") or 0))
+    don = Decimal(str(data.get("donation_budget") or 0))
+    total = Decimal(str(data.get("total_budget") or (assoc + don)))
+    dossier.budget_association = assoc
+    dossier.budget_donation = don
+    dossier.budget_total = total
+    dossier.save(update_fields=["budget_association", "budget_donation", "budget_total", "updated_at"])
+
+    for i, row in enumerate(rows):
+        if not isinstance(row, dict):
+            continue
+        title = str(row.get("item") or row.get("title") or "").strip()
+        if not title:
+            continue
+        try:
+            amount = Decimal(str(row.get("amount") or 0))
+        except Exception:
+            amount = Decimal("0")
+        key = (title, _money_key(amount))
+        if key in existing:
+            continue
+        # نفس العنوان بمبلغ مختلف → بند جديد (تراكم تاريخي)
+        bl = BudgetLine.objects.create(
+            dossier=dossier,
+            title=title,
+            source=str(row.get("source") or ""),
+            notes=str(row.get("notes") or ""),
+            proposed_amount=amount,
+            allocated_amount=Decimal("0"),
+            spent_amount=Decimal("0"),
+            sort_order=i,
+        )
+        BudgetTxn.objects.create(
+            line=bl,
+            kind="adjust",
+            amount=amount,
+            note="إنشاء من التكلفة المقترحة",
+            created_by=user,
+        )
+        created.append(bl)
+        existing[key] = bl
+    return list(dossier.budget_lines.all())
+
+
+@transaction.atomic
+def allocate_budget_line(*, dossier: ProjectDossier, line_id: int, amount, user, note: str = "") -> BudgetLine:
+    """مخصص الراعي/المشرف على بند. O(1)."""
+    email = (getattr(user, "email", "") or "").strip().lower()
+    is_sponsor = bool(email and email == (dossier.sponsor_email or "").strip().lower())
+    if not (is_super_admin(user) or is_sponsor):
+        raise PermissionDenied("ضبط المخصص للراعي أو المشرف فقط")
+    line = get_budget_line(dossier, line_id)
+    amt = Decimal(str(amount))
+    if amt < 0:
+        raise ValidationError({"amount": "المخصص لا يكون سالباً"})
+    line.allocated_amount = amt
+    line.save(update_fields=["allocated_amount", "updated_at"])
+    BudgetTxn.objects.create(
+        line=line,
+        kind="allocate",
+        amount=amt,
+        note=note or "تحديث المخصص",
+        created_by=user,
+    )
+    return line
+
+
+def get_budget_line(dossier: ProjectDossier, line_id: int) -> BudgetLine:
+    line = dossier.budget_lines.filter(pk=line_id).first()
+    if not line:
+        raise ValidationError({"line": "بند غير موجود"})
+    return line
+
+
+@transaction.atomic
+def spend_budget_line(
+    *,
+    dossier: ProjectDossier,
+    line_id: int,
+    amount,
+    user,
+    activity: StageActivity | None = None,
+    note: str = "",
+) -> BudgetLine:
+    """خصم تراكمي من البند أثناء الخطة. O(1)."""
+    assert_can_edit(user, dossier)
+    line = get_budget_line(dossier, line_id)
+    amt = Decimal(str(amount))
+    if amt <= 0:
+        raise ValidationError({"amount": "مبلغ الصرف يجب أن يكون موجباً"})
+    ceiling = line.allocated_amount if line.allocated_amount else line.proposed_amount
+    if (line.spent_amount or 0) + amt > (ceiling or 0):
+        raise ValidationError({"amount": "التجاوز عن المخصص/المقترح غير مسموح"})
+    line.spent_amount = (line.spent_amount or 0) + amt
+    line.save(update_fields=["spent_amount", "updated_at"])
+    BudgetTxn.objects.create(
+        line=line,
+        kind="spend",
+        amount=amt,
+        note=note or "صرف من الخطة التنفيذية",
+        activity=activity,
+        created_by=user,
+    )
+    return line
+
+
+@transaction.atomic
+def complete_activity(
+    *,
+    dossier: ProjectDossier,
+    activity: StageActivity,
+    user,
+    lessons: str = "",
+    notes: str = "",
+    evidence_url: str = "",
+    evidence_file=None,
+    evidence_title: str = "",
+) -> StageActivity:
+    """إتمام نشاط مع شاهد إلزامي ودرس مستفاد. O(1)."""
+    assert_can_edit(user, dossier)
+    assert_stage_open_for_work(activity.stage)
+    has_file = bool(evidence_file)
+    has_url = bool((evidence_url or "").strip())
+    if not has_file and not has_url:
+        # اقبل شاهداً سابقاً مرتبطاً
+        if not activity.attachments.exists():
+            raise ValidationError({"evidence": "الشاهد مطلوب عند إتمام النشاط (ملف أو رابط)"})
+    if not (lessons or "").strip() and not (activity.lessons or "").strip():
+        raise ValidationError({"lessons": "الدرس المستفاد مطلوب عند الإتمام"})
+    if lessons:
+        activity.lessons = lessons
+    if notes:
+        activity.notes = notes
+    activity.manual_status = "done"
+    activity.progress_pct = 100
+    refresh_activity_auto_status(activity, save=False)
+    activity.save()
+    if has_file or has_url:
+        DossierAttachment.objects.create(
+            dossier=dossier,
+            stage=activity.stage,
+            activity=activity,
+            title=evidence_title or f"شاهد {activity.code}",
+            file=evidence_file if has_file else "",
+            external_url=evidence_url.strip() if has_url else "",
+            uploaded_by=user,
+        )
+    return activity
+
+
+def document_closure_comparison(dossier: ProjectDossier) -> dict:
+    """مقارنة أقسام الوثيقة مع الإغلاق. O(S·F)."""
+    pairs = [
+        ("basics", "closure_basics", "البيانات الأساسية"),
+        ("team", "closure_team", "فريق العمل"),
+        ("volunteers", "volunteer_contributions", "المتطوعون"),
+        ("risks", "risk_log", "المخاطر"),
+        ("budget", "financial_performance", "الأداء المالي / التكلفة"),
+        ("budget", "final_cost", "التكلفة النهائية"),
+        ("objectives_kpis", "scope_measure", "النطاق / الأهداف"),
+        ("main_phases", "time_performance", "الأداء الزمني"),
+        ("stakeholders", "stakeholder_satisfaction", "أصحاب المصلحة"),
+    ]
+    doc_map = {s.key: s for s in dossier.sections.filter(kind="document")}
+    clo_map = {s.key: s for s in dossier.sections.filter(kind="closure")}
+    rows = []
+    for dkey, ckey, label in pairs:
+        dsec = doc_map.get(dkey)
+        csec = clo_map.get(ckey)
+        rows.append(
+            {
+                "label": label,
+                "document_key": dkey,
+                "closure_key": ckey,
+                "document_status": dsec.status if dsec else "empty",
+                "closure_status": csec.status if csec else "empty",
+                "document_data": dsec.data if dsec else {},
+                "closure_data": csec.data if csec else {},
+            }
+        )
+    lines = [
+        {
+            "id": bl.id,
+            "title": bl.title,
+            "proposed": str(bl.proposed_amount),
+            "allocated": str(bl.allocated_amount),
+            "spent": str(bl.spent_amount),
+            "remaining": str(bl.remaining),
+        }
+        for bl in dossier.budget_lines.all()
+    ]
+    return {"pairs": rows, "budget_lines": lines}
 
 
 @transaction.atomic
@@ -224,7 +498,6 @@ def submit_stage(*, dossier: ProjectDossier, order: int, user, request=None) -> 
     dossier.status = "pending_approval"
     dossier.save(update_fields=["status", "updated_at"])
 
-    # إبطال طلبات سابقة معلّقة لنفس المرحلة
     ApprovalRequest.objects.filter(
         dossier=dossier, scope="stage", stage=stage, decision="pending"
     ).update(decision="expired", decided_at=timezone.now())
@@ -444,9 +717,22 @@ def dashboard_stats(dossier: ProjectDossier) -> dict:
         "budget_total": str(dossier.budget_total),
         "budget_association": str(dossier.budget_association),
         "budget_donation": str(dossier.budget_donation),
+        "budget_lines": [
+            {
+                "id": bl.id,
+                "title": bl.title,
+                "proposed": str(bl.proposed_amount),
+                "allocated": str(bl.allocated_amount),
+                "spent": str(bl.spent_amount),
+                "remaining": str(bl.remaining),
+            }
+            for bl in dossier.budget_lines.all()
+        ],
         "stages": stage_finance,
         "current_stage": dossier.current_stage,
         "status": dossier.status,
+        "active_stage_label": _stage_label(dossier.current_stage),
+        "approval_hint": "اعتماد هذه المرحلة فقط عبر بريد الراعي أو زر المشرف",
     }
 
 

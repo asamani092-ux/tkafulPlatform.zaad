@@ -15,7 +15,7 @@ import { authFetch } from "../../../lib/api";
 import { labelAr } from "../../../i18n/labels";
 import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 import ToolConfigFields from "../../admin/ToolConfigFields";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { TOOL_LABELS, STATUS_LABELS, LIFECYCLE_ACTION_LABELS, type ProjectType } from "../projects/types";
 
 interface AdminTool { id: number; tool_key: string; config: Record<string, unknown>; is_enabled: boolean }
@@ -66,6 +66,7 @@ const WIZARD_STEPS = [
 /** إدارة مشاريع المنصّة — نطاق حسب الدور (super-admin يرى الكل). */
 export default function PlatformProjects() {
   const toast = useToast();
+  const navigate = useNavigate();
   const toastRef = useRef(toast);
   toastRef.current = toast;
   const [projects, setProjects] = useState<AdminProject[]>([]);
@@ -73,6 +74,13 @@ export default function PlatformProjects() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", brand_color: "#8b1538", type: "" });
+  const [dossierCreate, setDossierCreate] = useState({
+    open: false,
+    name: "",
+    sponsor_name: "",
+    sponsor_email: "",
+    saving: false,
+  });
   const [types, setTypes] = useState<ProjectType[]>([]);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
@@ -148,6 +156,41 @@ export default function PlatformProjects() {
   };
 
   const openCreateWizard = () => {
+    setDossierCreate({ open: true, name: "", sponsor_name: "", sponsor_email: "", saving: false });
+  };
+
+  const createDossierProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dossierCreate.name.trim() || !dossierCreate.sponsor_email.trim()) {
+      toast.error({ title: "الاسم وبريد الراعي مطلوبان" });
+      return;
+    }
+    setDossierCreate((s) => ({ ...s, saving: true }));
+    try {
+      const res = await authFetch("/api/projectdocs/dossiers/", {
+        method: "POST",
+        body: JSON.stringify({
+          name: dossierCreate.name.trim(),
+          sponsor_name: dossierCreate.sponsor_name.trim(),
+          sponsor_email: dossierCreate.sponsor_email.trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error({
+          title: data.detail || data.name || data.sponsor_email || "تعذّر إنشاء ملف المشروع",
+        });
+        return;
+      }
+      toast.success({ title: "تم إنشاء المشروع والبطاقة" });
+      setDossierCreate({ open: false, name: "", sponsor_name: "", sponsor_email: "", saving: false });
+      navigate(`/Admin/projects/${encodeURIComponent(data.project_slug)}/dossier`);
+    } finally {
+      setDossierCreate((s) => ({ ...s, saving: false }));
+    }
+  };
+
+  const openToolsWizard = () => {
     setForm({ name: "", description: "", brand_color: "#8b1538", type: "" });
     setWizardProjectId(null);
     setWizardStep(1);
@@ -517,7 +560,14 @@ export default function PlatformProjects() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-extrabold text-primary">المشاريع</h1>
         {isSuperAdmin && (
-          <Button type="button" onClick={openCreateWizard}>إضافة مشروع</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" onClick={openCreateWizard}>
+              إنشاء ملف مشروع
+            </Button>
+            <Button type="button" variant="secondary" onClick={openToolsWizard}>
+              مشروع بأدوات فقط
+            </Button>
+          </div>
         )}
       </div>
 
@@ -560,6 +610,39 @@ export default function PlatformProjects() {
         })}
         {projects.length === 0 && <p className="text-brand-gray">لا مشاريع ضمن نطاقك.</p>}
       </div>
+
+      <Modal
+        open={dossierCreate.open}
+        onClose={() => setDossierCreate((s) => ({ ...s, open: false }))}
+        title="إنشاء ملف مشروع"
+      >
+        <p className="mb-3 text-sm text-brand-gray">
+          ابدأ باسم المشروع والراعي (مدير الإدارة) ثم انتقل مباشرة لبطاقة الملف.
+        </p>
+        <form className="space-y-3" onSubmit={(e) => void createDossierProject(e)}>
+          <Input
+            label="اسم المشروع"
+            value={dossierCreate.name}
+            onChange={(e) => setDossierCreate((s) => ({ ...s, name: e.target.value }))}
+            required
+          />
+          <Input
+            label="اسم الراعي"
+            value={dossierCreate.sponsor_name}
+            onChange={(e) => setDossierCreate((s) => ({ ...s, sponsor_name: e.target.value }))}
+          />
+          <Input
+            label="بريد الراعي"
+            type="email"
+            value={dossierCreate.sponsor_email}
+            onChange={(e) => setDossierCreate((s) => ({ ...s, sponsor_email: e.target.value }))}
+            required
+          />
+          <Button type="submit" disabled={dossierCreate.saving}>
+            {dossierCreate.saving ? "جاري الإنشاء…" : "إنشاء والانتقال للبطاقة"}
+          </Button>
+        </form>
+      </Modal>
 
       <Modal
         open={wizardOpen}

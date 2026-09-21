@@ -2,6 +2,8 @@ from rest_framework import serializers
 
 from .models import (
     ApprovalRequest,
+    BudgetLine,
+    BudgetTxn,
     DossierAttachment,
     DossierSection,
     DossierStage,
@@ -9,6 +11,36 @@ from .models import (
     StageActivity,
 )
 from .services import refresh_activity_auto_status
+
+
+class BudgetLineSerializer(serializers.ModelSerializer):
+    remaining = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BudgetLine
+        fields = (
+            "id",
+            "title",
+            "source",
+            "notes",
+            "proposed_amount",
+            "allocated_amount",
+            "spent_amount",
+            "remaining",
+            "sort_order",
+            "updated_at",
+        )
+        read_only_fields = ("spent_amount", "updated_at")
+
+    def get_remaining(self, obj):
+        return str(obj.remaining)
+
+
+class BudgetTxnSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BudgetTxn
+        fields = ("id", "line", "kind", "amount", "note", "activity", "created_at")
+        read_only_fields = fields
 
 
 class DossierSectionSerializer(serializers.ModelSerializer):
@@ -80,6 +112,7 @@ class DossierAttachmentSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "stage",
+            "activity",
             "section_key",
             "title",
             "file",
@@ -92,6 +125,7 @@ class DossierAttachmentSerializer(serializers.ModelSerializer):
 class ProjectDossierSerializer(serializers.ModelSerializer):
     sections = DossierSectionSerializer(many=True, read_only=True)
     stages = DossierStageSerializer(many=True, read_only=True)
+    budget_lines = BudgetLineSerializer(many=True, read_only=True)
     project_slug = serializers.CharField(source="project.slug", read_only=True)
     project_name = serializers.CharField(source="project.name", read_only=True)
     manager_username = serializers.CharField(source="manager.username", read_only=True, default="")
@@ -122,6 +156,7 @@ class ProjectDossierSerializer(serializers.ModelSerializer):
             "budget_association",
             "budget_donation",
             "budget_total",
+            "budget_lines",
             "sections",
             "stages",
             "created_at",
@@ -169,7 +204,9 @@ class ApprovalRequestSerializer(serializers.ModelSerializer):
 
 
 class CreateDossierSerializer(serializers.Serializer):
-    project_id = serializers.IntegerField()
+    project_id = serializers.IntegerField(required=False)
+    name = serializers.CharField(required=False, allow_blank=True)
+    description = serializers.CharField(required=False, allow_blank=True)
     marketing_name = serializers.CharField(required=False, allow_blank=True)
     portfolio = serializers.CharField(required=False, allow_blank=True)
     department = serializers.CharField(required=False, allow_blank=True)
@@ -193,3 +230,21 @@ class SectionPatchSerializer(serializers.Serializer):
 class DecideSerializer(serializers.Serializer):
     decision = serializers.ChoiceField(choices=["approved", "returned"])
     note = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class SpendSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2)
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+    activity_id = serializers.IntegerField(required=False, allow_null=True)
+
+
+class AllocateSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(max_digits=14, decimal_places=2)
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class CompleteActivitySerializer(serializers.Serializer):
+    lessons = serializers.CharField(required=False, allow_blank=True, default="")
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+    evidence_url = serializers.URLField(required=False, allow_blank=True, default="")
+    evidence_title = serializers.CharField(required=False, allow_blank=True, default="")

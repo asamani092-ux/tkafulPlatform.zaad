@@ -2,6 +2,8 @@ from django.contrib import admin
 
 from .models import (
     ApprovalRequest,
+    BudgetLine,
+    BudgetTxn,
     DossierAttachment,
     DossierSection,
     DossierStage,
@@ -17,8 +19,15 @@ class ProjectDossierAdmin(admin.ModelAdmin):
     list_filter = ("status", "current_stage")
 
 
+@admin.register(BudgetLine)
+class BudgetLineAdmin(admin.ModelAdmin):
+    list_display = ("title", "dossier", "proposed_amount", "allocated_amount", "spent_amount")
+    search_fields = ("title", "dossier__code")
+
+
 admin.site.register(DossierSection)
 admin.site.register(DossierStage)
 admin.site.register(StageActivity)
 admin.site.register(ApprovalRequest)
 admin.site.register(DossierAttachment)
+admin.site.register(BudgetTxn)
