@@ -153,67 +153,89 @@ CARD_SECTIONS: list[dict] = [
 ]
 
 
+# المراحل الرئيسية الثابتة في وثيقة المشروع (مرجع المنصة)
+DOCUMENT_FIXED_PHASES: list[dict] = [
+    {"key": "define", "label": "تحديد وتعريف المشروع"},
+    {"key": "prepare", "label": "إعداد المشروع"},
+    {"key": "plan", "label": "التخطيط للمشروع"},
+    {"key": "execute", "label": "تنفيذ المشروع"},
+    {"key": "close", "label": "إغلاق المشروع"},
+]
+
+LOGICAL_IMPACT_ROWS: list[dict] = [
+    {"row_key": "impact", "label": "الأثر"},
+    {"row_key": "returns", "label": "العوائد والغايات"},
+]
+
+
 DOCUMENT_SECTIONS: list[dict] = [
     {
         "key": "basics",
-        "label": "البيانات الأساسية",
+        "label": "البيانات",
         "stage": "define",
+        "from_card": True,
+        "ui": "card_basics",
         "fields": [
-            _f("project_name", "اسم المشروع", required=True),
-            _f("marketing_name", "الاسم التسويقي"),
-            _f("code", "الرمز الداخلي"),
-            _f("portfolio", "المحفظة"),
+            _f("marketing_name", "الاسم"),
             _f("department", "الإدارة"),
             _f("section", "القسم"),
             _f("location", "الموقع"),
+            _f("execution_start", "تاريخ بدء التنفيذ", "date"),
+            _f("execution_end", "تاريخ انتهاء التنفيذ", "date"),
+            _f("sponsor_name", "راعي المشروع"),
+            _f("sponsor_email", "ايميل الراعي", "text"),
             _f("strategic_goal", "الهدف الاستراتيجي", "textarea"),
-            _f("sponsor_name", "مدير الإدارة (الراعي)"),
-            _f("projects_office", "مكتب المشاريع", "text"),
-            _f("projects_committee", "لجنة المشاريع", "text"),
-            _f("start_date", "تاريخ البدء المخطط", "date"),
-            _f("end_date", "تاريخ الإغلاق المخطط", "date"),
         ],
     },
     {
-        "key": "mgmt_kpis",
-        "label": "مؤشرات الإدارة",
+        "key": "indicators",
+        "label": "المؤشرات",
         "stage": "define",
+        "from_card": True,
+        "ui": "table",
         "fields": [
             _table(
-                "indicators",
+                "rows",
                 "المؤشرات",
                 [
-                    {"key": "name", "label": "المؤشر"},
-                    {"key": "baseline", "label": "خط الأساس"},
+                    {"key": "goal", "label": "الهدف"},
+                    {"key": "indicator_name", "label": "اسم المؤشر"},
                     {"key": "target", "label": "المستهدف"},
-                    {"key": "unit", "label": "وحدة القياس"},
                 ],
             ),
         ],
     },
     {
-        "key": "logical_framework",
-        "label": "الإطار المنطقي",
+        "key": "logical_impact",
+        "label": "الأثر المنطقي",
         "stage": "define",
+        "ui": "logical_matrix",
         "fields": [
-            _f("goal", "الهدف العام", "textarea"),
-            _f("outcomes", "النتائج", "textarea"),
-            _f("outputs", "المخرجات", "textarea"),
-            _f("assumptions", "الافتراضات", "textarea"),
+            _f(
+                "rows",
+                "الأثر المنطقي",
+                "logical_matrix",
+                columns=[
+                    {"key": "description", "label": "الوصف"},
+                    {"key": "indicators", "label": "المؤشرات"},
+                    {"key": "means", "label": "وسائل التحقق"},
+                    {"key": "assumptions", "label": "الافتراضات"},
+                ],
+            ),
         ],
     },
     {
         "key": "outputs_quality",
-        "label": "مخرجات المشروع وتطلعات الجودة",
+        "label": "مخرجات المشروع",
         "stage": "prepare",
+        "ui": "table",
         "fields": [
             _table(
-                "outputs",
+                "rows",
                 "المخرجات",
                 [
-                    {"key": "output", "label": "المخرج"},
-                    {"key": "quality", "label": "معيار الجودة"},
-                    {"key": "measure", "label": "طريقة القياس"},
+                    {"key": "output", "label": "المخرجات"},
+                    {"key": "quality", "label": "تطلعات الجودة"},
                 ],
             ),
         ],
@@ -222,32 +244,23 @@ DOCUMENT_SECTIONS: list[dict] = [
         "key": "main_phases",
         "label": "المراحل الرئيسية",
         "stage": "prepare",
+        "ui": "fixed_phases_activities",
         "fields": [
-            _table(
-                "phases",
-                "المراحل",
-                [
-                    {"key": "name", "label": "المرحلة"},
-                    {"key": "start", "label": "البداية"},
-                    {"key": "end", "label": "النهاية"},
-                    {"key": "deliverable", "label": "التسليم"},
-                ],
-            ),
+            _f("phases", "المراحل والأنشطة", "phases_activities"),
         ],
     },
     {
-        "key": "objectives_kpis",
-        "label": "أهداف المشروع ومؤشراتها",
+        "key": "objectives",
+        "label": "أهداف المشروع",
         "stage": "plan",
+        "ui": "table",
         "fields": [
             _table(
-                "objectives",
+                "rows",
                 "الأهداف",
                 [
                     {"key": "objective", "label": "الهدف"},
-                    {"key": "kpi", "label": "المؤشر"},
-                    {"key": "target", "label": "المستهدف"},
-                    {"key": "source", "label": "مصدر التحقق"},
+                    {"key": "indicator", "label": "المؤشر"},
                 ],
             ),
         ],
@@ -256,53 +269,46 @@ DOCUMENT_SECTIONS: list[dict] = [
         "key": "aspirations",
         "label": "تطلعات المشروع",
         "stage": "plan",
+        "ui": "aspirations_horizontal",
         "fields": [
-            _f("short_term", "تطلعات قصيرة المدى", "textarea"),
-            _f("long_term", "تطلعات طويلة المدى", "textarea"),
-            _f("impact", "الأثر المتوقع", "textarea"),
+            _f("short_term", "تطلعات قصيرة المدى"),
+            _f("long_term", "تطلعات طويلة المدى"),
+            _f("impact", "الأثر المتوقع"),
         ],
     },
     {
         "key": "similar_experiences",
-        "label": "التجارب الشبيهة",
+        "label": "التجارب المشابهة",
         "stage": "plan",
+        "from_card": True,
+        "ui": "similar_with_beneficiaries",
         "fields": [
             _table(
-                "experiences",
-                "التجارب",
+                "rows",
+                "التجارب المشابهة",
                 [
-                    {"key": "name", "label": "التجربة"},
-                    {"key": "org", "label": "الجهة"},
-                    {"key": "lesson", "label": "الدرس المستفاد"},
+                    {"key": "org", "label": "الجهة المنفذة"},
+                    {"key": "project_name", "label": "اسم المشروع"},
+                    {"key": "highlight", "label": "أبرز ما يميز التجربة"},
+                    {"key": "addition_point", "label": "نقطة إضافة التجربة الشبيهة في المشروع"},
                 ],
             ),
-        ],
-    },
-    {
-        "key": "beneficiaries",
-        "label": "الفئة والمستفيدون",
-        "stage": "plan",
-        "fields": [
-            _f("primary_group", "الفئة المستهدفة", "textarea"),
-            _f("count_estimate", "العدد التقديري", "number"),
-            _f("selection_criteria", "معايير الاختيار", "textarea"),
-            _f("geography", "النطاق الجغرافي"),
+            _f("target_group", "الفئة المستهدفة"),
+            _f("beneficiaries_count", "عدد المستفيدين", "number"),
         ],
     },
     {
         "key": "risks",
-        "label": "المخاطر والاستجابة",
+        "label": "المخاطر",
         "stage": "plan",
+        "ui": "table",
         "fields": [
             _table(
-                "risks",
+                "rows",
                 "المخاطر",
                 [
-                    {"key": "risk", "label": "الخطر"},
-                    {"key": "probability", "label": "الاحتمال"},
-                    {"key": "impact", "label": "الأثر"},
+                    {"key": "risk", "label": "الخطر / الفرصة"},
                     {"key": "response", "label": "الاستجابة"},
-                    {"key": "owner", "label": "المسؤول"},
                 ],
             ),
         ],
@@ -311,15 +317,18 @@ DOCUMENT_SECTIONS: list[dict] = [
         "key": "team",
         "label": "فريق العمل",
         "stage": "prepare",
+        "ui": "team_picker",
         "fields": [
             _table(
-                "members",
+                "rows",
                 "الأعضاء",
                 [
                     {"key": "name", "label": "الاسم"},
-                    {"key": "role", "label": "الدور"},
-                    {"key": "responsibility", "label": "المسؤولية"},
-                    {"key": "contact", "label": "التواصل"},
+                    {"key": "job_title", "label": "الوظيفة"},
+                    {"key": "phone", "label": "رقم التواصل"},
+                    {"key": "email", "label": "الايميل"},
+                    {"key": "main_tasks", "label": "المهام الرئيسية"},
+                    {"key": "user_id", "label": "معرّف العضو", "type": "text", "hidden": True},
                 ],
             ),
         ],
@@ -328,66 +337,88 @@ DOCUMENT_SECTIONS: list[dict] = [
         "key": "volunteers",
         "label": "المتطوعون",
         "stage": "execute",
+        "ui": "table",
         "fields": [
-            _f("needed_count", "العدد المطلوب", "number"),
-            _f("roles", "الأدوار التطوعية", "textarea"),
-            _f("onboarding", "آلية الاستقطاب والتأهيل", "textarea"),
+            _table(
+                "rows",
+                "المتطوعون",
+                [
+                    {"key": "volunteers_count", "label": "عدد المتطوعين", "type": "number"},
+                    {"key": "hours_count", "label": "عدد الساعات", "type": "number"},
+                    {"key": "main_tasks", "label": "المهام الرئيسية"},
+                ],
+            ),
         ],
     },
     {
         "key": "stakeholders",
         "label": "أصحاب المصلحة",
         "stage": "prepare",
+        "ui": "table",
         "fields": [
             _table(
-                "stakeholders",
+                "rows",
                 "أصحاب المصلحة",
                 [
-                    {"key": "name", "label": "الجهة/الشخص"},
-                    {"key": "interest", "label": "المصلحة"},
-                    {"key": "influence", "label": "التأثير"},
-                    {"key": "engagement", "label": "أسلوب التواصل"},
-                ],
-            ),
-        ],
-    },
-    {
-        "key": "partnerships",
-        "label": "الشراكات",
-        "stage": "execute",
-        "fields": [
-            _table(
-                "partners",
-                "الشركاء",
-                [
-                    {"key": "name", "label": "الشريك"},
-                    {"key": "role", "label": "الدور"},
-                    {"key": "contribution", "label": "المساهمة"},
+                    {"key": "name", "label": "الجهة / الاسم"},
+                    {"key": "intro", "label": "التعريف به"},
+                    {"key": "intersection", "label": "وصف التقاطع"},
+                    {"key": "management", "label": "آلية الادارة"},
                 ],
             ),
         ],
     },
     {
         "key": "budget",
-        "label": "المخصص وتكلفة المشروع",
+        "label": "المخصص المالي وتكلفة المشروع",
         "stage": "plan",
+        "from_card": True,
+        "ui": "document_budget",
         "fields": [
-            _f("association_budget", "مخصص الجمعية", "number"),
-            _f("donation_budget", "مخصص التبرعات", "number"),
-            _f("total_budget", "الإجمالي", "number"),
             _table(
-                "lines",
-                "بنود التكلفة",
+                "card_allocation",
+                "المخصص من البطاقة",
                 [
-                    {"key": "item", "label": "البند"},
-                    {"key": "amount", "label": "المبلغ"},
-                    {"key": "source", "label": "المصدر"},
-                    {"key": "notes", "label": "ملاحظات"},
+                    {"key": "from_association", "label": "من الجمعية", "type": "number"},
+                    {"key": "from_donation", "label": "من التبرع", "type": "number"},
+                    {
+                        "key": "total",
+                        "label": "الاجمالي",
+                        "type": "number",
+                        "computed": "sum:from_association,from_donation",
+                        "readonly": True,
+                    },
                 ],
             ),
+            _table(
+                "lines",
+                "تكلفة المشروع",
+                [
+                    {
+                        "key": "phase_key",
+                        "label": "المرحلة",
+                        "type": "select",
+                        "options": [p["key"] for p in DOCUMENT_FIXED_PHASES],
+                        "option_labels": {p["key"]: p["label"] for p in DOCUMENT_FIXED_PHASES},
+                    },
+                    {"key": "activity", "label": "النشاط"},
+                    {"key": "statement", "label": "البيان"},
+                    {"key": "quantity", "label": "الكمية", "type": "number"},
+                    {"key": "unit_price", "label": "السعر للوحدة", "type": "number"},
+                    {
+                        "key": "line_total",
+                        "label": "الاجمالي",
+                        "type": "number",
+                        "computed": "product:quantity,unit_price",
+                        "readonly": True,
+                    },
+                ],
+            ),
+            _f("lines_grand_total", "اجمالي الأصناف", "number", readonly=True),
         ],
     },
 ]
+
 
 CLOSURE_SECTIONS: list[dict] = [
     {
@@ -583,6 +614,10 @@ def _coerce_field(fdef: FieldDef, val):
         if opts and val not in opts:
             raise serializers.ValidationError({fdef["key"]: "قيمة غير مسموحة"})
         return str(val)
+    if t == "logical_matrix":
+        return _coerce_logical_matrix(fdef, val)
+    if t == "phases_activities":
+        return _coerce_phases_activities(val)
     if t == "table":
         if not isinstance(val, list):
             raise serializers.ValidationError({fdef["key"]: "يجب أن يكون جدولاً"})
@@ -607,6 +642,14 @@ def _coerce_field(fdef: FieldDef, val):
                             raise serializers.ValidationError(
                                 {fdef["key"]: f"صف {i + 1}: رقم غير صالح لـ {col_def.get('label') or col_key}"}
                             ) from exc
+                elif ctype == "select":
+                    opts = col_def.get("options") or []
+                    cell_s = "" if cell is None else str(cell)
+                    if opts and cell_s and cell_s not in opts:
+                        raise serializers.ValidationError(
+                            {fdef["key"]: f"صف {i + 1}: قيمة غير مسموحة لـ {col_def.get('label') or col_key}"}
+                        )
+                    cleaned_row[col_key] = cell_s
                 else:
                     cleaned_row[col_key] = "" if cell is None else str(cell)
             for col_key, col_def in col_defs.items():
@@ -614,9 +657,71 @@ def _coerce_field(fdef: FieldDef, val):
                 if computed.startswith("sum:"):
                     parts = [p.strip() for p in computed[4:].split(",") if p.strip()]
                     cleaned_row[col_key] = float(sum(float(cleaned_row.get(p) or 0) for p in parts))
+                elif computed.startswith("product:"):
+                    parts = [p.strip() for p in computed[8:].split(",") if p.strip()]
+                    prod = 1.0
+                    for p in parts:
+                        prod *= float(cleaned_row.get(p) or 0)
+                    cleaned_row[col_key] = float(prod)
+            if row.get("_locked"):
+                cleaned_row["_locked"] = True
+            if row.get("_source"):
+                cleaned_row["_source"] = str(row.get("_source"))
             rows.append(cleaned_row)
         return rows
     return str(val)
+
+
+def _coerce_logical_matrix(fdef: FieldDef, val):
+    cols = [c["key"] for c in fdef.get("columns") or []]
+    by_key = {}
+    if isinstance(val, list):
+        for row in val:
+            if isinstance(row, dict) and row.get("row_key"):
+                by_key[str(row["row_key"])] = row
+    out = []
+    for spec in LOGICAL_IMPACT_ROWS:
+        src = by_key.get(spec["row_key"]) or {}
+        cleaned = {"row_key": spec["row_key"], "label": spec["label"]}
+        for ck in cols:
+            cleaned[ck] = "" if src.get(ck) is None else str(src.get(ck))
+        out.append(cleaned)
+    return out
+
+
+def _coerce_phases_activities(val):
+    by_key = {}
+    if isinstance(val, list):
+        for row in val:
+            if isinstance(row, dict) and row.get("key"):
+                by_key[str(row["key"])] = row
+    out = []
+    for spec in DOCUMENT_FIXED_PHASES:
+        src = by_key.get(spec["key"]) or {}
+        acts = src.get("activities") or []
+        if not isinstance(acts, list):
+            acts = []
+        cleaned_acts = [str(a).strip() for a in acts if str(a).strip()]
+        out.append({"key": spec["key"], "label": spec["label"], "activities": cleaned_acts})
+    return out
+
+
+def default_logical_impact_rows() -> list[dict]:
+    return [
+        {
+            "row_key": r["row_key"],
+            "label": r["label"],
+            "description": "",
+            "indicators": "",
+            "means": "",
+            "assumptions": "",
+        }
+        for r in LOGICAL_IMPACT_ROWS
+    ]
+
+
+def default_main_phases() -> list[dict]:
+    return [{"key": p["key"], "label": p["label"], "activities": []} for p in DOCUMENT_FIXED_PHASES]
 
 
 def section_is_filled(data: dict) -> bool:
@@ -647,6 +752,8 @@ def schema_payload() -> dict:
                     "label": s["label"],
                     "stage": s["stage"],
                     "fields": fields,
+                    "ui": s.get("ui") or "default",
+                    "from_card": bool(s.get("from_card")),
                 }
             )
         return out
@@ -657,4 +764,5 @@ def schema_payload() -> dict:
         "document": pack(DOCUMENT_SECTIONS),
         "closure": pack(CLOSURE_SECTIONS),
         "card": pack(CARD_SECTIONS),
+        "document_fixed_phases": list(DOCUMENT_FIXED_PHASES),
     }

@@ -1,13 +1,24 @@
 /** أنواع ملف المشروع — تتوافق مع مخطط الخادم. */
-export type FieldType = "text" | "textarea" | "number" | "date" | "select" | "table";
+export type FieldType =
+  | "text"
+  | "textarea"
+  | "number"
+  | "date"
+  | "select"
+  | "table"
+  | "logical_matrix"
+  | "phases_activities";
 
 export interface FieldColumn {
   key: string;
   label: string;
-  type?: "text" | "number" | "date";
+  type?: "text" | "number" | "date" | "select";
   group?: string;
   computed?: string;
   readonly?: boolean;
+  hidden?: boolean;
+  options?: string[];
+  option_labels?: Record<string, string>;
 }
 
 export interface SchemaField {
@@ -18,6 +29,7 @@ export interface SchemaField {
   options?: string[];
   columns?: FieldColumn[];
   header_groups?: Array<{ key: string; label: string }>;
+  readonly?: boolean;
 }
 
 export interface SchemaSection {
@@ -25,6 +37,8 @@ export interface SchemaSection {
   label: string;
   stage: string;
   fields: SchemaField[];
+  ui?: string;
+  from_card?: boolean;
 }
 
 export interface DossierSchema {
@@ -33,6 +47,7 @@ export interface DossierSchema {
   document: SchemaSection[];
   closure: SchemaSection[];
   card?: SchemaSection[];
+  document_fixed_phases?: Array<{ key: string; label: string }>;
 }
 
 export interface DossierSectionRow {
