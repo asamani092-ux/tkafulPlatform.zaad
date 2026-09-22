@@ -1,7 +1,8 @@
-import Card from "../ui/Card";
+import { useMemo } from "react";
 import Button from "../ui/Button";
 import Input from "../ui/Input";
 import Badge from "../ui/Badge";
+import CollapsibleCard from "./CollapsibleCard";
 import EditableDataTable, { type TableColumn, type HeaderGroup } from "./EditableDataTable";
 import { DOSSIER_STATUS_AR, type DossierSchema, type SchemaField } from "./types";
 
@@ -50,7 +51,7 @@ function fieldColumns(f: SchemaField): { columns: TableColumn[]; headerGroups: H
   return { columns, headerGroups };
 }
 
-/** تبويب البطاقة: بيانات مطلوبة + جداول المؤشرات/المراحل/المخرجات/التجارب/المخصص. */
+/** تبويب البطاقة: بيانات مطلوبة + جداول في بطاقات قابلة للطي. */
 export default function CardTab({
   code,
   status,
@@ -68,8 +69,18 @@ export default function CardTab({
 }: Props) {
   const cardSections = schema?.card || [];
 
+  const sectionMeta = useMemo(() => {
+    return cardSections.map((sec) => {
+      const tableField = sec.fields.find((f) => f.type === "table");
+      const draftKey = `card:${sec.key}`;
+      const data = drafts[draftKey] || {};
+      const rows = tableField ? asRows(data[tableField.key]) : [];
+      return { sec, tableField, draftKey, rows };
+    });
+  }, [cardSections, drafts]);
+
   return (
-    <div className="space-y-4" dir="rtl">
+    <div className="space-y-3" dir="rtl">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <Badge>{code}</Badge>
@@ -82,8 +93,7 @@ export default function CardTab({
         )}
       </div>
 
-      <Card>
-        <h2 className="mb-3 text-lg font-extrabold text-primary">البيانات المطلوبة</h2>
+      <CollapsibleCard title="البيانات المطلوبة" defaultOpen subtitle="الاسم والإدارة والتواريخ والراعي">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Input
             label="الاسم"
@@ -154,19 +164,28 @@ export default function CardTab({
             </Button>
           </div>
         )}
-      </Card>
+      </CollapsibleCard>
 
-      {cardSections.map((sec) => {
-        const tableField = sec.fields.find((f) => f.type === "table");
+      {sectionMeta.map(({ sec, tableField, draftKey, rows }, idx) => {
         if (!tableField) return null;
-        const draftKey = `card:${sec.key}`;
-        const data = drafts[draftKey] || {};
         const { columns, headerGroups } = fieldColumns(tableField);
-        const rows = asRows(data[tableField.key]);
         return (
-          <Card key={sec.key}>
+          <CollapsibleCard
+            key={sec.key}
+            title={sec.label}
+            defaultOpen={idx === 0}
+            subtitle={rows.length ? `${rows.length} صف` : "لا صفوف بعد"}
+            badge={
+              rows.length > 0 ? (
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+                  {rows.length}
+                </span>
+              ) : null
+            }
+          >
             <EditableDataTable
               label={sec.label}
+              hideTitle
               columns={columns}
               headerGroups={headerGroups}
               rows={rows}
@@ -189,7 +208,7 @@ export default function CardTab({
                 </Button>
               </div>
             )}
-          </Card>
+          </CollapsibleCard>
         );
       })}
     </div>
