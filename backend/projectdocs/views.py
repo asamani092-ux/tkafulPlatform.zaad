@@ -124,10 +124,15 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             "manager_email",
             "budget_association",
             "budget_donation",
+            "execution_start",
+            "execution_end",
         }
         for key in allowed:
             if key in request.data:
-                setattr(dossier, key, request.data[key])
+                val = request.data[key]
+                if key in ("execution_start", "execution_end") and val == "":
+                    val = None
+                setattr(dossier, key, val)
         if "manager" in request.data or "manager_id" in request.data:
             if not is_super_admin(request.user):
                 return Response({"detail": "تعيين المسؤول للمشرف فقط"}, status=403)
@@ -300,6 +305,11 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="comparison")
     def comparison(self, request, pk=None):
         return Response(services.document_closure_comparison(self.get_object()))
+
+    @action(detail=True, methods=["get"], url_path="info-page")
+    def info_page(self, request, pk=None):
+        """صفحة المعلومات — قراءة فقط تعكس بيانات البطاقة."""
+        return Response(services.info_page_payload(self.get_object()))
 
     @action(detail=True, methods=["get"], url_path="budget-lines")
     def budget_lines(self, request, pk=None):

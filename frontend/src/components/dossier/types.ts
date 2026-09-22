@@ -4,6 +4,10 @@ export type FieldType = "text" | "textarea" | "number" | "date" | "select" | "ta
 export interface FieldColumn {
   key: string;
   label: string;
+  type?: "text" | "number" | "date";
+  group?: string;
+  computed?: string;
+  readonly?: boolean;
 }
 
 export interface SchemaField {
@@ -13,6 +17,7 @@ export interface SchemaField {
   required?: boolean;
   options?: string[];
   columns?: FieldColumn[];
+  header_groups?: Array<{ key: string; label: string }>;
 }
 
 export interface SchemaSection {
@@ -24,13 +29,15 @@ export interface SchemaSection {
 
 export interface DossierSchema {
   stages: Array<{ order: number; key: string; label: string }>;
+  workspaces?: Array<{ order: number; key: string; label: string; needs_approval?: boolean }>;
   document: SchemaSection[];
   closure: SchemaSection[];
+  card?: SchemaSection[];
 }
 
 export interface DossierSectionRow {
   id: number;
-  kind: "document" | "closure";
+  kind: "card" | "document" | "closure";
   key: string;
   data: Record<string, unknown>;
   status: string;
@@ -66,6 +73,8 @@ export interface ProjectDossier {
   projects_committee_name: string;
   sponsor_name: string;
   sponsor_email: string;
+  execution_start?: string | null;
+  execution_end?: string | null;
   manager: number | null;
   manager_username: string;
   manager_email: string;

@@ -4,7 +4,6 @@ import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Input from "../../ui/Input";
-import Badge from "../../ui/Badge";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
@@ -13,8 +12,9 @@ import StageBar from "../../dossier/StageBar";
 import ActivitiesPanel from "../../dossier/ActivitiesPanel";
 import DossierDashboard from "../../dossier/DossierDashboard";
 import ClosureComparison from "../../dossier/ClosureComparison";
+import CardTab, { type CardScalars } from "../../dossier/CardTab";
+import DossierInfoPage, { type InfoPagePayload } from "../../dossier/DossierInfoPage";
 import {
-  DOSSIER_STATUS_AR,
   SECTION_STATUS_AR,
   type DossierSchema,
   type ProjectDossier,
@@ -23,7 +23,7 @@ import {
 } from "../../dossier/types";
 import { downloadDossierPdf, type ExportPayload } from "../../../utils/dossierPdf";
 
-type Tab = "card" | "document" | "plan" | "closure" | "board";
+type Tab = "card" | "document" | "plan" | "closure" | "board" | "info";
 
 export default function ProjectDossierWorkspace() {
   const { slug } = useParams();
@@ -58,20 +58,17 @@ export default function ProjectDossierWorkspace() {
   const [creating, setCreating] = useState(false);
   const [sectionDrafts, setSectionDrafts] = useState<Record<string, Record<string, unknown>>>({});
   const [savingKey, setSavingKey] = useState("");
-  const [card, setCard] = useState({
+  const [infoPage, setInfoPage] = useState<InfoPagePayload | null>(null);
+  const [card, setCard] = useState<CardScalars>({
     marketing_name: "",
-    portfolio: "",
     department: "",
     section: "",
     strategic_goal: "",
+    execution_start: "",
+    execution_end: "",
     location: "",
-    projects_office_name: "",
-    projects_committee_name: "",
     sponsor_name: "",
     sponsor_email: "",
-    manager_email: "",
-    budget_association: "0",
-    budget_donation: "0",
   });
 
   const load = useCallback(async () => {
@@ -104,18 +101,14 @@ export default function ProjectDossierWorkspace() {
       setDossier(d);
       setCard({
         marketing_name: d.marketing_name || "",
-        portfolio: d.portfolio || "",
         department: d.department || "",
         section: d.section || "",
         strategic_goal: d.strategic_goal || "",
+        execution_start: d.execution_start || "",
+        execution_end: d.execution_end || "",
         location: d.location || "",
-        projects_office_name: d.projects_office_name || "",
-        projects_committee_name: d.projects_committee_name || "",
         sponsor_name: d.sponsor_name || "",
         sponsor_email: d.sponsor_email || "",
-        manager_email: d.manager_email || "",
-        budget_association: String(d.budget_association ?? 0),
-        budget_donation: String(d.budget_donation ?? 0),
       });
       const drafts: Record<string, Record<string, unknown>> = {};
       d.sections.forEach((s) => {
@@ -123,14 +116,16 @@ export default function ProjectDossierWorkspace() {
       });
       setSectionDrafts(drafts);
 
-      const [actRes, dashRes, cmpRes] = await Promise.all([
+      const [actRes, dashRes, cmpRes, infoRes] = await Promise.all([
         authFetch(`/api/projectdocs/dossiers/${d.id}/activities/`),
         authFetch(`/api/projectdocs/dossiers/${d.id}/dashboard/`),
         authFetch(`/api/projectdocs/dossiers/${d.id}/comparison/`),
+        authFetch(`/api/projectdocs/dossiers/${d.id}/info-page/`),
       ]);
       if (actRes.ok) setActivities(await actRes.json());
       if (dashRes.ok) setDash(await dashRes.json());
       if (cmpRes.ok) setComparison(await cmpRes.json());
+      if (infoRes.ok) setInfoPage(await infoRes.json());
     } catch {
       setError(true);
     } finally {
@@ -183,19 +178,28 @@ export default function ProjectDossierWorkspace() {
 
   const saveCard = async () => {
     if (!dossier) return;
-    const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/`, {
-      method: "PATCH",
-      body: JSON.stringify(card),
-    });
-    if (!res.ok) {
-      toast.error({ title: "تعذّر حفظ البطاقة" });
-      return;
+    setSavingKey("card:scalars");
+    try {
+      const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          ...card,
+          execution_start: card.execution_start || null,
+          execution_end: card.execution_end || null,
+        }),
+      });
+      if (!res.ok) {
+        toast.error({ title: "تعذّر حفظ البطاقة" });
+        return;
+      }
+      toast.success({ title: "حُفظت البيانات المطلوبة" });
+      await load();
+    } finally {
+      setSavingKey("");
     }
-    toast.success({ title: "حُفظت البطاقة" });
-    await load();
   };
 
-  const saveSection = async (kind: "document" | "closure", key: string) => {
+  const saveSection = async (kind: "card" | "document" | "closure", key: string) => {
     if (!dossier) return;
     const draftKey = `${kind}:${key}`;
     setSavingKey(draftKey);
@@ -206,7 +210,7 @@ export default function ProjectDossierWorkspace() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error({ title: data.detail || data.stage || "تعذّر الحفظ" });
+        toast.error({ title: data.detail || data.stage || data.key || "تعذّر الحفظ" });
         return;
       }
       toast.success({ title: "حُفظ القسم" });
@@ -270,9 +274,11 @@ export default function ProjectDossierWorkspace() {
 
   /** تصفح/تعديل: مفتوح للمشرف ومدير الإدارة حتى على المقفلة. الإرسال فقط لـ active/returned. */
   const canEditWorkspace = (key: Tab) => {
+    if (key === "info") return false;
     if (!wsOpen(key)) return false;
     const w = workspaces.find((x) => x.key === key);
     if (!w) return key === "card";
+    if (key === "card") return true;
     if (dossier?.bypass_workspace_gates) return true;
     return w.status === "active" || w.status === "returned";
   };
@@ -321,24 +327,19 @@ export default function ProjectDossierWorkspace() {
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input
-              label="الاسم التسويقي"
+              label="الاسم"
               value={card.marketing_name}
               onChange={(e) => setCard({ ...card, marketing_name: e.target.value })}
             />
             <Input
-              label="بريد الراعي"
+              label="ايميل الراعي"
               value={card.sponsor_email}
               onChange={(e) => setCard({ ...card, sponsor_email: e.target.value })}
             />
             <Input
-              label="اسم الراعي"
+              label="راعي المشروع"
               value={card.sponsor_name}
               onChange={(e) => setCard({ ...card, sponsor_name: e.target.value })}
-            />
-            <Input
-              label="بريد المسؤول"
-              value={card.manager_email}
-              onChange={(e) => setCard({ ...card, manager_email: e.target.value })}
             />
           </div>
           <div className="mt-4">
@@ -365,52 +366,31 @@ export default function ProjectDossierWorkspace() {
             )}
           </div>
 
+          {tab === "info" && infoPage && (
+            <DossierInfoPage data={infoPage} onBack={() => setTab("card")} />
+          )}
+
           {tab === "card" && (
-            <Card>
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Badge>{dossier.code}</Badge>
-                <Badge variant="warning">{DOSSIER_STATUS_AR[dossier.status] || dossier.status}</Badge>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {(
-                  [
-                    ["marketing_name", "الاسم التسويقي"],
-                    ["portfolio", "المحفظة"],
-                    ["department", "الإدارة"],
-                    ["section", "القسم"],
-                    ["location", "الموقع"],
-                    ["sponsor_name", "اسم الراعي"],
-                    ["sponsor_email", "بريد الراعي"],
-                    ["manager_email", "بريد المسؤول"],
-                    ["projects_office_name", "مكتب المشاريع (عرض)"],
-                    ["projects_committee_name", "لجنة المشاريع (عرض)"],
-                    ["budget_association", "مخصص الجمعية"],
-                    ["budget_donation", "مخصص التبرعات"],
-                  ] as const
-                ).map(([k, label]) => (
-                  <Input
-                    key={k}
-                    label={label}
-                    value={card[k]}
-                    onChange={(e) => setCard({ ...card, [k]: e.target.value })}
-                  />
-                ))}
-                <label className="block text-sm sm:col-span-2">
-                  <span className="mb-1 block font-bold text-primary">الهدف الاستراتيجي</span>
-                  <textarea
-                    className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm"
-                    rows={3}
-                    value={card.strategic_goal}
-                    onChange={(e) => setCard({ ...card, strategic_goal: e.target.value })}
-                  />
-                </label>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button type="button" onClick={() => void saveCard()}>
-                  حفظ البطاقة
-                </Button>
-              </div>
-            </Card>
+            <CardTab
+              code={dossier.code}
+              status={dossier.status}
+              card={card}
+              schema={schema}
+              drafts={sectionDrafts}
+              canEdit={canEditWorkspace("card")}
+              savingKey={savingKey}
+              phasesHintTotal={(() => {
+                const rows = (sectionDrafts["card:phases"]?.rows as Array<Record<string, number>>) || [];
+                return rows.reduce((acc, r) => acc + (Number(r.budget_total) || 0), 0);
+              })()}
+              onCardChange={setCard}
+              onSaveCard={() => void saveCard()}
+              onSaveSection={(key) => void saveSection("card", key)}
+              onDraftChange={(sectionKey, data) =>
+                setSectionDrafts((p) => ({ ...p, [`card:${sectionKey}`]: data }))
+              }
+              onOpenInfo={() => setTab("info")}
+            />
           )}
 
           {(tab === "document" || tab === "closure") && (

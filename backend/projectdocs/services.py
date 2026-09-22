@@ -114,6 +114,8 @@ def create_dossier_for_project(
         projects_committee_name=card.get("projects_committee_name") or "",
         sponsor_name=card.get("sponsor_name") or "",
         sponsor_email=card.get("sponsor_email") or "",
+        execution_start=card.get("execution_start") or None,
+        execution_end=card.get("execution_end") or None,
         manager=manager,
         manager_email=card.get("manager_email") or (manager.email if manager else ""),
         current_stage="define",
@@ -124,6 +126,7 @@ def create_dossier_for_project(
     )
     section_rows = []
     for kind, keys in (
+        ("card", catalog.all_section_keys("card")),
         ("document", catalog.all_section_keys("document")),
         ("closure", catalog.all_section_keys("closure")),
     ):
@@ -317,11 +320,15 @@ def update_section(
     if not section_def:
         raise ValidationError({"key": "قسم غير معروف"})
 
-    # فصل الوثيقة عن الإغلاق عبر تبويبات الاعتماد
+    # فصل الوثيقة عن الإغلاق عبر تبويبات الاعتماد؛ البطاقة مفتوحة دائماً
     if kind == "document":
         assert_workspace_open_for_work(user, dossier, "document")
     elif kind == "closure":
         assert_workspace_open_for_work(user, dossier, "closure")
+    elif kind == "card":
+        assert_workspace_open_for_work(user, dossier, "card")
+    else:
+        raise ValidationError({"kind": "نوع قسم غير معروف"})
     cleaned = catalog.validate_section_data(kind, key, data)
     section = dossier.sections.get(kind=kind, key=key)
     if section.status == "approved" and not can_bypass_workspace_gates(user, dossier):
@@ -332,7 +339,75 @@ def update_section(
     section.save(update_fields=["data", "status", "updated_by", "updated_at"])
     if kind == "document" and key == "budget":
         sync_budget_lines_from_section(dossier, cleaned, user=user)
+    if kind == "card" and key == "project_budget":
+        _sync_dossier_budget_from_card(dossier, cleaned)
     return section
+
+
+def _sync_dossier_budget_from_card(dossier: ProjectDossier, data: dict) -> None:
+    """تحديث مخصصات الملف من صفوف جدول المخصص لكامل المشروع. O(R)."""
+    rows = data.get("rows") or []
+    assoc = Decimal("0")
+    don = Decimal("0")
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            assoc += Decimal(str(row.get("from_association") or 0))
+            don += Decimal(str(row.get("from_donation") or 0))
+        except Exception:
+            continue
+    dossier.budget_association = assoc
+    dossier.budget_donation = don
+    dossier.recompute_budget_total()
+    dossier.save(update_fields=["budget_association", "budget_donation", "budget_total", "updated_at"])
+
+
+def info_page_payload(dossier: ProjectDossier) -> dict:
+    """صفحة المعلومات — قراءة فقط من أقسام البطاقة. O(R)."""
+    by_key = {s.key: s for s in dossier.sections.filter(kind="card")}
+
+    def rows_of(key: str) -> list:
+        sec = by_key.get(key)
+        data = (sec.data if sec else {}) or {}
+        rows = data.get("rows") or []
+        return rows if isinstance(rows, list) else []
+
+    indicators = rows_of("indicators")
+    phases = rows_of("phases")
+    project_budget = rows_of("project_budget")
+    phase_assoc = 0.0
+    phase_don = 0.0
+    for row in phases:
+        if not isinstance(row, dict):
+            continue
+        try:
+            phase_assoc += float(row.get("budget_association") or 0)
+            phase_don += float(row.get("budget_donation") or 0)
+        except (TypeError, ValueError):
+            continue
+    return {
+        "code": dossier.code,
+        "name": dossier.marketing_name or dossier.project.name,
+        "department": dossier.department,
+        "section": dossier.section,
+        "strategic_goal": dossier.strategic_goal,
+        "execution_start": dossier.execution_start,
+        "execution_end": dossier.execution_end,
+        "location": dossier.location,
+        "sponsor_name": dossier.sponsor_name,
+        "sponsor_email": dossier.sponsor_email,
+        "indicators": indicators,
+        "phases_budget_summary": {
+            "from_association": phase_assoc,
+            "from_donation": phase_don,
+            "total": phase_assoc + phase_don,
+            "rows": phases,
+        },
+        "project_budget": project_budget,
+        "outputs": rows_of("outputs"),
+        "similar_experiences": rows_of("similar_experiences"),
+    }
 
 
 def _money_key(amount) -> str:
