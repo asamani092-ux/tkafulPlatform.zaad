@@ -42,8 +42,19 @@ function applyComputed(row: Record<string, string | number>, cols: TableColumn[]
 }
 
 function cellTone(c: TableColumn, primaryKey?: string, budgetGroup?: string): string {
-  if (primaryKey && c.key === primaryKey) return "bg-primary/10";
-  if (budgetGroup && c.group === budgetGroup) return "bg-amber-50/90";
+  if (primaryKey && c.key === primaryKey) {
+    return "border border-primary/40 bg-primary/[0.06]";
+  }
+  if (budgetGroup && c.group === budgetGroup) {
+    return "border border-amber-400 bg-amber-50/50";
+  }
+  return "";
+}
+
+function groupHeaderTone(groupKey: string | undefined, budgetGroup?: string): string {
+  if (budgetGroup && groupKey === budgetGroup) {
+    return "border border-amber-400 bg-amber-50/50";
+  }
   return "";
 }
 
@@ -109,7 +120,7 @@ export default function EditableDataTable({
                   const first = columns.find((x) => x.group === c.group);
                   if (first?.key !== c.key) return null;
                   const span = columns.filter((x) => x.group === c.group).length;
-                  const budgetTone = budgetGroup && c.group === budgetGroup ? "bg-amber-50/90" : "";
+                  const budgetTone = groupHeaderTone(c.group, budgetGroup);
                   return (
                     <th
                       key={`g-${c.group}`}
