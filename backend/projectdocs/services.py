@@ -866,9 +866,22 @@ def admin_decide_workspace(*, dossier: ProjectDossier, key: str, decision: str, 
         raise ValidationError({"workspace": "تبويب غير موجود"})
     if ws.status != "submitted":
         raise ValidationError({"status": "التبويب ليس بانتظار الاعتماد"})
-    approval = ApprovalRequest.create_pending(
-        dossier=dossier, scope=key, payload={"via": "admin", "workspace_key": key}
+    # استخدم طلب الإيميل القائم إن وُجد حتى لا يبقى الرمز صالحاً بعد القرار الداخلي
+    approval = (
+        ApprovalRequest.objects.select_for_update()
+        .filter(dossier=dossier, scope=key, decision="pending")
+        .order_by("-created_at")
+        .first()
     )
+    if not approval:
+        approval = ApprovalRequest.create_pending(
+            dossier=dossier, scope=key, payload={"via": "admin", "workspace_key": key}
+        )
+    else:
+        payload = dict(approval.payload_snapshot or {})
+        payload["via"] = "admin"
+        approval.payload_snapshot = payload
+        approval.save(update_fields=["payload_snapshot"])
     return apply_approval_decision(
         approval=approval, decision=decision, note=note, actor=user, request=request
     )

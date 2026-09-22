@@ -386,6 +386,46 @@ class DossierRestructureTests(APITestCase):
         )
         self.assertEqual(deny.status_code, 400, deny.content)
 
+    def test_admin_decide_consumes_pending_email_token(self):
+        """القرار الداخلي يستهلك طلب الإيميل القائم فلا يبقى الرمز صالحاً. O(1)."""
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/projectdocs/dossiers/",
+            {
+                "name": "رمز داخلي",
+                "sponsor_email": "tok@test.com",
+                "sponsor_name": "راعٍ",
+                "manager_id": self.manager.id,
+            },
+            format="json",
+        )
+        dossier_id = res.data["id"]
+        with patch("projectdocs.services.send_approval_email", return_value=True):
+            self.client.force_authenticate(self.manager)
+            sub = self.client.post(
+                f"/api/projectdocs/dossiers/{dossier_id}/workspaces/document/submit/",
+                {},
+                format="json",
+            )
+        self.assertEqual(sub.status_code, 201, sub.content)
+        pending = ApprovalRequest.objects.get(dossier_id=dossier_id, decision="pending")
+        token = pending.token
+        self.client.force_authenticate(self.admin)
+        dec = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/workspaces/document/decide/",
+            {"decision": "approved"},
+            format="json",
+        )
+        self.assertEqual(dec.status_code, 200, dec.content)
+        pending.refresh_from_db()
+        self.assertEqual(pending.decision, "approved")
+        reuse = self.client.post(
+            f"/api/public/approvals/{token}/decide/",
+            {"decision": "returned", "note": "متأخر"},
+            format="json",
+        )
+        self.assertEqual(reuse.status_code, 400)
+
     def test_by_project_exposes_bypass_for_admin(self):
         """by-project يمرّر سياق الطلب حتى يظهر bypass للمشرف. O(1)."""
         self.client.force_authenticate(self.admin)
