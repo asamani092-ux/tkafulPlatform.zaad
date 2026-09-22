@@ -91,7 +91,7 @@ export default function DossierInfoPage({ data, onBack }: Props) {
         </div>
       </div>
 
-      <CollapsibleCard title="بيانات المشروع" defaultOpen>
+      <CollapsibleCard title="بيانات المشروع" defaultOpen={false}>
         <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
           {(
             [
@@ -119,7 +119,7 @@ export default function DossierInfoPage({ data, onBack }: Props) {
 
       <CollapsibleCard
         title="المؤشرات الرئيسية"
-        defaultOpen
+        defaultOpen={false}
         subtitle={data.indicators.length ? `${data.indicators.length} مؤشر` : "لا مؤشرات"}
       >
         <ReadTable

@@ -66,7 +66,7 @@ export default function UserShell({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="flex min-h-screen flex-col bg-surface-muted md:flex-row" dir="rtl">
+    <div className="flex min-h-screen flex-col bg-surface-muted md:h-dvh md:max-h-dvh md:flex-row md:overflow-hidden" dir="rtl">
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-surface-border bg-surface px-4 py-3 md:hidden">
         <button
           type="button"
@@ -81,7 +81,7 @@ export default function UserShell({ children }: { children: ReactNode }) {
         <NotificationBell />
       </header>
 
-      <aside className="hidden w-60 shrink-0 border-l border-surface-border bg-surface p-5 md:block">
+      <aside className="hidden w-60 shrink-0 border-l border-surface-border bg-surface p-5 md:block md:h-full md:min-h-0 md:overflow-y-auto">
         {navBody}
       </aside>
 
@@ -100,7 +100,7 @@ export default function UserShell({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <main className="min-w-0 flex-1 p-4 sm:p-6">{children}</main>
+      <main className="min-h-0 min-w-0 flex-1 p-4 sm:p-6 md:overflow-y-auto">{children}</main>
     </div>
   );
 }
