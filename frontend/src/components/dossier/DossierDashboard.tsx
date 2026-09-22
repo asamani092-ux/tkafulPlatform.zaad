@@ -23,11 +23,11 @@ type Dash = {
 };
 
 const STAGE_AR: Record<string, string> = {
-  define: "التعريف",
-  prepare: "التجهيز",
-  plan: "التخطيط",
-  execute: "التنفيذ",
-  close: "الإغلاق",
+  define: "تحديد وتعريف المشروع",
+  prepare: "إعداد المشروع",
+  plan: "التخطيط للمشروع",
+  execute: "تنفيذ المشروع",
+  close: "إغلاق المشروع",
 };
 
 type Props = {
