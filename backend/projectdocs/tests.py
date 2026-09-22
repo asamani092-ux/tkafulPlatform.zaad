@@ -386,6 +386,21 @@ class DossierRestructureTests(APITestCase):
         )
         self.assertEqual(deny.status_code, 400, deny.content)
 
+    def test_by_project_exposes_bypass_for_admin(self):
+        """by-project يمرّر سياق الطلب حتى يظهر bypass للمشرف. O(1)."""
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/projectdocs/dossiers/",
+            {"name": "سياق", "sponsor_email": "ctx@test.com", "sponsor_name": "راعٍ"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        slug = res.data["project_slug"]
+        by = self.client.get(f"/api/projectdocs/dossiers/by-project/{slug}/")
+        self.assertEqual(by.status_code, 200)
+        self.assertTrue(by.data["bypass_workspace_gates"])
+        self.assertEqual(by.data["workspaces"][2]["status"], "locked")
+
     def test_budget_lines_cumulative_allocate_spend(self):
         dossier = create_project_with_dossier(
             name="ميزانية",

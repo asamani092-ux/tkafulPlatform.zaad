@@ -135,7 +135,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             dossier.manager_id = mid or None
         dossier.recompute_budget_total()
         dossier.save()
-        return Response(ProjectDossierSerializer(dossier).data)
+        return Response(ProjectDossierSerializer(dossier, context={"request": request}).data)
 
     @action(detail=False, methods=["get"], url_path=r"by-project/(?P<slug>[^/.]+)")
     def by_project(self, request, slug=None):
@@ -143,7 +143,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         if not dossier:
             return Response({"detail": "لا يوجد ملف"}, status=404)
         self.check_object_permissions(request, dossier)
-        return Response(ProjectDossierSerializer(dossier).data)
+        return Response(ProjectDossierSerializer(dossier, context={"request": request}).data)
 
     @action(detail=True, methods=["patch"], url_path=r"sections/(?P<kind>[^/.]+)/(?P<key>[^/.]+)")
     def patch_section(self, request, pk=None, kind=None, key=None):
