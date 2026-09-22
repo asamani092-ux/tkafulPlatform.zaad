@@ -101,9 +101,17 @@ function AppContent() {
   const hideChrome = isUserPage || isSaqyaPage || isAdminPage || isErrorPage;
 
   return (
-    <div className="flex min-h-screen flex-col bg-surface-muted" dir="rtl">
+    <div
+      className={
+        hideChrome
+          ? "flex min-h-screen flex-col bg-surface-muted md:h-dvh md:max-h-dvh md:overflow-hidden"
+          : "flex min-h-screen flex-col bg-surface-muted"
+      }
+      dir="rtl"
+    >
       {!hideChrome && <Navbar />}
-      <main className="flex-1 overflow-x-hidden">
+      {/* صفحات الإدارة/المستخدم لها غلاف تمرير خاص — لا نلفّها بـ main إضافي */}
+      <div className={hideChrome ? "flex min-h-0 min-w-0 flex-1 flex-col" : "flex-1 overflow-x-hidden"}>
         <Routes>
           {/* —— الموقع العام —— */}
           <Route path="/" element={<Home />} />
@@ -182,7 +190,7 @@ function AppContent() {
 
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
-      </main>
+      </div>
       {!hideChrome && <Footer />}
     </div>
   );
