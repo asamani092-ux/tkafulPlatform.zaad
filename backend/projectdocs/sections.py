@@ -39,6 +39,120 @@ def _table(key: str, label: str, columns: list[dict], **extra) -> FieldDef:
     return _f(key, label, "table", columns=columns, **extra)
 
 
+def _sections_for_kind(kind: str) -> list[dict]:
+    if kind == "document":
+        return DOCUMENT_SECTIONS
+    if kind == "closure":
+        return CLOSURE_SECTIONS
+    if kind == "card":
+        return CARD_SECTIONS
+    return []
+
+
+# أقسام تبويب البطاقة (قائمة المنصة — الإكسل للمراجعة فقط)
+CARD_SECTIONS: list[dict] = [
+    {
+        "key": "indicators",
+        "label": "المؤشرات",
+        "stage": "card",
+        "fields": [
+            _table(
+                "rows",
+                "المؤشرات",
+                [
+                    {"key": "goal", "label": "الهدف"},
+                    {"key": "indicator_name", "label": "اسم المؤشر"},
+                    {"key": "target", "label": "المستهدف"},
+                ],
+            ),
+        ],
+    },
+    {
+        "key": "phases",
+        "label": "المراحل",
+        "stage": "card",
+        "fields": [
+            _table(
+                "rows",
+                "المراحل",
+                [
+                    {"key": "activity_type", "label": "نوع النشاط"},
+                    {"key": "executor", "label": "المنفذ"},
+                    {"key": "start_date", "label": "تاريخ البداية", "type": "date"},
+                    {"key": "end_date", "label": "تاريخ الإغلاق", "type": "date"},
+                    {"key": "output", "label": "المخرج"},
+                    {"key": "budget_association", "label": "من الجمعية", "type": "number", "group": "budget"},
+                    {"key": "budget_donation", "label": "من المتبرع", "type": "number", "group": "budget"},
+                    {
+                        "key": "budget_total",
+                        "label": "إجمالي المخصص",
+                        "type": "number",
+                        "group": "budget",
+                        "computed": "sum:budget_association,budget_donation",
+                        "readonly": True,
+                    },
+                ],
+                header_groups=[{"key": "budget", "label": "المخصص المالي"}],
+            ),
+        ],
+    },
+    {
+        "key": "outputs",
+        "label": "المخرجات",
+        "stage": "card",
+        "fields": [
+            _table(
+                "rows",
+                "المخرجات",
+                [
+                    {"key": "direct", "label": "مباشرة"},
+                    {"key": "indirect", "label": "غير مباشرة"},
+                ],
+            ),
+        ],
+    },
+    {
+        "key": "similar_experiences",
+        "label": "التجارب الشبيهة",
+        "stage": "card",
+        "fields": [
+            _table(
+                "rows",
+                "التجارب الشبيهة",
+                [
+                    {"key": "org", "label": "الجهة المنفذة"},
+                    {"key": "project_name", "label": "اسم المشروع"},
+                    {"key": "highlight", "label": "أبرز ما يميز التجربة"},
+                    {"key": "addition_point", "label": "نقطة إضافة التجربة الشبيهة في المشروع"},
+                ],
+            ),
+        ],
+    },
+    {
+        "key": "project_budget",
+        "label": "المخصص المالي لكامل المشروع",
+        "stage": "card",
+        "fields": [
+            _table(
+                "rows",
+                "المخصص المالي لكامل المشروع",
+                [
+                    {"key": "from_association", "label": "من الجمعية", "type": "number"},
+                    {"key": "from_donation", "label": "من التبرع", "type": "number"},
+                    {
+                        "key": "total",
+                        "label": "الاجمالي",
+                        "type": "number",
+                        "computed": "sum:from_association,from_donation",
+                        "readonly": True,
+                    },
+                ],
+            ),
+        ],
+    },
+]
+
+
 DOCUMENT_SECTIONS: list[dict] = [
     {
         "key": "basics",
@@ -418,8 +532,7 @@ CLOSURE_SECTIONS: list[dict] = [
 
 
 def _section_map(kind: str) -> dict[str, dict]:
-    src = DOCUMENT_SECTIONS if kind == "document" else CLOSURE_SECTIONS
-    return {s["key"]: s for s in src}
+    return {s["key"]: s for s in _sections_for_kind(kind)}
 
 
 def get_section_def(kind: str, key: str) -> dict | None:
@@ -427,13 +540,11 @@ def get_section_def(kind: str, key: str) -> dict | None:
 
 
 def sections_for_stage(kind: str, stage_key: str) -> list[dict]:
-    src = DOCUMENT_SECTIONS if kind == "document" else CLOSURE_SECTIONS
-    return [s for s in src if s["stage"] == stage_key]
+    return [s for s in _sections_for_kind(kind) if s.get("stage") == stage_key]
 
 
 def all_section_keys(kind: str) -> list[str]:
-    src = DOCUMENT_SECTIONS if kind == "document" else CLOSURE_SECTIONS
-    return [s["key"] for s in src]
+    return [s["key"] for s in _sections_for_kind(kind)]
 
 
 def validate_section_data(kind: str, key: str, data: dict) -> dict:
@@ -475,15 +586,34 @@ def _coerce_field(fdef: FieldDef, val):
     if t == "table":
         if not isinstance(val, list):
             raise serializers.ValidationError({fdef["key"]: "يجب أن يكون جدولاً"})
-        cols = {c["key"] for c in fdef.get("columns") or []}
+        col_defs = {c["key"]: c for c in fdef.get("columns") or []}
         rows = []
         for i, row in enumerate(val):
             if not isinstance(row, dict):
                 raise serializers.ValidationError({fdef["key"]: f"صف {i + 1} غير صالح"})
             cleaned_row = {}
-            for col in cols:
-                cell = row.get(col)
-                cleaned_row[col] = "" if cell is None else str(cell)
+            for col_key, col_def in col_defs.items():
+                if col_def.get("computed"):
+                    continue
+                cell = row.get(col_key)
+                ctype = col_def.get("type") or "text"
+                if ctype == "number":
+                    if cell is None or cell == "":
+                        cleaned_row[col_key] = 0
+                    else:
+                        try:
+                            cleaned_row[col_key] = float(cell)
+                        except (TypeError, ValueError) as exc:
+                            raise serializers.ValidationError(
+                                {fdef["key"]: f"صف {i + 1}: رقم غير صالح لـ {col_def.get('label') or col_key}"}
+                            ) from exc
+                else:
+                    cleaned_row[col_key] = "" if cell is None else str(cell)
+            for col_key, col_def in col_defs.items():
+                computed = col_def.get("computed") or ""
+                if computed.startswith("sum:"):
+                    parts = [p.strip() for p in computed[4:].split(",") if p.strip()]
+                    cleaned_row[col_key] = float(sum(float(cleaned_row.get(p) or 0) for p in parts))
             rows.append(cleaned_row)
         return rows
     return str(val)
@@ -507,12 +637,16 @@ def schema_payload() -> dict:
     def pack(sections: list[dict]) -> list[dict]:
         out = []
         for s in sections:
+            fields = []
+            for f in s["fields"]:
+                packed = dict(f)
+                fields.append(packed)
             out.append(
                 {
                     "key": s["key"],
                     "label": s["label"],
                     "stage": s["stage"],
-                    "fields": s["fields"],
+                    "fields": fields,
                 }
             )
         return out
@@ -522,4 +656,5 @@ def schema_payload() -> dict:
         "workspaces": list(WORKSPACES),
         "document": pack(DOCUMENT_SECTIONS),
         "closure": pack(CLOSURE_SECTIONS),
+        "card": pack(CARD_SECTIONS),
     }

@@ -50,6 +50,8 @@ class ProjectDossier(models.Model):
     projects_committee_name = models.CharField(max_length=200, blank=True, help_text="عرض فقط")
     sponsor_name = models.CharField(max_length=200, blank=True)
     sponsor_email = models.EmailField(blank=True)
+    execution_start = models.DateField(null=True, blank=True)
+    execution_end = models.DateField(null=True, blank=True)
     manager = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -82,6 +84,7 @@ class ProjectDossier(models.Model):
 
 class DossierSection(models.Model):
     KIND_CHOICES = [
+        ("card", "بطاقة المشروع"),
         ("document", "وثيقة المشروع"),
         ("closure", "وثيقة الإغلاق"),
     ]

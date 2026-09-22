@@ -17,7 +17,13 @@ from projectdocs.models import (
     ProjectDossier,
     StageActivity,
 )
-from projectdocs.sections import DOCUMENT_SECTIONS, CLOSURE_SECTIONS, schema_payload, validate_section_data
+from projectdocs.sections import (
+    CARD_SECTIONS,
+    DOCUMENT_SECTIONS,
+    CLOSURE_SECTIONS,
+    schema_payload,
+    validate_section_data,
+)
 from projectdocs.services import (
     allocate_budget_line,
     complete_activity,
@@ -42,10 +48,12 @@ class SectionsCatalogTests(APITestCase):
     def test_catalog_counts(self):
         self.assertEqual(len(DOCUMENT_SECTIONS), 15)
         self.assertEqual(len(CLOSURE_SECTIONS), 11)
+        self.assertEqual(len(CARD_SECTIONS), 5)
         payload = schema_payload()
         self.assertEqual(len(payload["stages"]), 5)
         self.assertEqual(len(payload["document"]), 15)
         self.assertEqual(len(payload["closure"]), 11)
+        self.assertEqual(len(payload["card"]), 5)
 
     def test_validate_rejects_unknown_keys(self):
         with self.assertRaises(Exception):
@@ -58,6 +66,26 @@ class SectionsCatalogTests(APITestCase):
             {"indicators": [{"name": "أ", "baseline": "0", "target": "10", "unit": "%"}]},
         )
         self.assertEqual(cleaned["indicators"][0]["name"], "أ")
+
+    def test_card_phase_budget_total_computed(self):
+        cleaned = validate_section_data(
+            "card",
+            "phases",
+            {
+                "rows": [
+                    {
+                        "activity_type": "تدريب",
+                        "executor": "فريق",
+                        "start_date": "2026-01-01",
+                        "end_date": "2026-01-31",
+                        "output": "دورة",
+                        "budget_association": 100,
+                        "budget_donation": 50,
+                    }
+                ]
+            },
+        )
+        self.assertEqual(cleaned["rows"][0]["budget_total"], 150.0)
 
 
 class DossierApiTests(APITestCase):
@@ -90,7 +118,7 @@ class DossierApiTests(APITestCase):
         )
         self.assertEqual(res.status_code, 201, res.content)
         self.assertTrue(res.data["code"].startswith("PRJ-"))
-        self.assertEqual(len(res.data["sections"]), 26)
+        self.assertEqual(len(res.data["sections"]), 31)
         self.assertEqual(len(res.data["stages"]), 5)
         self.assertEqual(len(res.data["workspaces"]), 5)
         self.assertEqual(res.data["workspaces"][0]["key"], "card")
@@ -547,6 +575,105 @@ class DossierRestructureTests(APITestCase):
         self.assertGreaterEqual(len(cmp.data["pairs"]), 5)
         payload = document_closure_comparison(ProjectDossier.objects.get(pk=dossier_id))
         self.assertEqual(payload["pairs"][0]["document_key"], "basics")
+
+    def test_card_fields_tables_and_info_page(self):
+        """حفظ حقول البطاقة وجداولها وعكسها في صفحة المعلومات. O(1)."""
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/projectdocs/dossiers/",
+            {
+                "name": "بطاقة كاملة",
+                "sponsor_email": "card@test.com",
+                "sponsor_name": "راعٍ",
+                "manager_id": self.manager.id,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        dossier_id = res.data["id"]
+        card_keys = {s["key"] for s in res.data["sections"] if s["kind"] == "card"}
+        self.assertEqual(
+            card_keys,
+            {"indicators", "phases", "outputs", "similar_experiences", "project_budget"},
+        )
+
+        patch = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/",
+            {
+                "marketing_name": "اسم العرض",
+                "department": "التكافل",
+                "section": "القسم أ",
+                "strategic_goal": "هدف",
+                "location": "الرياض",
+                "execution_start": "2026-03-01",
+                "execution_end": "2026-09-01",
+                "sponsor_name": "مدير الإدارة",
+                "sponsor_email": "card@test.com",
+            },
+            format="json",
+        )
+        self.assertEqual(patch.status_code, 200, patch.content)
+        self.assertEqual(patch.data["execution_start"], "2026-03-01")
+        self.assertEqual(patch.data["marketing_name"], "اسم العرض")
+
+        ind = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/card/indicators/",
+            {
+                "data": {
+                    "rows": [
+                        {"goal": "تمكين", "indicator_name": "عدد المستفيدين", "target": "100"},
+                    ]
+                }
+            },
+            format="json",
+        )
+        self.assertEqual(ind.status_code, 200, ind.content)
+
+        ph = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/card/phases/",
+            {
+                "data": {
+                    "rows": [
+                        {
+                            "activity_type": "تنفيذ",
+                            "executor": "فريق أ",
+                            "start_date": "2026-03-01",
+                            "end_date": "2026-04-01",
+                            "output": "تقرير",
+                            "budget_association": 200,
+                            "budget_donation": 100,
+                        }
+                    ]
+                }
+            },
+            format="json",
+        )
+        self.assertEqual(ph.status_code, 200, ph.content)
+        self.assertEqual(ph.data["data"]["rows"][0]["budget_total"], 300.0)
+
+        bud = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/card/project_budget/",
+            {
+                "data": {
+                    "rows": [{"from_association": 200, "from_donation": 100}],
+                }
+            },
+            format="json",
+        )
+        self.assertEqual(bud.status_code, 200, bud.content)
+        self.assertEqual(bud.data["data"]["rows"][0]["total"], 300.0)
+
+        info = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/info-page/")
+        self.assertEqual(info.status_code, 200)
+        self.assertEqual(info.data["name"], "اسم العرض")
+        self.assertEqual(len(info.data["indicators"]), 1)
+        self.assertEqual(info.data["indicators"][0]["indicator_name"], "عدد المستفيدين")
+        self.assertEqual(info.data["phases_budget_summary"]["total"], 300.0)
+        self.assertEqual(info.data["project_budget"][0]["total"], 300.0)
+
+        # لا مسار كتابة على info-page
+        bad = self.client.post(f"/api/projectdocs/dossiers/{dossier_id}/info-page/", {}, format="json")
+        self.assertIn(bad.status_code, (405, 404))
 
     def test_no_excel_routes_in_projectdocs(self):
         from django.urls import get_resolver

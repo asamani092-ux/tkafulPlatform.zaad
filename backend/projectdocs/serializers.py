@@ -179,6 +179,8 @@ class ProjectDossierSerializer(serializers.ModelSerializer):
             "projects_committee_name",
             "sponsor_name",
             "sponsor_email",
+            "execution_start",
+            "execution_end",
             "manager",
             "manager_username",
             "manager_email",
