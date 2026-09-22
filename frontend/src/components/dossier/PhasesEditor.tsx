@@ -120,13 +120,15 @@ export default function PhasesEditor({
         >
           {/* العمود الأساسي — لون مميَّز */}
           {primaryCol && (
-            <div className="border-b border-primary/15 bg-primary/10 px-4 py-3 sm:px-5">
-              <FieldInput
-                col={primaryCol}
-                value={row[primaryCol.key] ?? ""}
-                disabled={disabled}
-                onChange={(v) => updateRow(i, primaryCol.key, v)}
-              />
+            <div className="border-b border-primary/20 bg-primary/[0.12] px-4 py-3 sm:px-5">
+              <div className="border-r-4 border-primary pe-3">
+                <FieldInput
+                  col={primaryCol}
+                  value={row[primaryCol.key] ?? ""}
+                  disabled={disabled}
+                  onChange={(v) => updateRow(i, primaryCol.key, v)}
+                />
+              </div>
             </div>
           )}
 
