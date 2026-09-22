@@ -47,11 +47,16 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = ProjectDossier.objects.select_related("project", "manager").prefetch_related(
-            "sections", "stages"
+            "sections", "stages", "workspaces"
         )
         user = self.request.user
         if is_super_admin(user):
             return qs
+        from django.db.models import Q
+
+        email = (getattr(user, "email", "") or "").strip()
+        if email:
+            return qs.filter(Q(manager=user) | Q(sponsor_email__iexact=email))
         return qs.filter(manager=user)
 
     def get_serializer_class(self):
@@ -76,11 +81,12 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
                 sponsor_name=data.get("sponsor_name") or "",
                 sponsor_email=data.get("sponsor_email") or "",
                 description=data.get("description") or "",
+                manager_id=data.get("manager_id"),
                 actor=request.user,
                 request=request,
             )
             return Response(
-                ProjectDossierSerializer(dossier).data,
+                ProjectDossierSerializer(dossier, context={"request": request}).data,
                 status=status.HTTP_201_CREATED,
             )
         project_id = data.pop("project_id", None)
@@ -97,7 +103,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             request=request,
         )
         return Response(
-            ProjectDossierSerializer(dossier).data,
+            ProjectDossierSerializer(dossier, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -129,7 +135,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             dossier.manager_id = mid or None
         dossier.recompute_budget_total()
         dossier.save()
-        return Response(ProjectDossierSerializer(dossier).data)
+        return Response(ProjectDossierSerializer(dossier, context={"request": request}).data)
 
     @action(detail=False, methods=["get"], url_path=r"by-project/(?P<slug>[^/.]+)")
     def by_project(self, request, slug=None):
@@ -137,7 +143,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         if not dossier:
             return Response({"detail": "لا يوجد ملف"}, status=404)
         self.check_object_permissions(request, dossier)
-        return Response(ProjectDossierSerializer(dossier).data)
+        return Response(ProjectDossierSerializer(dossier, context={"request": request}).data)
 
     @action(detail=True, methods=["patch"], url_path=r"sections/(?P<kind>[^/.]+)/(?P<key>[^/.]+)")
     def patch_section(self, request, pk=None, kind=None, key=None):
@@ -152,6 +158,40 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             user=request.user,
         )
         return Response(DossierSectionSerializer(section).data)
+
+    @action(detail=True, methods=["post"], url_path=r"workspaces/(?P<key>[^/.]+)/submit")
+    def submit_workspace(self, request, pk=None, key=None):
+        dossier = self.get_object()
+        approval = services.submit_workspace(
+            dossier=dossier,
+            key=key,
+            user=request.user,
+            request=request,
+        )
+        return Response(
+            {
+                "detail": "أُرسل للاعتماد",
+                "approval_id": approval.id,
+                "expires_at": approval.expires_at,
+                "token_hint": approval.token[:8],
+            },
+            status=201,
+        )
+
+    @action(detail=True, methods=["post"], url_path=r"workspaces/(?P<key>[^/.]+)/decide")
+    def decide_workspace(self, request, pk=None, key=None):
+        dossier = self.get_object()
+        ser = DecideSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        approval = services.admin_decide_workspace(
+            dossier=dossier,
+            key=key,
+            decision=ser.validated_data["decision"],
+            note=ser.validated_data.get("note") or "",
+            user=request.user,
+            request=request,
+        )
+        return Response({"decision": approval.decision, "note": approval.note})
 
     @action(detail=True, methods=["post"], url_path=r"stages/(?P<order>[0-9]+)/submit")
     def submit_stage(self, request, pk=None, order=None):
@@ -213,7 +253,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         if stage_id and not stage:
             return Response({"stage": "مرحلة لا تتبع هذا الملف"}, status=400)
         try:
-            services.assert_stage_open_for_work(stage)
+            services.assert_workspace_open_for_work(request.user, dossier, "plan")
         except ValidationError as exc:
             return Response(exc.detail, status=400)
         ser = StageActivitySerializer(data=data)
@@ -231,7 +271,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         services.assert_can_edit(request.user, dossier)
         activity = get_object_or_404(StageActivity, pk=activity_id, stage__dossier=dossier)
         try:
-            services.assert_stage_open_for_work(activity.stage)
+            services.assert_workspace_open_for_work(request.user, dossier, "plan")
         except ValidationError as exc:
             return Response(exc.detail, status=400)
         if request.method == "DELETE":

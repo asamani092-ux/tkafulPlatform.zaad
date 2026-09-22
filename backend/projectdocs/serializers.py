@@ -7,6 +7,7 @@ from .models import (
     DossierAttachment,
     DossierSection,
     DossierStage,
+    DossierWorkspace,
     ProjectDossier,
     StageActivity,
 )
@@ -64,6 +65,34 @@ class DossierStageSerializer(serializers.ModelSerializer):
             "return_note",
             "approved_at",
         )
+
+
+class DossierWorkspaceSerializer(serializers.ModelSerializer):
+    label = serializers.SerializerMethodField()
+    needs_approval = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DossierWorkspace
+        fields = (
+            "id",
+            "order",
+            "key",
+            "label",
+            "status",
+            "return_note",
+            "approved_at",
+            "needs_approval",
+        )
+
+    def get_label(self, obj):
+        from .sections import WORKSPACES
+
+        return next((w["label"] for w in WORKSPACES if w["key"] == obj.key), obj.key)
+
+    def get_needs_approval(self, obj):
+        from .sections import WORKSPACES
+
+        return next((bool(w.get("needs_approval")) for w in WORKSPACES if w["key"] == obj.key), True)
 
 
 class StageActivitySerializer(serializers.ModelSerializer):
@@ -125,10 +154,12 @@ class DossierAttachmentSerializer(serializers.ModelSerializer):
 class ProjectDossierSerializer(serializers.ModelSerializer):
     sections = DossierSectionSerializer(many=True, read_only=True)
     stages = DossierStageSerializer(many=True, read_only=True)
+    workspaces = serializers.SerializerMethodField()
     budget_lines = BudgetLineSerializer(many=True, read_only=True)
     project_slug = serializers.CharField(source="project.slug", read_only=True)
     project_name = serializers.CharField(source="project.name", read_only=True)
     manager_username = serializers.CharField(source="manager.username", read_only=True, default="")
+    bypass_workspace_gates = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectDossier
@@ -159,10 +190,26 @@ class ProjectDossierSerializer(serializers.ModelSerializer):
             "budget_lines",
             "sections",
             "stages",
+            "workspaces",
+            "bypass_workspace_gates",
             "created_at",
             "updated_at",
         )
         read_only_fields = ("budget_total", "current_stage", "created_at", "updated_at", "code")
+
+    def get_workspaces(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        from .services import workspaces_payload
+
+        return workspaces_payload(obj, user=user)
+
+    def get_bypass_workspace_gates(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        from .services import can_bypass_workspace_gates
+
+        return can_bypass_workspace_gates(user, obj) if user else False
 
 
 class ProjectDossierListSerializer(serializers.ModelSerializer):

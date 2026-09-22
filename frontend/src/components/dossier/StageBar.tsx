@@ -1,12 +1,4 @@
-import { STAGE_STATUS_AR, type DossierStageRow } from "./types";
-
-const STAGE_LABEL: Record<string, string> = {
-  define: "تحديد وتعريف المشروع",
-  prepare: "إعداد المشروع",
-  plan: "التخطيط للمشروع",
-  execute: "تنفيذ المشروع",
-  close: "إغلاق المشروع",
-};
+import { STAGE_STATUS_AR } from "./types";
 
 const tone: Record<string, string> = {
   locked: "bg-gray-100 text-gray-500 border-gray-200",
@@ -16,37 +8,63 @@ const tone: Record<string, string> = {
   returned: "bg-rose-50 text-rose-900 border-rose-300",
 };
 
-type Props = {
-  stages: DossierStageRow[];
-  currentKey?: string;
+export type WorkspaceRow = {
+  id: number;
+  order: number;
+  key: string;
+  label: string;
+  status: string;
+  return_note?: string;
+  needs_approval?: boolean;
 };
 
-export default function StageBar({ stages, currentKey }: Props) {
-  const ordered = [...stages].sort((a, b) => a.order - b.order);
+type Props = {
+  workspaces: WorkspaceRow[];
+  currentKey?: string;
+  /** مشرف أو مدير الإدارة — يفتح كل التبويبات للتصفح/العمل */
+  bypassLocked?: boolean;
+  onSelect?: (key: string) => void;
+};
+
+/** شريط تسلسل التبويبات (بطاقة → وثيقة → خطة → إغلاق → لوحة). */
+export default function StageBar({ workspaces, currentKey, bypassLocked = false, onSelect }: Props) {
+  const ordered = [...workspaces].sort((a, b) => a.order - b.order);
   const active = ordered.find((s) => s.status === "active" || s.status === "returned" || s.status === "submitted");
   return (
     <div className="space-y-2" dir="rtl">
       <ol className="flex flex-wrap gap-2">
         {ordered.map((s) => {
-          const isCurrent = s.key === currentKey || s.status === "active" || s.status === "returned";
+          const isCurrent = s.key === currentKey;
+          const lockedForUser = s.status === "locked" && !bypassLocked;
           return (
-            <li
-              key={s.id}
-              className={`min-w-[7.5rem] flex-1 rounded-xl border px-3 py-2 text-center ${tone[s.status] || tone.locked} ${
-                isCurrent ? "ring-2 ring-primary/30" : ""
-              }`}
-            >
-              <div className="text-xs font-bold">{STAGE_LABEL[s.key] || s.key}</div>
-              <div className="mt-0.5 text-[11px]">{STAGE_STATUS_AR[s.status] || s.status}</div>
+            <li key={s.id} className="min-w-[7.5rem] flex-1">
+              <button
+                type="button"
+                disabled={lockedForUser || !onSelect}
+                onClick={() => {
+                  if (!lockedForUser && onSelect) onSelect(s.key);
+                }}
+                className={`w-full rounded-xl border px-3 py-2 text-center ${tone[s.status] || tone.locked} ${
+                  isCurrent ? "ring-2 ring-primary/30" : ""
+                } ${lockedForUser ? "cursor-not-allowed opacity-80" : "cursor-pointer"}`}
+              >
+                <div className="text-xs font-bold">{s.label || s.key}</div>
+                <div className="mt-0.5 text-[11px]">{STAGE_STATUS_AR[s.status] || s.status}</div>
+              </button>
             </li>
           );
         })}
       </ol>
-      {active && (
+      {active && active.needs_approval !== false && active.key !== "card" && (
         <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900">
           {active.status === "submitted"
-            ? `بانتظار اعتماد المدير لهذه المرحلة فقط (${STAGE_LABEL[active.key] || active.key}) — المرحلة التالية تبقى مقفلة.`
-            : `اعتماد هذه المرحلة فقط (${STAGE_LABEL[active.key] || active.key}) — المرحلة التالية لا تُفتح إلا بعد اعتماد المدير عبر البريد أو زر المشرف.`}
+            ? `بانتظار اعتماد مدير الإدارة لتبويب «${active.label}» — التبويب التالي يبقى مقفلاً.`
+            : `أرسل تبويب «${active.label}» لاعتماد مدير الإدارة — البطاقة بلا اعتماد.`}
+        </p>
+      )}
+      {bypassLocked && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          حسابك (مشرف أو مدير الإدارة) يفتح كل التبويبات — التسلسل يبقى ظاهراً للموظفين.
         </p>
       )}
     </div>

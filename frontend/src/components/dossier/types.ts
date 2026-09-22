@@ -76,6 +76,16 @@ export interface ProjectDossier {
   budget_total: string | number;
   sections: DossierSectionRow[];
   stages: DossierStageRow[];
+  workspaces?: Array<{
+    id: number;
+    order: number;
+    key: string;
+    label: string;
+    status: string;
+    return_note: string;
+    needs_approval: boolean;
+  }>;
+  bypass_workspace_gates?: boolean;
 }
 
 export interface StageActivity {

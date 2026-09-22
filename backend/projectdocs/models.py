@@ -209,7 +209,9 @@ class ApprovalRequest(models.Model):
         ("card", "البطاقة"),
         ("stage", "مرحلة"),
         ("document", "الوثيقة"),
+        ("plan", "الخطة التنفيذية"),
         ("closure", "الإغلاق"),
+        ("board", "لوحة المشروع"),
     ]
     DECISION_CHOICES = [
         ("pending", "بانتظار"),
@@ -298,6 +300,43 @@ class DossierAttachment(models.Model):
 
     def __str__(self):
         return self.title or f"attachment-{self.pk}"
+
+
+class DossierWorkspace(models.Model):
+    """بوابة تبويب ملف المشروع (بطاقة بلا اعتماد؛ الباقي متسلسل)."""
+
+    KEY_CHOICES = [
+        ("card", "البطاقة"),
+        ("document", "الوثيقة"),
+        ("plan", "الخطة التنفيذية"),
+        ("closure", "الإغلاق"),
+        ("board", "لوحة المشروع"),
+    ]
+    STATUS_CHOICES = [
+        ("locked", "مقفلة"),
+        ("active", "نشطة"),
+        ("submitted", "بانتظار الاعتماد"),
+        ("approved", "معتمدة"),
+        ("returned", "معادة للتعديل"),
+    ]
+
+    dossier = models.ForeignKey(ProjectDossier, on_delete=models.CASCADE, related_name="workspaces")
+    order = models.PositiveSmallIntegerField()
+    key = models.CharField(max_length=20, choices=KEY_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="locked")
+    return_note = models.TextField(blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["order"]
+        constraints = [
+            models.UniqueConstraint(fields=["dossier", "order"], name="uq_dossier_workspace_order"),
+            models.UniqueConstraint(fields=["dossier", "key"], name="uq_dossier_workspace_key"),
+        ]
+
+    def __str__(self):
+        return f"{self.dossier_id}:{self.key}:{self.status}"
 
 
 class BudgetLine(models.Model):
