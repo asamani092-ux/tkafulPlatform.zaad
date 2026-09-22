@@ -12,3 +12,7 @@ export const EXTERNAL_STORE_URL =
 /** إظهار نموذج طلب سقيا الماء في الواجهة العامة — false لإخفاء الروابط والنموذج. */
 export const WATER_SUPPLY_FORM_ENABLED =
   import.meta.env.VITE_ENABLE_WATER_SUPPLY_FORM !== "false";
+
+/** مفتاح Google Maps JavaScript API — فارغ = رسالة عربية بدل تحطيم الصفحة. */
+export const GOOGLE_MAPS_API_KEY =
+  import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";

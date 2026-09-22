@@ -15,6 +15,7 @@ const TARGETS: Record<string, string> = {
   "/signin": "unified-signin",
   "/projects/saqya": "saqya-landing",
   "/projects/saqya/sponsorships": "saqya-portal",
+  "/Admin/settings": "platform-settings",
 };
 
 /** التوافق الخلفي — نفس خريطة ACTIVE_LEGACY_REDIRECTS في App.tsx. */

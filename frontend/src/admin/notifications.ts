@@ -8,8 +8,10 @@ export const EVENT_AR: Record<string, string> = {
   water_supply: "طلبات سقيا الماء",
   sponsorship: "الكفالات",
   volunteer_application: "طلبات التطوع",
+  volunteer_opportunity: "فرص التطوع",
+  volunteer_decision: "قرارات طلبات التطوع",
+  suggestion_received: "الاقتراحات",
   project_status: "حالة المشاريع",
-  broadcast: "الرسائل العامة",
 };
 
 export const EVENT_OPTIONS = Object.entries(EVENT_AR).map(([value, label]) => ({ value, label }));

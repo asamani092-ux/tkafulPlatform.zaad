@@ -30,7 +30,7 @@ describe("labelAr لا يُسرّب المفتاح الخام", () => {
   });
 
   it("يعيد التسمية العربية عند الوجود", () => {
-    expect(labelAr(ROLE_AR, "admin")).toBe("مشرف عام");
+    expect(labelAr(ROLE_AR, "admin")).toBe("مدير النظام");
     expect(labelAr(SERVICE_STATUS_AR, "PENDING")).toBe("قيد المراجعة");
   });
 });

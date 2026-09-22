@@ -26,11 +26,16 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
 DEBUG = os.environ.get("DEBUG", "True") == "True"
 
 # Example:
-# ALLOWED_HOSTS="takaful-backend.onrender.com,localhost,127.0.0.1"
-ALLOWED_HOSTS = os.environ.get(
-    "ALLOWED_HOSTS",
-    "localhost,127.0.0.1"
-).split(",")
+# ALLOWED_HOSTS="tkaful.alzaad.org.sa,localhost,127.0.0.1"
+# دائماً نضيف localhost/127.0.0.1 لفحص الصحة داخل الحاوية (Coolify healthcheck)
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if h.strip()
+]
+for _h in ("localhost", "127.0.0.1"):
+    if _h not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_h)
 
 
 # ===========================
@@ -66,6 +71,7 @@ INSTALLED_APPS = [
     "volunteering",  # التطوع (منقول من takaful_app — D-02)
     "services",      # الخدمات (Phase A4)
     "reporting",     # التقارير والإحصائيات (Phase A4)
+    "projectdocs",   # ملف المشروع الداخلي (بطاقة/وثيقة/خطة/إغلاق)
 ]
 
 
@@ -162,9 +168,24 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 SAQYA_MAX_UPLOAD_SIZE = 16 * 1024 * 1024  # 16MB
 
-# البريد: console محلياً، SMTP عبر البيئة في الإنتاج (لإشعارات سير العمل)
-EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@alzad.org")
+# البريد: console محلياً، SMTP عبر البيئة في الإنتاج (أوت لوك / Office 365)
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
+)
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.office365.com")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() in ("1", "true", "yes")
+EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False").lower() in ("1", "true", "yes")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "tkaful@alzaad.org.sa")
+SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
+# طارئ فقط: تخطّي OTP عند الدخول إذا فشل البريد أو أثناء ضبط SMTP
+LOGIN_OTP_DISABLED = os.environ.get("LOGIN_OTP_DISABLED", "False").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 EXTERNAL_STORE_URL = os.environ.get("EXTERNAL_STORE_URL", "")
 
@@ -283,9 +304,14 @@ if not DEBUG:
             "SECRET_KEY must be set via environment in production (DEBUG=False)."
         )
 
-    # الثقة بترويسة البروكسي لتحديد HTTPS (Render/Reverse proxy)
+    # الثقة بترويسة البروكسي لتحديد HTTPS (Coolify / Nginx)
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-    SECURE_SSL_REDIRECT = True
+    USE_X_FORWARDED_HOST = True
+    SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "True").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
     # HSTS
     SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30  # 30 يوماً

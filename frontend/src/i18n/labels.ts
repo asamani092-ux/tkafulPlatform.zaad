@@ -1,9 +1,10 @@
 /** تسميات الأدوار العربية — مصدر حقيقة للواجهة. */
 export const ROLE_AR: Record<string, string> = {
-  admin: "مشرف عام",
-  manager: "مدير",
+  admin: "مدير النظام",
   employee: "موظف",
-  user: "متطوّع",
+  user: "متطوع",
+  // توافق عرض للحسابات القديمة
+  manager: "موظف (قديم: مدير)",
   beneficiary: "مستفيد",
   donor: "متبرّع",
   supplier: "مورّد",
@@ -11,11 +12,11 @@ export const ROLE_AR: Record<string, string> = {
   project_admin: "مدير مشروع",
   project_editor: "محرر",
   project_viewer: "مشاهد",
-  super_admin: "مشرف عام",
+  super_admin: "مدير النظام",
 };
 
 export const ROLE_OPTIONS = Object.entries(ROLE_AR)
-  .filter(([v]) => !["project_admin", "project_editor", "project_viewer", "super_admin"].includes(v))
+  .filter(([v]) => ["admin", "employee", "user"].includes(v))
   .map(([value, label]) => ({ value, label }));
 
 /** تسميات أنواع أهداف سجل النشاط. */

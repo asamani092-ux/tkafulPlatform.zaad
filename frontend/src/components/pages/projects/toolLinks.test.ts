@@ -45,6 +45,16 @@ describe("project tool links", () => {
     );
   });
 
+  it("routes volunteering to project join page and respects show_opportunities", () => {
+    expect(resolveToolLink("volunteering", base)).toBe("/projects/p1/volunteer");
+    expect(
+      resolveToolLink("volunteering", {
+        ...base,
+        toolConfig: { volunteering: { show_opportunities: false } },
+      }),
+    ).toBeNull();
+  });
+
   it("returns null for reports (no dead public button)", () => {
     expect(resolveToolLink("reports", base)).toBeNull();
   });

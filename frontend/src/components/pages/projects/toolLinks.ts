@@ -39,8 +39,10 @@ export function resolveToolLink(tool: string, ctx: ToolLinkContext): string | nu
       return ctx.mapsCount > 0 ? `/projects/${ctx.slug}/map` : null;
     case "sponsorships":
       return `/projects/${ctx.slug}/sponsorships`;
-    case "volunteering":
-      return "/volunteers";
+    case "volunteering": {
+      if (ctx.toolConfig?.volunteering?.show_opportunities === false) return null;
+      return `/projects/${ctx.slug}/volunteer`;
+    }
     case "services":
       return resolveServicesLink(ctx);
     default:

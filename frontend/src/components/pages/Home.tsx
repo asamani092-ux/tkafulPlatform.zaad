@@ -82,7 +82,7 @@ export default function Home() {
               <Link to="/map" className="btn-register inline-flex" style={{ color: "var(--text-brand)" }}>خارطة الأثر</Link>
             )}
             {settings.show_volunteering && (
-              <Link to="/volunteers" className="btn-register inline-flex" style={{ color: "var(--text-brand)" }}>تطوّع معنا</Link>
+              <Link to="/signup" className="btn-register inline-flex" style={{ color: "var(--text-brand)" }}>تطوّع معنا</Link>
             )}
           </div>
         </div>

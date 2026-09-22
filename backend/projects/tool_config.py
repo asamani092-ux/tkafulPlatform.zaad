@@ -28,6 +28,10 @@ TOOL_CONFIG_SCHEMA: dict[str, dict[str, str]] = {
     },
     "volunteering": {
         "show_opportunities": "bool",
+        "location": "str",
+        "requirements": "str",
+        "estimated_hours": "int",
+        "duration": "str",
     },
     "services": {
         "request_form": "str",  # slug: legacy service|water_supply أو أي slug نموذج مخصّص
@@ -80,6 +84,24 @@ TOOL_CONFIG_UI: dict[str, dict[str, dict]] = {
     "volunteering": {
         "show_opportunities": {
             "label": "إظهار فرص التطوع",
+            "hint": "يعرض زر الانضمام في صفحة المشروع العامة",
+        },
+        "location": {
+            "label": "موقع الفرصة",
+            "hint": "يظهر للزائر في صفحة الانضمام ونافذة التأكيد",
+        },
+        "requirements": {
+            "label": "متطلبات التطوع",
+            "hint": "نص يظهر في نافذة التأكيد",
+        },
+        "estimated_hours": {
+            "label": "الساعات المطلوبة",
+            "hint": "عدد صحيح ≥ 0",
+            "min": 0,
+        },
+        "duration": {
+            "label": "المدة الزمنية",
+            "hint": "مثال: يومان · أسبوع",
         },
     },
     "services": {

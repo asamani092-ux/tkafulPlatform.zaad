@@ -46,12 +46,14 @@ const SaqyaHome = lazy(() => import("./components/pages/saqya"));
 
 const ProjectLanding = lazy(() => import("./components/pages/projects/ProjectLanding"));
 const ProjectMapPage = lazy(() => import("./components/pages/projects/ProjectMapPage"));
+const ProjectVolunteerJoin = lazy(() => import("./components/pages/projects/ProjectVolunteerJoin"));
+const ProjectDossierWorkspace = lazy(() => import("./components/pages/admin/ProjectDossierWorkspace"));
+const ApprovalReviewPage = lazy(() => import("./components/pages/approvals/ApprovalReviewPage"));
 const MapsAggregator = lazy(() => import("./components/pages/projects/MapsAggregator"));
 const PlatformProjects = lazy(() => import("./components/pages/admin/PlatformProjects"));
 const ProjectSponsorshipsAdmin = lazy(() => import("./components/pages/admin/ProjectSponsorshipsAdmin"));
 const MapsAdmin = lazy(() => import("./components/pages/admin/MapsAdmin"));
 const PlatformSettingsPage = lazy(() => import("./components/pages/admin/PlatformSettings"));
-const BroadcastAdmin = lazy(() => import("./components/pages/admin/BroadcastAdmin"));
 const RolesAdmin = lazy(() => import("./components/pages/admin/RolesAdmin"));
 const ActivityLogAdmin = lazy(() => import("./components/pages/admin/ActivityLogAdmin"));
 const ProjectTypesAdmin = lazy(() => import("./components/pages/admin/ProjectTypesAdmin"));
@@ -128,9 +130,10 @@ function AppContent() {
 
           {/* 1. المشاريع — الإنشاء داخل القائمة؛ /create يُحوّل توافقياً (domains.ts) */}
           <Route path="/Admin/projects" element={<Lazy><ProtectedRoute requiredRole="staff"><PlatformProjects /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/projects/:slug/dossier" element={<Lazy><ProtectedRoute requiredRole="staff"><ProjectDossierWorkspace /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/projects/:slug/sponsorships" element={<Lazy><ProtectedRoute requiredRole="staff"><ProjectSponsorshipsAdmin /></ProtectedRoute></Lazy>} />
 
-          {/* 2. المستخدمون */}
+          {/* 2. إدارة المستخدمين */}
           <Route path="/Admin/users" element={<Lazy><ProtectedRoute requiredRole="admin"><UsersAdmin /></ProtectedRoute></Lazy>} />
 
           {/* 3. المتطوعون — صفحة موحّدة بثلاثة أقسام (المسارات القديمة تفتح القسم المناسب) */}
@@ -156,7 +159,6 @@ function AppContent() {
 
           {/* 9. إعدادات المنصّة */}
           <Route path="/Admin/settings" element={<Lazy><ProtectedRoute requiredRole="admin"><PlatformSettingsPage /></ProtectedRoute></Lazy>} />
-          <Route path="/Admin/settings/broadcast" element={<Lazy><ProtectedRoute requiredRole="admin"><BroadcastAdmin /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/settings/roles" element={<Lazy><ProtectedRoute requiredRole="admin"><RolesAdmin /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/settings/activity" element={<Lazy><ProtectedRoute requiredRole="admin"><ActivityLogAdmin /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/settings/project-types" element={<Lazy><ProtectedRoute requiredRole="admin"><ProjectTypesAdmin /></ProtectedRoute></Lazy>} />
@@ -167,9 +169,12 @@ function AppContent() {
           ))}
 
           {/* —— صفحات المشاريع العامة —— */}
-          <Route path="/projects/:slug" element={<Lazy><ProjectLanding /></Lazy>} />
+          {/* المسارات الفرعية قبل :slug حتى لا تُلتقط كمعرّف مشروع */}
+          <Route path="/approvals/:token" element={<Lazy><ApprovalReviewPage /></Lazy>} />
           <Route path="/projects/:slug/map" element={<Lazy><ProjectMapPage /></Lazy>} />
+          <Route path="/projects/:slug/volunteer" element={<Lazy><ProjectVolunteerJoin /></Lazy>} />
           <Route path="/projects/:slug/sponsorships" element={<Lazy><SaqyaHome /></Lazy>} />
+          <Route path="/projects/:slug" element={<Lazy><ProjectLanding /></Lazy>} />
           <Route path="/map" element={<Lazy><MapsAggregator /></Lazy>} />
           <Route path="/forms/:slug" element={<Lazy><DynamicFormPage /></Lazy>} />
 

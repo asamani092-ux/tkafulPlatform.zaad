@@ -4,7 +4,12 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from notifications.services import notify, EVENT_VOLUNTEER
+from notifications.services import (
+    notify,
+    notify_approved_volunteers_opportunity,
+    EVENT_VOLUNTEER,
+    EVENT_VOLUNTEER_DECISION,
+)
 
 logger = logging.getLogger(__name__)
 from django.contrib.auth.models import User
@@ -303,6 +308,10 @@ class VolunteeringProfileViewSet(viewsets.ModelViewSet):
         profile.save()
 
         logger.info("Project %s approved: %s -> ACTIVE", profile.project.id, old_status)
+        notify_approved_volunteers_opportunity(
+            project_name=profile.project.name,
+            project_id=profile.project.id,
+        )
 
         serializer = self.get_serializer(profile)
         return Response({
@@ -493,6 +502,15 @@ def accept_volunteer_request(request, volunteer_id):
     # ✅ UPDATED: Mark as approved
     volunteer.profile.is_approved = True
     volunteer.profile.save()
+
+    notify(
+        message="مرحباً بك متطوعاً معتمداً في المنصّة. يمكنك الآن استعراض فرص التطوع والتقديم عليها.",
+        users=[volunteer],
+        notification_type="success",
+        link="/user/opportunities",
+        event_type=EVENT_VOLUNTEER_DECISION,
+        email_subject="تم قبول انضمامك كمتطوع",
+    )
     
     return Response({
         "message": "Volunteer request accepted successfully",
@@ -515,8 +533,15 @@ def reject_volunteer_request(request, volunteer_id):
             status=status.HTTP_404_NOT_FOUND
         )
     
-    # Option: Delete the user or mark as rejected
     volunteer_name = volunteer.profile.name
+    volunteer_email = (volunteer.email or "").strip()
+    from notifications.services import _send_email
+    if volunteer_email:
+        _send_email(
+            volunteer_email,
+            "تحديث طلب الانضمام",
+            "نعتذر، لم يُقبل طلب انضمامك كمتطوع حالياً. يمكنك المحاولة لاحقاً. شكراً لاهتمامك.",
+        )
     volunteer.delete()
     
     return Response({
@@ -698,6 +723,14 @@ def apply_to_opportunity(request, project_id):
             notification_type="action",
             link="/Admin/volunteers/applications",
             event_type=EVENT_VOLUNTEER,
+        )
+        notify(
+            message=f"شكراً لتقديمك على مشروع «{platform_project.name}». طلبك قيد المراجعة وسنُعلمك بالنتيجة.",
+            users=[user],
+            notification_type="success",
+            link="/user/opportunities",
+            event_type=EVENT_VOLUNTEER,
+            email_subject="استلمنا طلب تطوعك",
         )
 
         return Response({
@@ -887,6 +920,15 @@ def accept_volunteer_application(request, application_id):
                 order=idx
             )
 
+        notify(
+            message=f"تم قبول طلب تطوعك في مشروع «{application.project.name}» وتم إنشاء مهمة لك.",
+            users=[application.volunteer],
+            notification_type="success",
+            link="/user/tasks",
+            event_type=EVENT_VOLUNTEER_DECISION,
+            email_subject="تم قبول طلب التطوع",
+        )
+
         return Response({
             'message': 'تم قبول الطلب وإنشاء مهمة للمتطوع',
             'task_id': task.id
@@ -921,6 +963,15 @@ def reject_volunteer_application(request, application_id):
         application.reviewed_at = timezone.now()
         application.admin_notes = request.data.get('admin_notes', '')
         application.save()
+
+        notify(
+            message=f"نأسف، لم يُقبل طلب تطوعك على مشروع «{application.project.name}» حالياً. شكراً لاهتمامك.",
+            users=[application.volunteer],
+            notification_type="warning",
+            link="/user/opportunities",
+            event_type=EVENT_VOLUNTEER_DECISION,
+            email_subject="تحديث طلب التطوع",
+        )
 
         return Response({
             'message': 'تم رفض الطلب'

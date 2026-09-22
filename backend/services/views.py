@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 
 from core.permissions import IsAdmin
 from core.throttles import PublicWriteRateThrottle
-from notifications.services import notify, EVENT_SERVICE_REQUEST, EVENT_WATER_SUPPLY
+from notifications.services import notify, EVENT_SERVICE_REQUEST, EVENT_WATER_SUPPLY, EVENT_SUGGESTION
 
 from .models import (
     Service, ServiceRequest, ServiceVolunteerApplication, Suggestion, WaterSupplyRequest,
@@ -162,6 +162,23 @@ def public_submit_suggestion(request):
         from .legacy_forms import ensure_system_forms, mirror_suggestion
         ensure_system_forms()
         mirror_suggestion(obj)
+        submitter = (getattr(obj, "submitted_by", None) or "").strip()
+        notify(
+            message=f"اقتراح جديد: {obj.title}",
+            roles=["admin"],
+            notification_type="action",
+            link="/Admin/requests/forms",
+            event_type=EVENT_SUGGESTION,
+        )
+        notify(
+            message="شكراً لاقتراحك! وصلنا وسنراجعه قريباً. نقدّر مشاركتك في تطوير المنصّة.",
+            users=[request.user] if getattr(request.user, "is_authenticated", False) else None,
+            notification_type="success",
+            link="/",
+            event_type=EVENT_SUGGESTION,
+            email_subject="شكراً لاقتراحك",
+            email_addresses=[submitter] if "@" in submitter else None,
+        )
         return Response({
             'message': 'تم استلام اقتراحك بنجاح'
         }, status=status.HTTP_201_CREATED)

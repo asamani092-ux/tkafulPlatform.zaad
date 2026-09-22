@@ -4,6 +4,8 @@ URL configuration for takaful_backend project.
 from django.contrib import admin
 from django.urls import path, include
 
+from projectdocs.views import public_approval_decide, public_approval_get
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("core.urls")),
@@ -19,4 +21,11 @@ urlpatterns = [
     path("api/map/", include("maps.legacy_urls")),
     path("api/platform/", include("projects.urls")),
     path("api/maps/", include("maps.urls")),
+    path("api/projectdocs/", include("projectdocs.urls")),
+    path("api/public/approvals/<str:token>/", public_approval_get, name="public-approval-get"),
+    path(
+        "api/public/approvals/<str:token>/decide/",
+        public_approval_decide,
+        name="public-approval-decide",
+    ),
 ]

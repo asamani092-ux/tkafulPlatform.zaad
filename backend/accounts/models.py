@@ -62,3 +62,34 @@ class Profile(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+class EmailOTP(models.Model):
+    """
+    رمز تحقق قصير الأجل عبر البريد (دخول / تسجيل فرصة).
+    التعقيد: إنشاء وتحقق O(1) بالبريد+الغرض.
+    """
+
+    PURPOSE_LOGIN = "login"
+    PURPOSE_REGISTER = "register"
+    PURPOSE_CHOICES = [
+        (PURPOSE_LOGIN, "دخول"),
+        (PURPOSE_REGISTER, "تسجيل فرصة"),
+    ]
+
+    email = models.EmailField(db_index=True)
+    code = models.CharField(max_length=6)
+    purpose = models.CharField(max_length=20, choices=PURPOSE_CHOICES)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "accounts_email_otp"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["email", "purpose", "-created_at"], name="idx_email_otp_lookup"),
+        ]
+
+    def __str__(self):
+        return f"{self.email}:{self.purpose}"
