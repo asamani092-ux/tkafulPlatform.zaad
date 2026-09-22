@@ -7,6 +7,7 @@ from .models import (
     DossierAttachment,
     DossierSection,
     DossierStage,
+    DossierWorkspace,
     ProjectDossier,
     StageActivity,
 )
@@ -27,6 +28,7 @@ class BudgetLineAdmin(admin.ModelAdmin):
 
 admin.site.register(DossierSection)
 admin.site.register(DossierStage)
+admin.site.register(DossierWorkspace)
 admin.site.register(StageActivity)
 admin.site.register(ApprovalRequest)
 admin.site.register(DossierAttachment)

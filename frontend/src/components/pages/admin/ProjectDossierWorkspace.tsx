@@ -25,14 +25,6 @@ import { downloadDossierPdf, type ExportPayload } from "../../../utils/dossierPd
 
 type Tab = "card" | "document" | "plan" | "closure" | "board";
 
-const TABS: Array<{ id: Tab; label: string }> = [
-  { id: "card", label: "البطاقة" },
-  { id: "document", label: "الوثيقة" },
-  { id: "plan", label: "الخطة التنفيذية" },
-  { id: "closure", label: "الإغلاق" },
-  { id: "board", label: "لوحة المشروع" },
-];
-
 export default function ProjectDossierWorkspace() {
   const { slug } = useParams();
   const toast = useToast();
@@ -150,10 +142,20 @@ export default function ProjectDossierWorkspace() {
     void load();
   }, [load]);
 
-  const activeStage = useMemo(
-    () => dossier?.stages.find((s) => s.status === "active" || s.status === "returned" || s.status === "submitted"),
-    [dossier],
+  const workspaces = dossier?.workspaces || [];
+  const activeWorkspace = useMemo(
+    () => workspaces.find((s) => s.status === "active" || s.status === "returned" || s.status === "submitted"),
+    [workspaces],
   );
+  const currentWs = useMemo(
+    () => workspaces.find((w) => w.key === tab) || activeWorkspace || workspaces[0],
+    [workspaces, tab, activeWorkspace],
+  );
+  const wsOpen = (key: Tab) => {
+    const w = workspaces.find((x) => x.key === key);
+    if (!w) return dossier?.bypass_workspace_gates || key === "card";
+    return w.status !== "locked" || !!dossier?.bypass_workspace_gates;
+  };
 
   const createDossier = async () => {
     if (!projectId) {
@@ -214,25 +216,25 @@ export default function ProjectDossierWorkspace() {
     }
   };
 
-  const submitActiveStage = async () => {
-    if (!dossier || !activeStage) return;
-    const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/stages/${activeStage.order}/submit/`, {
+  const submitActiveWorkspace = async () => {
+    if (!dossier || !currentWs || currentWs.key === "card" || !currentWs.needs_approval) return;
+    const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/workspaces/${currentWs.key}/submit/`, {
       method: "POST",
       body: "{}",
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      toast.error({ title: data.detail || data.sponsor_email || data.status || "تعذّر الإرسال" });
+      toast.error({ title: data.detail || data.sponsor_email || data.status || data.workspace || "تعذّر الإرسال" });
       return;
     }
-    toast.success({ title: "أُرسلت المرحلة للاعتماد" });
+    toast.success({ title: "أُرسل التبويب للاعتماد" });
     await load();
   };
 
-  const adminDecide = async (decision: "approved" | "returned") => {
-    if (!dossier || !activeStage) return;
+  const adminDecideWorkspace = async (decision: "approved" | "returned") => {
+    if (!dossier || !currentWs) return;
     const note = decision === "returned" ? window.prompt("سبب الإعادة") || "" : "";
-    const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/stages/${activeStage.order}/decide/`, {
+    const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/workspaces/${currentWs.key}/decide/`, {
       method: "POST",
       body: JSON.stringify({ decision, note }),
     });
@@ -241,7 +243,7 @@ export default function ProjectDossierWorkspace() {
       toast.error({ title: data.detail || "تعذّر القرار" });
       return;
     }
-    toast.success({ title: decision === "approved" ? "اعتُمدت المرحلة" : "أُعيدت للتعديل" });
+    toast.success({ title: decision === "approved" ? "اعتُمد التبويب" : "أُعيد للتعديل" });
     await load();
   };
 
@@ -260,32 +262,25 @@ export default function ProjectDossierWorkspace() {
   const sectionsFor = (kind: "document" | "closure"): Array<{ def: SchemaSection; status: string }> => {
     if (!schema || !dossier) return [];
     const defs = kind === "document" ? schema.document : schema.closure;
-    const stageFilter =
-      kind === "document"
-        ? activeStage?.key
-        : dossier.stages.find((s) => s.key === "close")?.status === "locked"
-          ? null
-          : "close";
-    return defs
-      .filter((def) => (stageFilter ? def.stage === stageFilter : false))
-      .map((def) => {
-        const row = dossier.sections.find((s) => s.kind === kind && s.key === def.key);
-        return { def, status: row?.status || "empty" };
-      });
+    return defs.map((def) => {
+      const row = dossier.sections.find((s) => s.kind === kind && s.key === def.key);
+      return { def, status: row?.status || "empty" };
+    });
   };
 
-  const closeStage = useMemo(
-    () => dossier?.stages.find((s) => s.key === "close"),
-    [dossier],
-  );
-  const closureUnlocked = !!closeStage && closeStage.status !== "locked";
+  /** تصفح/تعديل: مفتوح للمشرف ومدير الإدارة حتى على المقفلة. الإرسال فقط لـ active/returned. */
+  const canEditWorkspace = (key: Tab) => {
+    if (!wsOpen(key)) return false;
+    const w = workspaces.find((x) => x.key === key);
+    if (!w) return key === "card";
+    if (dossier?.bypass_workspace_gates) return true;
+    return w.status === "active" || w.status === "returned";
+  };
 
-  const canEditSection = (stageKey: string) => {
-    if (!activeStage) return false;
-    return (
-      activeStage.key === stageKey &&
-      (activeStage.status === "active" || activeStage.status === "returned")
-    );
+  const canSubmitWorkspace = (key: Tab) => {
+    const w = workspaces.find((x) => x.key === key);
+    if (!w || !w.needs_approval || w.key === "card") return false;
+    return w.status === "active" || w.status === "returned";
   };
 
   if (loading) {
@@ -355,27 +350,19 @@ export default function ProjectDossierWorkspace() {
       ) : (
         <>
           <div className="mb-4">
-            <StageBar stages={dossier.stages} currentKey={dossier.current_stage} />
-            {activeStage?.return_note && (
+            <StageBar
+              workspaces={workspaces}
+              currentKey={tab}
+              bypassLocked={!!dossier.bypass_workspace_gates}
+              onSelect={(key) => {
+                if (wsOpen(key as Tab)) setTab(key as Tab);
+              }}
+            />
+            {currentWs?.return_note && (
               <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">
-                سبب الإعادة: {activeStage.return_note}
+                سبب الإعادة: {currentWs.return_note}
               </p>
             )}
-          </div>
-
-          <div className="mb-4 flex flex-wrap gap-2">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTab(t.id)}
-                className={`rounded-lg px-3 py-2 text-sm font-bold ${
-                  tab === t.id ? "bg-primary text-white" : "border border-surface-border bg-surface text-primary"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
           </div>
 
           {tab === "card" && (
@@ -422,48 +409,46 @@ export default function ProjectDossierWorkspace() {
                 <Button type="button" onClick={() => void saveCard()}>
                   حفظ البطاقة
                 </Button>
-                {activeStage && (activeStage.status === "active" || activeStage.status === "returned") && (
-                  <Button type="button" onClick={() => void submitActiveStage()}>
-                    إرسال المرحلة للاعتماد
-                  </Button>
-                )}
-                {activeStage?.status === "submitted" && (
-                  <>
-                    <Button type="button" onClick={() => void adminDecide("approved")}>
-                      اعتماد (مشرف)
-                    </Button>
-                    <Button type="button" variant="secondary" onClick={() => void adminDecide("returned")}>
-                      إعادة للتعديل
-                    </Button>
-                  </>
-                )}
               </div>
             </Card>
           )}
 
           {(tab === "document" || tab === "closure") && (
             <div className="space-y-3">
-              {tab === "document" && (
-                <p className="text-sm text-brand-gray">
-                  تُعرض أقسام المرحلة النشطة فقط. المرحلة التالية تُفتح بعد اعتماد المدير (الراعي).
-                </p>
-              )}
-              {tab === "closure" && !closureUnlocked && (
+              {!wsOpen(tab) && (
                 <Card>
-                  <p className="text-sm text-brand-gray">
-                    وثيقة الإغلاق مقفلة حتى اعتماد المراحل السابقة وفتح مرحلة الإغلاق من قبل المدير.
-                  </p>
+                  <p className="text-sm text-brand-gray">هذا التبويب مقفل حتى اعتماد التبويب السابق من مدير الإدارة.</p>
                 </Card>
               )}
-              {tab === "closure" && closureUnlocked && comparison && (
+              {wsOpen(tab) && (
+                <>
+              {tab === "document" && (
+                <p className="text-sm text-brand-gray">أقسام وثيقة المشروع — تُرسل كاملة لاعتماد مدير الإدارة.</p>
+              )}
+              {tab === "closure" && comparison && (
                 <Card>
                   <h3 className="mb-2 font-bold text-primary">مقارنة الوثيقة والإغلاق</h3>
                   <ClosureComparison pairs={comparison.pairs} budgetLines={comparison.budget_lines} />
                 </Card>
               )}
-              {((tab === "document") || (tab === "closure" && closureUnlocked)) && (
-                <>
-              <div className="flex justify-end">
+              <div className="flex flex-wrap justify-between gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {canSubmitWorkspace(tab) && (
+                    <Button type="button" onClick={() => void submitActiveWorkspace()}>
+                      إرسال التبويب للاعتماد
+                    </Button>
+                  )}
+                  {currentWs?.status === "submitted" && (
+                    <>
+                      <Button type="button" onClick={() => void adminDecideWorkspace("approved")}>
+                        اعتماد (مدير/مشرف)
+                      </Button>
+                      <Button type="button" variant="secondary" onClick={() => void adminDecideWorkspace("returned")}>
+                        إعادة للتعديل
+                      </Button>
+                    </>
+                  )}
+                </div>
                 <Button type="button" variant="secondary" onClick={() => void exportKind(tab === "document" ? "document" : "closure")}>
                   تصدير PDF
                 </Button>
@@ -471,14 +456,14 @@ export default function ProjectDossierWorkspace() {
               {sectionsFor(tab === "document" ? "document" : "closure").map(({ def, status }) => {
                 const kind = tab === "document" ? "document" : "closure";
                 const draftKey = `${kind}:${def.key}`;
-                const editable = canEditSection(def.stage);
+                const editable = canEditWorkspace(tab);
                 return (
                   <Card key={def.key}>
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h3 className="font-bold text-primary">{def.label}</h3>
                         <p className="text-xs text-brand-gray">
-                          المرحلة: {def.stage} · {SECTION_STATUS_AR[status] || status}
+                          {SECTION_STATUS_AR[status] || status}
                         </p>
                       </div>
                       {editable && (
@@ -500,9 +485,6 @@ export default function ProjectDossierWorkspace() {
                   </Card>
                 );
               })}
-              {sectionsFor(tab === "document" ? "document" : "closure").length === 0 && tab === "document" && (
-                <p className="text-sm text-brand-gray">لا أقسام قابلة للعرض في المرحلة الحالية، أو بانتظار اعتماد المدير.</p>
-              )}
                 </>
               )}
             </div>
@@ -510,10 +492,31 @@ export default function ProjectDossierWorkspace() {
 
           {tab === "plan" && (
             <Card>
+              {!wsOpen("plan") ? (
+                <p className="text-sm text-brand-gray">الخطة مقفلة حتى اعتماد الوثيقة.</p>
+              ) : (
+                <>
+              <div className="mb-3 flex flex-wrap gap-2">
+                {canSubmitWorkspace("plan") && (
+                  <Button type="button" onClick={() => void submitActiveWorkspace()}>
+                    إرسال الخطة للاعتماد
+                  </Button>
+                )}
+                {workspaces.find((w) => w.key === "plan")?.status === "submitted" && (
+                  <>
+                    <Button type="button" onClick={() => void adminDecideWorkspace("approved")}>
+                      اعتماد (مدير/مشرف)
+                    </Button>
+                    <Button type="button" variant="secondary" onClick={() => void adminDecideWorkspace("returned")}>
+                      إعادة للتعديل
+                    </Button>
+                  </>
+                )}
+              </div>
               <ActivitiesPanel
                 stages={dossier.stages}
                 activities={activities}
-                canEdit={!!activeStage && (activeStage.status === "active" || activeStage.status === "returned")}
+                canEdit={canEditWorkspace("plan")}
                 onCreate={async (payload) => {
                   const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/activities/`, {
                     method: "POST",
@@ -558,15 +561,38 @@ export default function ProjectDossierWorkspace() {
                   await load();
                 }}
               />
+                </>
+              )}
             </Card>
           )}
 
           {tab === "board" && (
             <Card>
+              {!wsOpen("board") ? (
+                <p className="text-sm text-brand-gray">اللوحة مقفلة حتى اعتماد الإغلاق.</p>
+              ) : (
+                <>
+              <div className="mb-3 flex flex-wrap gap-2">
+                {canSubmitWorkspace("board") && (
+                  <Button type="button" onClick={() => void submitActiveWorkspace()}>
+                    إرسال اللوحة للاعتماد
+                  </Button>
+                )}
+                {workspaces.find((w) => w.key === "board")?.status === "submitted" && (
+                  <>
+                    <Button type="button" onClick={() => void adminDecideWorkspace("approved")}>
+                      اعتماد (مدير/مشرف)
+                    </Button>
+                    <Button type="button" variant="secondary" onClick={() => void adminDecideWorkspace("returned")}>
+                      إعادة للتعديل
+                    </Button>
+                  </>
+                )}
+              </div>
               <DossierDashboard
                 data={dash as never}
-                canAllocate
-                canSpend={!!activeStage && (activeStage.status === "active" || activeStage.status === "returned")}
+                canAllocate={!!dossier.bypass_workspace_gates || canEditWorkspace("board")}
+                canSpend={canEditWorkspace("board")}
                 onAllocate={async (lineId, amount) => {
                   const res = await authFetch(
                     `/api/projectdocs/dossiers/${dossier.id}/budget-lines/${lineId}/allocate/`,
@@ -594,6 +620,8 @@ export default function ProjectDossierWorkspace() {
                   await load();
                 }}
               />
+                </>
+              )}
             </Card>
           )}
         </>

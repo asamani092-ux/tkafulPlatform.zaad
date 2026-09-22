@@ -24,6 +24,7 @@ from .models import (
     DossierAttachment,
     DossierSection,
     DossierStage,
+    DossierWorkspace,
     ProjectDossier,
     StageActivity,
 )
@@ -132,15 +133,34 @@ def create_dossier_for_project(
 
     stage_rows = []
     for s in catalog.STAGES:
+        # مراحل المحتوى مؤشر مكان فقط — كلها مفتوحة؛ الاعتماد على التبويبات
         stage_rows.append(
             DossierStage(
                 dossier=dossier,
                 order=s["order"],
                 key=s["key"],
-                status="active" if s["order"] == 1 else "locked",
+                status="approved",
             )
         )
     DossierStage.objects.bulk_create(stage_rows)
+
+    ws_rows = []
+    for w in catalog.WORKSPACES:
+        if w["key"] == "card":
+            status = "approved"  # بلا اعتماد
+        elif w["key"] == "document":
+            status = "active"
+        else:
+            status = "locked"
+        ws_rows.append(
+            DossierWorkspace(
+                dossier=dossier,
+                order=w["order"],
+                key=w["key"],
+                status=status,
+            )
+        )
+    DossierWorkspace.objects.bulk_create(ws_rows)
 
     log_activity(
         actor=actor,
@@ -153,11 +173,16 @@ def create_dossier_for_project(
 
 
 def can_edit_dossier(user, dossier: ProjectDossier) -> bool:
+    """مشرف، مدير المشروع، أو مدير الإدارة (الراعي). O(1)."""
     if not user or not user.is_authenticated:
         return False
     if is_super_admin(user):
         return True
-    return dossier.manager_id == user.id
+    if dossier.manager_id == user.id:
+        return True
+    email = (getattr(user, "email", "") or "").strip().lower()
+    sponsor = (dossier.sponsor_email or "").strip().lower()
+    return bool(email and sponsor and email == sponsor)
 
 
 def assert_can_edit(user, dossier: ProjectDossier):
@@ -174,19 +199,63 @@ def active_stage(dossier: ProjectDossier) -> DossierStage | None:
     return dossier.stages.filter(status__in=["active", "returned", "submitted"]).order_by("order").first()
 
 
-def assert_stage_open_for_work(stage: DossierStage | None, *, allow_submitted: bool = False) -> DossierStage:
-    """المرحلة المقفلة/المعتمدة لا تُفتح للعمل قبل اعتماد المدير للمرحلة السابقة. O(1)."""
-    if not stage:
-        raise ValidationError({"stage": "مرحلة غير موجودة"})
-    allowed = ("active", "returned")
-    if allow_submitted:
-        allowed = ("active", "returned", "submitted")
-    if stage.status not in allowed:
+def can_bypass_workspace_gates(user, dossier: ProjectDossier) -> bool:
+    """مشرف عام أو مدير الإدارة (الراعي) — وإن كان هو نفسه مدير المشروع. O(1)."""
+    if not user or not user.is_authenticated:
+        return False
+    if is_super_admin(user):
+        return True
+    email = (getattr(user, "email", "") or "").strip().lower()
+    sponsor = (dossier.sponsor_email or "").strip().lower()
+    return bool(email and sponsor and email == sponsor)
+
+
+def workspace_def(key: str) -> dict | None:
+    return next((w for w in catalog.WORKSPACES if w["key"] == key), None)
+
+
+def get_workspace(dossier: ProjectDossier, key: str) -> DossierWorkspace:
+    ws = dossier.workspaces.filter(key=key).first()
+    if not ws:
+        raise ValidationError({"workspace": "تبويب غير موجود"})
+    return ws
+
+
+def assert_workspace_open_for_work(user, dossier: ProjectDossier, key: str) -> DossierWorkspace:
+    """قفل تسلسل التبويبات على الموظف/مدير المشروع؛ مفتوح لمدير الإدارة والمشرف. O(1)."""
+    ws = get_workspace(dossier, key)
+    if key == "card" or can_bypass_workspace_gates(user, dossier):
+        return ws
+    if ws.status not in ("active", "returned"):
         raise ValidationError(
+            {"workspace": "هذا التبويب مقفل حتى اعتماد التبويب السابق من مدير الإدارة"}
+        )
+    return ws
+
+
+def workspaces_payload(dossier: ProjectDossier, user=None) -> list[dict]:
+    """حالات التبويبات كما في قاعدة البيانات؛ الفتح للمدير عبر bypass_workspace_gates. O(W)."""
+    out = []
+    for ws in dossier.workspaces.all():
+        out.append(
             {
-                "stage": "لا يمكن العمل على هذه المرحلة قبل اعتماد المدير للمرحلة السابقة أو أثناء انتظار الاعتماد",
+                "id": ws.id,
+                "order": ws.order,
+                "key": ws.key,
+                "status": ws.status,
+                "return_note": ws.return_note,
+                "approved_at": ws.approved_at,
+                "needs_approval": bool(workspace_def(ws.key) and workspace_def(ws.key).get("needs_approval")),
+                "label": (workspace_def(ws.key) or {}).get("label") or ws.key,
             }
         )
+    return out
+
+
+def assert_stage_open_for_work(stage: DossierStage | None, *, allow_submitted: bool = False) -> DossierStage:
+    """مراحل المحتوى لم تعد بوابات — تُقبل إن وُجدت. O(1)."""
+    if not stage:
+        raise ValidationError({"stage": "مرحلة غير موجودة"})
     return stage
 
 
@@ -198,6 +267,7 @@ def create_project_with_dossier(
     sponsor_email: str,
     actor: User | None,
     description: str = "",
+    manager_id=None,
     request=None,
 ) -> ProjectDossier:
     """إنشاء مشروع + ملف دفعة واحدة بعد الاسم والراعي. O(S)."""
@@ -219,14 +289,17 @@ def create_project_with_dossier(
         is_active=True,
         created_by=actor,
     )
+    card = {
+        "marketing_name": name,
+        "sponsor_name": sponsor_name,
+        "sponsor_email": sponsor_email,
+    }
+    if manager_id is not None:
+        card["manager_id"] = manager_id
     return create_dossier_for_project(
         project=project,
         actor=actor,
-        card={
-            "marketing_name": name,
-            "sponsor_name": sponsor_name,
-            "sponsor_email": sponsor_email,
-        },
+        card=card,
         request=request,
     )
 
@@ -244,18 +317,15 @@ def update_section(
     if not section_def:
         raise ValidationError({"key": "قسم غير معروف"})
 
-    # فصل الوثيقة عن الإغلاق: لا يُكتب نوع في مرحلة النوع الآخر
-    stage = dossier.stages.filter(key=section_def["stage"]).first()
-    if kind == "document" and section_def["stage"] == "close":
-        raise ValidationError({"kind": "قسم الإغلاق يُعبَّأ في وثيقة الإغلاق فقط"})
-    if kind == "closure":
-        close_stage = dossier.stages.filter(key="close").first()
-        assert_stage_open_for_work(close_stage)
-    assert_stage_open_for_work(stage)
+    # فصل الوثيقة عن الإغلاق عبر تبويبات الاعتماد
+    if kind == "document":
+        assert_workspace_open_for_work(user, dossier, "document")
+    elif kind == "closure":
+        assert_workspace_open_for_work(user, dossier, "closure")
     cleaned = catalog.validate_section_data(kind, key, data)
     section = dossier.sections.get(kind=kind, key=key)
-    if section.status == "approved":
-        raise ValidationError({"status": "القسم معتمد ولا يُعدَّل إلا بإعادة المرحلة للتعديل"})
+    if section.status == "approved" and not can_bypass_workspace_gates(user, dossier):
+        raise ValidationError({"status": "القسم معتمد ولا يُعدَّل إلا بإعادة التبويب للتعديل"})
     section.data = cleaned
     section.status = "filled" if catalog.section_is_filled(cleaned) else "empty"
     section.updated_by = user
@@ -400,7 +470,7 @@ def complete_activity(
 ) -> StageActivity:
     """إتمام نشاط مع شاهد إلزامي ودرس مستفاد. O(1)."""
     assert_can_edit(user, dossier)
-    assert_stage_open_for_work(activity.stage)
+    assert_workspace_open_for_work(user, dossier, "plan")
     has_file = bool(evidence_file)
     has_url = bool((evidence_url or "").strip())
     if not has_file and not has_url:
@@ -472,6 +542,123 @@ def document_closure_comparison(dossier: ProjectDossier) -> dict:
         for bl in dossier.budget_lines.all()
     ]
     return {"pairs": rows, "budget_lines": lines}
+
+
+@transaction.atomic
+def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -> ApprovalRequest:
+    """إرسال تبويب (وثيقة/خطة/إغلاق/لوحة) لاعتماد مدير الإدارة. O(1)."""
+    assert_can_edit(user, dossier)
+    wdef = workspace_def(key)
+    if not wdef or not wdef.get("needs_approval"):
+        raise ValidationError({"workspace": "هذا التبويب لا يحتاج اعتماداً"})
+    ws = dossier.workspaces.select_for_update().filter(key=key).first()
+    if not ws:
+        raise ValidationError({"workspace": "تبويب غير موجود"})
+    if ws.status not in ("active", "returned"):
+        raise ValidationError({"status": "لا يمكن إرسال هذا التبويب الآن"})
+    if not dossier.sponsor_email:
+        raise ValidationError({"sponsor_email": "بريد الراعي (مدير الإدارة) مطلوب قبل الإرسال"})
+
+    if key == "document":
+        dossier.sections.filter(kind="document", status__in=("filled", "returned", "submitted")).update(status="submitted")
+    elif key == "closure":
+        dossier.sections.filter(kind="closure", status__in=("filled", "returned", "submitted")).update(status="submitted")
+
+    ws.status = "submitted"
+    ws.return_note = ""
+    ws.save(update_fields=["status", "return_note", "updated_at"])
+    dossier.status = "pending_approval"
+    dossier.save(update_fields=["status", "updated_at"])
+
+    ApprovalRequest.objects.filter(
+        dossier=dossier, scope=key, decision="pending"
+    ).update(decision="expired", decided_at=timezone.now())
+
+    approval = ApprovalRequest.create_pending(
+        dossier=dossier,
+        scope=key,
+        payload={
+            "workspace_key": key,
+            "workspace_label": wdef["label"],
+            "dossier_code": dossier.code,
+            "project_name": dossier.project.name,
+        },
+    )
+    send_approval_email(approval)
+    log_activity(
+        actor=user,
+        action=ACTION_STAGE_SUBMIT,
+        summary=f"إرسال تبويب {key} للاعتماد — {dossier.code}",
+        request=request,
+        target=dossier,
+    )
+    _notify_dossier_event(
+        dossier=dossier,
+        message=f"طُلب اعتماد «{wdef['label']}» لمشروع {dossier.code}",
+        link=f"/Admin/projects/{dossier.project.slug}/dossier",
+        users=[u for u in [dossier.manager] if u],
+        roles=["admin"],
+    )
+    return approval
+
+
+def _workspace_label(key: str) -> str:
+    return next((w["label"] for w in catalog.WORKSPACES if w["key"] == key), key)
+
+
+def _approve_workspace(dossier: ProjectDossier, key: str, *, actor=None, request=None):
+    ws = dossier.workspaces.select_for_update().filter(key=key).first()
+    if not ws:
+        raise ValidationError({"workspace": "تبويب غير موجود"})
+    ws.status = "approved"
+    ws.approved_at = timezone.now()
+    ws.return_note = ""
+    ws.save(update_fields=["status", "approved_at", "return_note", "updated_at"])
+
+    if key == "document":
+        dossier.sections.filter(kind="document").update(status="approved")
+    elif key == "closure":
+        dossier.sections.filter(kind="closure").update(status="approved")
+
+    nxt = dossier.workspaces.filter(order=ws.order + 1).first()
+    if nxt and nxt.status == "locked":
+        nxt.status = "active"
+        nxt.save(update_fields=["status", "updated_at"])
+        dossier.status = "in_progress"
+    elif key == "board":
+        dossier.status = "closed"
+    else:
+        dossier.status = "in_progress"
+    dossier.save(update_fields=["status", "updated_at"])
+    log_activity(
+        actor=actor,
+        action=ACTION_STAGE_APPROVE,
+        summary=f"اعتماد تبويب {key} — {dossier.code}",
+        request=request,
+        target=dossier,
+    )
+
+
+def _return_workspace(dossier: ProjectDossier, key: str, *, note: str, actor=None, request=None):
+    ws = dossier.workspaces.select_for_update().filter(key=key).first()
+    if not ws:
+        raise ValidationError({"workspace": "تبويب غير موجود"})
+    ws.status = "returned"
+    ws.return_note = note or ""
+    ws.save(update_fields=["status", "return_note", "updated_at"])
+    if key == "document":
+        dossier.sections.filter(kind="document").update(status="returned")
+    elif key == "closure":
+        dossier.sections.filter(kind="closure").update(status="returned")
+    dossier.status = "in_progress"
+    dossier.save(update_fields=["status", "updated_at"])
+    log_activity(
+        actor=actor,
+        action=ACTION_STAGE_RETURN,
+        summary=f"إعادة تبويب {key} للتعديل — {dossier.code}",
+        request=request,
+        target=dossier,
+    )
 
 
 @transaction.atomic
@@ -587,13 +774,15 @@ def apply_approval_decision(
             _approve_stage(dossier, stage, actor=actor, request=request)
         else:
             _return_stage(dossier, stage, note=note, actor=actor, request=request)
-    elif locked.scope in ("document", "closure", "card"):
+    elif locked.scope in ("document", "plan", "closure", "board"):
         if decision == "approved":
-            dossier.status = "approved" if locked.scope != "closure" else "closed"
-            dossier.save(update_fields=["status", "updated_at"])
+            _approve_workspace(dossier, locked.scope, actor=actor, request=request)
         else:
-            dossier.status = "in_progress"
-            dossier.save(update_fields=["status", "updated_at"])
+            _return_workspace(dossier, locked.scope, note=note, actor=actor, request=request)
+    elif locked.scope == "card":
+        # البطاقة بلا اعتماد عمليًا
+        dossier.status = "in_progress"
+        dossier.save(update_fields=["status", "updated_at"])
 
     log_activity(
         actor=actor,
@@ -668,8 +857,26 @@ def _return_stage(dossier: ProjectDossier, stage: DossierStage, *, note: str, ac
 
 
 @transaction.atomic
+def admin_decide_workspace(*, dossier: ProjectDossier, key: str, decision: str, note: str, user, request=None):
+    """اعتماد/إعادة تبويب من داخل المنصة (مشرف أو مدير الإدارة)."""
+    if not (is_super_admin(user) or can_bypass_workspace_gates(user, dossier)):
+        raise PermissionDenied("الاعتماد الداخلي للمشرف أو مدير الإدارة فقط")
+    ws = dossier.workspaces.select_for_update().filter(key=key).first()
+    if not ws:
+        raise ValidationError({"workspace": "تبويب غير موجود"})
+    if ws.status != "submitted":
+        raise ValidationError({"status": "التبويب ليس بانتظار الاعتماد"})
+    approval = ApprovalRequest.create_pending(
+        dossier=dossier, scope=key, payload={"via": "admin", "workspace_key": key}
+    )
+    return apply_approval_decision(
+        approval=approval, decision=decision, note=note, actor=user, request=request
+    )
+
+
+@transaction.atomic
 def admin_decide_stage(*, dossier: ProjectDossier, order: int, decision: str, note: str, user, request=None):
-    """اعتماد/إعادة من داخل المنصة (مشرف)."""
+    """اعتماد/إعادة من داخل المنصة (مشرف) — مسار قديم للمراحل."""
     if not is_super_admin(user):
         raise PermissionDenied("الاعتماد الداخلي للمشرف فقط")
     stage = dossier.stages.select_for_update().filter(order=order).first()
@@ -732,7 +939,8 @@ def dashboard_stats(dossier: ProjectDossier) -> dict:
         "current_stage": dossier.current_stage,
         "status": dossier.status,
         "active_stage_label": _stage_label(dossier.current_stage),
-        "approval_hint": "اعتماد هذه المرحلة فقط عبر بريد الراعي أو زر المشرف",
+        "approval_hint": "اعتماد التبويب النشط فقط (وثيقة/خطة/إغلاق/لوحة) — البطاقة بلا اعتماد",
+        "workspaces": workspaces_payload(dossier),
     }
 
 

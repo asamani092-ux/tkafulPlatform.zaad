@@ -7,7 +7,17 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-# مراحل الاعتماد — أسماء العرض من مرجع الإكسل (المراحل الرئيسية)
+# تبويبات ملف المشروع — سلسلة الاعتماد (الإكسل: بطاقة/وثيقة/خطة/إغلاق + لوحة)
+# البطاقة بلا اعتماد؛ الباقي متسلسل لعمل الموظف.
+WORKSPACES = (
+    {"order": 1, "key": "card", "label": "البطاقة", "needs_approval": False},
+    {"order": 2, "key": "document", "label": "الوثيقة", "needs_approval": True},
+    {"order": 3, "key": "plan", "label": "الخطة التنفيذية", "needs_approval": True},
+    {"order": 4, "key": "closure", "label": "الإغلاق", "needs_approval": True},
+    {"order": 5, "key": "board", "label": "لوحة المشروع", "needs_approval": True},
+)
+
+# مراحل المحتوى داخل الوثيقة — مؤشر مكان فقط (ليست بوابات اعتماد)
 STAGES = (
     {"order": 1, "key": "define", "label": "تحديد وتعريف المشروع"},
     {"order": 2, "key": "prepare", "label": "إعداد المشروع"},
@@ -509,6 +519,7 @@ def schema_payload() -> dict:
 
     return {
         "stages": list(STAGES),
+        "workspaces": list(WORKSPACES),
         "document": pack(DOCUMENT_SECTIONS),
         "closure": pack(CLOSURE_SECTIONS),
     }
