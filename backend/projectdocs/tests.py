@@ -33,8 +33,107 @@ from projectdocs.services import (
     document_closure_comparison,
     spend_budget_line,
     sync_budget_lines_from_section,
+    sync_document_from_card,
 )
+from projectdocs.sections import DOCUMENT_SECTIONS as DOC_SECS
 from projects.models import Project
+
+
+def fill_all_document_sections(client, dossier_id):
+    """تعبئة حد أدنى لكل بطاقات الوثيقة قبل الإرسال. O(S)."""
+    payloads = {
+        "basics": {
+            "marketing_name": "اسم",
+            "department": "إدارة",
+            "section": "قسم",
+            "location": "موقع",
+            "execution_start": "2026-01-01",
+            "execution_end": "2026-12-31",
+            "sponsor_name": "راعي",
+            "sponsor_email": "s@test.com",
+            "strategic_goal": "هدف",
+        },
+        "indicators": {"rows": [{"goal": "غ", "indicator_name": "م", "target": "1"}]},
+        "logical_impact": {
+            "rows": [
+                {
+                    "row_key": "impact",
+                    "label": "الأثر",
+                    "description": "د",
+                    "indicators": "م",
+                    "means": "و",
+                    "assumptions": "ا",
+                },
+                {
+                    "row_key": "returns",
+                    "label": "العوائد والغايات",
+                    "description": "د",
+                    "indicators": "م",
+                    "means": "و",
+                    "assumptions": "ا",
+                },
+            ]
+        },
+        "outputs_quality": {"rows": [{"output": "مخرج", "quality": "جودة"}]},
+        "main_phases": {
+            "phases": [
+                {"key": p["key"], "label": p["label"], "activities": ["نشاط"]}
+                for p in [
+                    {"key": "define", "label": "تحديد وتعريف المشروع"},
+                    {"key": "prepare", "label": "إعداد المشروع"},
+                    {"key": "plan", "label": "التخطيط للمشروع"},
+                    {"key": "execute", "label": "تنفيذ المشروع"},
+                    {"key": "close", "label": "إغلاق المشروع"},
+                ]
+            ]
+        },
+        "objectives": {"rows": [{"objective": "هدف", "indicator": "مؤشر"}]},
+        "aspirations": {"short_term": "ق", "long_term": "ط", "impact": "أ"},
+        "similar_experiences": {
+            "rows": [{"org": "ج", "project_name": "م", "highlight": "ت", "addition_point": "ن"}],
+            "target_group": "فئة",
+            "beneficiaries_count": 10,
+        },
+        "risks": {"rows": [{"risk": "خطر", "response": "استجابة"}]},
+        "team": {
+            "rows": [
+                {
+                    "name": "عضو",
+                    "job_title": "وظيفة",
+                    "phone": "05",
+                    "email": "a@t.local",
+                    "main_tasks": "مهام",
+                    "user_id": "",
+                }
+            ]
+        },
+        "volunteers": {"rows": [{"volunteers_count": 2, "hours_count": 5, "main_tasks": "م"}]},
+        "stakeholders": {
+            "rows": [{"name": "جهة", "intro": "تعريف", "intersection": "تقاطع", "management": "إدارة"}]
+        },
+        "budget": {
+            "card_allocation": [],
+            "lines": [
+                {
+                    "phase_key": "define",
+                    "activity": "ن",
+                    "statement": "ب",
+                    "quantity": 1,
+                    "unit_price": 10,
+                    "line_total": 10,
+                }
+            ],
+            "lines_grand_total": 10,
+        },
+    }
+    for key in [s["key"] for s in DOC_SECS]:
+        data = payloads.get(key) or {}
+        res = client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/{key}/",
+            {"data": data},
+            format="json",
+        )
+        assert res.status_code == 200, f"{key}: {res.content}"
 
 
 def make_user(username, role="user"):
@@ -46,14 +145,15 @@ def make_user(username, role="user"):
 
 class SectionsCatalogTests(APITestCase):
     def test_catalog_counts(self):
-        self.assertEqual(len(DOCUMENT_SECTIONS), 15)
+        self.assertEqual(len(DOCUMENT_SECTIONS), 13)
         self.assertEqual(len(CLOSURE_SECTIONS), 11)
         self.assertEqual(len(CARD_SECTIONS), 5)
         payload = schema_payload()
         self.assertEqual(len(payload["stages"]), 5)
-        self.assertEqual(len(payload["document"]), 15)
+        self.assertEqual(len(payload["document"]), 13)
         self.assertEqual(len(payload["closure"]), 11)
         self.assertEqual(len(payload["card"]), 5)
+        self.assertEqual(len(payload["document_fixed_phases"]), 5)
 
     def test_validate_rejects_unknown_keys(self):
         with self.assertRaises(Exception):
@@ -62,10 +162,16 @@ class SectionsCatalogTests(APITestCase):
     def test_validate_table(self):
         cleaned = validate_section_data(
             "document",
-            "mgmt_kpis",
-            {"indicators": [{"name": "أ", "baseline": "0", "target": "10", "unit": "%"}]},
+            "indicators",
+            {"rows": [{"goal": "أ", "indicator_name": "م", "target": "10"}]},
         )
-        self.assertEqual(cleaned["indicators"][0]["name"], "أ")
+        self.assertEqual(cleaned["rows"][0]["goal"], "أ")
+
+    def test_logical_matrix_and_phases(self):
+        matrix = validate_section_data("document", "logical_impact", {"rows": []})
+        self.assertEqual(len(matrix["rows"]), 2)
+        phases = validate_section_data("document", "main_phases", {"phases": []})
+        self.assertEqual(len(phases["phases"]), 5)
 
     def test_card_phase_budget_total_computed(self):
         cleaned = validate_section_data(
@@ -118,7 +224,7 @@ class DossierApiTests(APITestCase):
         )
         self.assertEqual(res.status_code, 201, res.content)
         self.assertTrue(res.data["code"].startswith("PRJ-"))
-        self.assertEqual(len(res.data["sections"]), 31)
+        self.assertEqual(len(res.data["sections"]), 29)
         self.assertEqual(len(res.data["stages"]), 5)
         self.assertEqual(len(res.data["workspaces"]), 5)
         self.assertEqual(res.data["workspaces"][0]["key"], "card")
@@ -142,7 +248,7 @@ class DossierApiTests(APITestCase):
         self.client.force_authenticate(self.other)
         deny = self.client.patch(
             f"/api/projectdocs/dossiers/{dossier_id}/sections/document/basics/",
-            {"data": {"project_name": "س"}},
+            {"data": {"marketing_name": "س"}},
             format="json",
         )
         self.assertIn(deny.status_code, (403, 404))
@@ -150,7 +256,19 @@ class DossierApiTests(APITestCase):
         self.client.force_authenticate(self.manager)
         ok = self.client.patch(
             f"/api/projectdocs/dossiers/{dossier_id}/sections/document/basics/",
-            {"data": {"project_name": "مشروع تجريبي", "location": "الرياض"}},
+            {
+                "data": {
+                    "marketing_name": "مشروع تجريبي",
+                    "department": "إدارة",
+                    "section": "قسم",
+                    "location": "الرياض",
+                    "execution_start": "2026-01-01",
+                    "execution_end": "2026-12-31",
+                    "sponsor_name": "راعي",
+                    "sponsor_email": "sponsor@test.com",
+                    "strategic_goal": "هدف",
+                }
+            },
             format="json",
         )
         self.assertEqual(ok.status_code, 200, ok.content)
@@ -179,6 +297,7 @@ class DossierApiTests(APITestCase):
         )
         dossier_id = res.data["id"]
         self.client.force_authenticate(self.manager)
+        fill_all_document_sections(self.client, dossier_id)
         sub = self.client.post(
             f"/api/projectdocs/dossiers/{dossier_id}/workspaces/document/submit/",
             {},
@@ -256,7 +375,8 @@ class DossierApiTests(APITestCase):
         self.client.force_authenticate(self.admin)
         res = self.client.get("/api/projectdocs/schema/")
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(len(res.data["document"]), 15)
+        self.assertEqual(len(res.data["document"]), 13)
+        self.assertEqual(len(res.data["document_fixed_phases"]), 5)
 
     @patch("projectdocs.services.send_approval_email", return_value=True)
     def test_return_for_revision(self, _mail):
@@ -268,6 +388,7 @@ class DossierApiTests(APITestCase):
         )
         dossier_id = res.data["id"]
         self.client.force_authenticate(self.manager)
+        fill_all_document_sections(self.client, dossier_id)
         self.client.post(f"/api/projectdocs/dossiers/{dossier_id}/workspaces/document/submit/", {}, format="json")
         token = ApprovalRequest.objects.get(dossier_id=dossier_id, decision="pending").token
         back = self.client.post(
@@ -346,6 +467,8 @@ class DossierRestructureTests(APITestCase):
         self.client.force_authenticate(sponsor_user)
         # الراعي ليس manager — يجب أن يُرفض التعديل بصلاحية التحرير
         # المشرف يتجاوز ويعتمد الوثيقة ثم تُفتح الخطة
+        self.client.force_authenticate(self.manager)
+        fill_all_document_sections(self.client, dossier_id)
         self.client.force_authenticate(self.admin)
         with patch("projectdocs.services.send_approval_email", return_value=True):
             sub = self.client.post(
@@ -430,6 +553,7 @@ class DossierRestructureTests(APITestCase):
         dossier_id = res.data["id"]
         with patch("projectdocs.services.send_approval_email", return_value=True):
             self.client.force_authenticate(self.manager)
+            fill_all_document_sections(self.client, dossier_id)
             sub = self.client.post(
                 f"/api/projectdocs/dossiers/{dossier_id}/workspaces/document/submit/",
                 {},
@@ -694,3 +818,149 @@ class DossierRestructureTests(APITestCase):
         self.assertNotIn("excel", blob)
         self.assertNotIn("xlsx", blob)
         self.assertNotIn("import_excel", joined)
+
+
+class DocumentTwelveCardsTests(APITestCase):
+    """مزامنة البطاقة→الوثيقة، قفل الصفوف، اعتماد لكل بطاقة، ميزانية، فريق."""
+
+    def setUp(self):
+        self.admin = make_user("docadmin", role="admin")
+        self.manager = make_user("docmgr", role="user")
+        self.outsider = make_user("docout", role="user")
+
+    def _create(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/projectdocs/dossiers/",
+            {
+                "name": "وثيقة 12",
+                "sponsor_email": "sponsor12@test.com",
+                "sponsor_name": "راعٍ",
+                "manager_id": self.manager.id,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        return res.data["id"]
+
+    def test_sync_card_indicators_into_document(self):
+        dossier_id = self._create()
+        self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/card/indicators/",
+            {"data": {"rows": [{"goal": "غ", "indicator_name": "م", "target": "5"}]}},
+            format="json",
+        )
+        detail = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/")
+        doc_ind = next(s for s in detail.data["sections"] if s["kind"] == "document" and s["key"] == "indicators")
+        self.assertGreaterEqual(len(doc_ind["data"]["rows"]), 1)
+        self.assertTrue(doc_ind["data"]["rows"][0].get("_locked") or doc_ind["data"]["rows"][0].get("_source") == "card")
+        self.assertEqual(doc_ind["data"]["rows"][0]["indicator_name"], "م")
+
+    def test_locked_rows_preserved_for_outsider_addition_ok_for_manager(self):
+        dossier_id = self._create()
+        self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/card/indicators/",
+            {"data": {"rows": [{"goal": "غ", "indicator_name": "مقفول", "target": "1"}]}},
+            format="json",
+        )
+        self.client.force_authenticate(self.manager)
+        # إضافة صف جديد دون لمس المقفول
+        ok = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/indicators/",
+            {
+                "data": {
+                    "rows": [
+                        {"goal": "غ", "indicator_name": "مقفول", "target": "1", "_source": "card", "_locked": True},
+                        {"goal": "إضافة", "indicator_name": "جديد", "target": "2"},
+                    ]
+                }
+            },
+            format="json",
+        )
+        self.assertEqual(ok.status_code, 200, ok.content)
+        self.assertEqual(len(ok.data["data"]["rows"]), 2)
+
+        # خارجي يحاول تعديل المقفول — يُرفض تحرير الملف أصلاً
+        self.client.force_authenticate(self.outsider)
+        deny = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/indicators/",
+            {"data": {"rows": [{"goal": "اختراق", "indicator_name": "x", "target": "9"}]}},
+            format="json",
+        )
+        self.assertIn(deny.status_code, (403, 404))
+
+    def test_per_card_approve_then_workspace(self):
+        dossier_id = self._create()
+        self.client.force_authenticate(self.manager)
+        fill_all_document_sections(self.client, dossier_id)
+        self.client.force_authenticate(self.admin)
+        keys = [s["key"] for s in DOC_SECS]
+        for key in keys[:-1]:
+            res = self.client.post(
+                f"/api/projectdocs/dossiers/{dossier_id}/sections/document/{key}/decide/",
+                {"decision": "approved"},
+                format="json",
+            )
+            self.assertEqual(res.status_code, 200, res.content)
+            ws = next(w for w in res.data["workspaces"] if w["key"] == "document")
+            self.assertNotEqual(ws["status"], "approved")
+        last = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/{keys[-1]}/decide/",
+            {"decision": "approved"},
+            format="json",
+        )
+        self.assertEqual(last.status_code, 200, last.content)
+        ws = next(w for w in last.data["workspaces"] if w["key"] == "document")
+        self.assertEqual(ws["status"], "approved")
+        dossier = ProjectDossier.objects.get(pk=dossier_id)
+        self.assertEqual(dossier.workspaces.get(key="document").status, "approved")
+        self.assertEqual(dossier.workspaces.get(key="plan").status, "active")
+
+    def test_document_budget_lines_sync_and_grand_total(self):
+        dossier_id = self._create()
+        self.client.force_authenticate(self.manager)
+        res = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/budget/",
+            {
+                "data": {
+                    "card_allocation": [],
+                    "lines": [
+                        {
+                            "phase_key": "define",
+                            "activity": "تخطيط",
+                            "statement": "طباعة",
+                            "quantity": 2,
+                            "unit_price": 50,
+                            "line_total": 100,
+                        }
+                    ],
+                }
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(res.data["data"]["lines_grand_total"], 100.0)
+        dossier = ProjectDossier.objects.get(pk=dossier_id)
+        self.assertTrue(dossier.budget_lines.filter(title="طباعة").exists())
+
+    def test_team_candidates_from_project_members(self):
+        from projects.models import ProjectMember
+
+        dossier_id = self._create()
+        dossier = ProjectDossier.objects.get(pk=dossier_id)
+        ProjectMember.objects.create(project=dossier.project, user=self.manager, role="project_editor")
+        self.client.force_authenticate(self.manager)
+        res = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/team-candidates/")
+        self.assertEqual(res.status_code, 200)
+        rows = res.data["results"] if isinstance(res.data, dict) else res.data
+        ids = {row["user_id"] for row in rows}
+        self.assertIn(self.manager.id, ids)
+
+    def test_main_phases_always_five(self):
+        cleaned = validate_section_data(
+            "document",
+            "main_phases",
+            {"phases": [{"key": "define", "label": "x", "activities": ["أ"]}]},
+        )
+        self.assertEqual(len(cleaned["phases"]), 5)
+        self.assertEqual(cleaned["phases"][0]["activities"], ["أ"])

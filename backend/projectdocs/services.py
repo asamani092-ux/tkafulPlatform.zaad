@@ -165,6 +165,8 @@ def create_dossier_for_project(
         )
     DossierWorkspace.objects.bulk_create(ws_rows)
 
+    sync_document_from_card(dossier)
+
     log_activity(
         actor=actor,
         action=ACTION_DOSSIER_CREATE,
@@ -173,6 +175,166 @@ def create_dossier_for_project(
         target=dossier,
     )
     return dossier
+
+
+def ensure_document_sections(dossier: ProjectDossier) -> None:
+    """إنشاء أقسام الوثيقة الناقصة وفق الكتالوج الحالي. O(S)."""
+    existing = set(dossier.sections.filter(kind="document").values_list("key", flat=True))
+    to_create = []
+    for key in catalog.all_section_keys("document"):
+        if key in existing:
+            continue
+        to_create.append(DossierSection(dossier=dossier, kind="document", key=key, data={}, status="empty"))
+    if to_create:
+        DossierSection.objects.bulk_create(to_create)
+
+
+def _card_section_rows(dossier: ProjectDossier, key: str) -> list:
+    sec = dossier.sections.filter(kind="card", key=key).first()
+    data = (sec.data if sec else {}) or {}
+    rows = data.get("rows") or []
+    return rows if isinstance(rows, list) else []
+
+
+def _lock_rows(rows: list) -> list:
+    out = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        locked = dict(row)
+        locked["_locked"] = True
+        locked["_source"] = "card"
+        out.append(locked)
+    return out
+
+
+def _merge_table_from_card(existing_rows: list, card_rows: list) -> list:
+    """صفوف البطاقة المقفلة أولاً ثم إضافات الوثيقة غير المقفلة. O(R)."""
+    locked = _lock_rows(card_rows)
+    extras = []
+    for row in existing_rows or []:
+        if not isinstance(row, dict):
+            continue
+        if row.get("_source") == "card" or row.get("_locked"):
+            continue
+        extras.append(row)
+    return locked + extras
+
+
+@transaction.atomic
+def sync_document_from_card(dossier: ProjectDossier) -> None:
+    """نسخ بيانات البطاقة إلى الوثيقة تراكمياً دون مسح إضافات الوثيقة. O(S·R)."""
+    ensure_document_sections(dossier)
+    by_key = {s.key: s for s in dossier.sections.filter(kind="document")}
+
+    # 1) البيانات
+    basics = by_key.get("basics")
+    if basics and basics.status != "approved":
+        basics.data = {
+            "marketing_name": dossier.marketing_name or dossier.project.name,
+            "department": dossier.department or "",
+            "section": dossier.section or "",
+            "location": dossier.location or "",
+            "execution_start": str(dossier.execution_start or ""),
+            "execution_end": str(dossier.execution_end or ""),
+            "sponsor_name": dossier.sponsor_name or "",
+            "sponsor_email": dossier.sponsor_email or "",
+            "strategic_goal": dossier.strategic_goal or "",
+        }
+        basics.status = "filled" if catalog.section_is_filled(basics.data) else basics.status
+        basics.save(update_fields=["data", "status", "updated_at"])
+
+    # 2) المؤشرات
+    indicators = by_key.get("indicators")
+    if indicators and indicators.status != "approved":
+        prev = (indicators.data or {}).get("rows") or []
+        merged = _merge_table_from_card(prev, _card_section_rows(dossier, "indicators"))
+        indicators.data = {"rows": merged}
+        indicators.status = "filled" if merged else indicators.status
+        indicators.save(update_fields=["data", "status", "updated_at"])
+
+    # 3) التجارب + فئة مستهدفة
+    similar = by_key.get("similar_experiences")
+    if similar and similar.status != "approved":
+        prev_data = similar.data or {}
+        prev_rows = prev_data.get("rows") or []
+        merged = _merge_table_from_card(prev_rows, _card_section_rows(dossier, "similar_experiences"))
+        similar.data = {
+            "rows": merged,
+            "target_group": prev_data.get("target_group") or "",
+            "beneficiaries_count": prev_data.get("beneficiaries_count") or 0,
+        }
+        similar.status = "filled" if catalog.section_is_filled(similar.data) else similar.status
+        similar.save(update_fields=["data", "status", "updated_at"])
+
+    # 4) الأثر المنطقي — تهيئة صفوف ثابتة إن فارغ
+    logical = by_key.get("logical_impact")
+    if logical and not (logical.data or {}).get("rows"):
+        logical.data = {"rows": catalog.default_logical_impact_rows()}
+        logical.save(update_fields=["data", "updated_at"])
+
+    # 5) المراحل الرئيسية — تهيئة المراحل الثابتة
+    phases = by_key.get("main_phases")
+    if phases:
+        existing_phases = (phases.data or {}).get("phases")
+        if not existing_phases:
+            phases.data = {"phases": catalog.default_main_phases()}
+            phases.save(update_fields=["data", "updated_at"])
+        else:
+            # ضمان وجود كل المراحل الثابتة مع الحفاظ على الأنشطة
+            phases.data = {"phases": catalog.validate_section_data("document", "main_phases", {"phases": existing_phases}).get("phases")}
+            phases.save(update_fields=["data", "updated_at"])
+
+    # 6) المخصص من البطاقة (عرض فقط) داخل قسم الميزانية
+    budget = by_key.get("budget")
+    if budget and budget.status != "approved":
+        prev = budget.data or {}
+        card_alloc = _lock_rows(_card_section_rows(dossier, "project_budget"))
+        lines = prev.get("lines") or []
+        if not isinstance(lines, list):
+            lines = []
+        grand = 0.0
+        for row in lines:
+            if isinstance(row, dict):
+                try:
+                    grand += float(row.get("line_total") or 0)
+                except (TypeError, ValueError):
+                    pass
+        budget.data = {
+            "card_allocation": card_alloc,
+            "lines": lines,
+            "lines_grand_total": grand,
+        }
+        budget.status = "filled" if catalog.section_is_filled(budget.data) else budget.status
+        budget.save(update_fields=["data", "status", "updated_at"])
+
+
+def can_edit_locked_card_rows(user, dossier: ProjectDossier) -> bool:
+    """تعديل الصفوف المنقولة من البطاقة: مشرف أو مدير الملف أو الراعي."""
+    if not user or not user.is_authenticated:
+        return False
+    if is_super_admin(user):
+        return True
+    if dossier.manager_id == user.id:
+        return True
+    email = (getattr(user, "email", "") or "").strip().lower()
+    sponsor = (dossier.sponsor_email or "").strip().lower()
+    return bool(email and sponsor and email == sponsor)
+
+
+def _enforce_locked_rows(old_data: dict, new_data: dict, *, can_edit_locked: bool, table_keys: list[str]) -> dict:
+    """يمنع تعديل/حذف الصفوف المقفلة لغير المخوّل. O(R)."""
+    if can_edit_locked:
+        return new_data
+    out = dict(new_data)
+    for tkey in table_keys:
+        old_rows = old_data.get(tkey) if isinstance(old_data.get(tkey), list) else []
+        new_rows = out.get(tkey) if isinstance(out.get(tkey), list) else []
+        locked_old = [r for r in old_rows if isinstance(r, dict) and (r.get("_locked") or r.get("_source") == "card")]
+        unlocked_new = [r for r in new_rows if isinstance(r, dict) and not (r.get("_locked") or r.get("_source") == "card")]
+        # الصفوف المقفلة تُعاد كما كانت
+        out[tkey] = locked_old + unlocked_new
+    return out
 
 
 def can_edit_dossier(user, dossier: ProjectDossier) -> bool:
@@ -333,6 +495,40 @@ def update_section(
     section = dossier.sections.get(kind=kind, key=key)
     if section.status == "approved" and not can_bypass_workspace_gates(user, dossier):
         raise ValidationError({"status": "القسم معتمد ولا يُعدَّل إلا بإعادة التبويب للتعديل"})
+
+    if kind == "document":
+        table_keys = [f["key"] for f in section_def["fields"] if f.get("type") == "table"]
+        cleaned = _enforce_locked_rows(
+            section.data or {},
+            cleaned,
+            can_edit_locked=can_edit_locked_card_rows(user, dossier),
+            table_keys=table_keys,
+        )
+        # مخصص البطاقة داخل الميزانية يُعاد من البطاقة دائماً
+        if key == "budget":
+            cleaned["card_allocation"] = _lock_rows(_card_section_rows(dossier, "project_budget"))
+            grand = 0.0
+            for row in cleaned.get("lines") or []:
+                if isinstance(row, dict):
+                    try:
+                        grand += float(row.get("line_total") or 0)
+                    except (TypeError, ValueError):
+                        pass
+            cleaned["lines_grand_total"] = grand
+        if key == "basics" and not can_edit_locked_card_rows(user, dossier):
+            # البيانات المنقولة من البطاقة ثابتة لغير المدير
+            cleaned = {
+                "marketing_name": dossier.marketing_name or dossier.project.name,
+                "department": dossier.department or "",
+                "section": dossier.section or "",
+                "location": dossier.location or "",
+                "execution_start": str(dossier.execution_start or ""),
+                "execution_end": str(dossier.execution_end or ""),
+                "sponsor_name": dossier.sponsor_name or "",
+                "sponsor_email": dossier.sponsor_email or "",
+                "strategic_goal": dossier.strategic_goal or "",
+            }
+
     section.data = cleaned
     section.status = "filled" if catalog.section_is_filled(cleaned) else "empty"
     section.updated_by = user
@@ -341,6 +537,10 @@ def update_section(
         sync_budget_lines_from_section(dossier, cleaned, user=user)
     if kind == "card" and key == "project_budget":
         _sync_dossier_budget_from_card(dossier, cleaned)
+        # حدّث عرض المخصص في الوثيقة
+        sync_document_from_card(dossier)
+    if kind == "card" and key in ("indicators", "similar_experiences"):
+        sync_document_from_card(dossier)
     return section
 
 
@@ -425,33 +625,56 @@ def sync_budget_lines_from_section(dossier: ProjectDossier, data: dict, user=Non
         return list(dossier.budget_lines.all())
     existing = {(bl.title, _money_key(bl.proposed_amount)): bl for bl in dossier.budget_lines.all()}
     created = []
-    assoc = Decimal(str(data.get("association_budget") or 0))
-    don = Decimal(str(data.get("donation_budget") or 0))
-    total = Decimal(str(data.get("total_budget") or (assoc + don)))
-    dossier.budget_association = assoc
-    dossier.budget_donation = don
-    dossier.budget_total = total
-    dossier.save(update_fields=["budget_association", "budget_donation", "budget_total", "updated_at"])
+
+    # المخصص المعروض من البطاقة لا يستبدل مخصصات الملف إلا عند وجود صفوف بطاقة
+    card_alloc = data.get("card_allocation") or []
+    if isinstance(card_alloc, list) and card_alloc:
+        assoc = Decimal("0")
+        don = Decimal("0")
+        for row in card_alloc:
+            if not isinstance(row, dict):
+                continue
+            try:
+                assoc += Decimal(str(row.get("from_association") or 0))
+                don += Decimal(str(row.get("from_donation") or 0))
+            except Exception:
+                continue
+        dossier.budget_association = assoc
+        dossier.budget_donation = don
+        dossier.recompute_budget_total()
+        dossier.save(update_fields=["budget_association", "budget_donation", "budget_total", "updated_at"])
 
     for i, row in enumerate(rows):
         if not isinstance(row, dict):
             continue
-        title = str(row.get("item") or row.get("title") or "").strip()
+        title = str(row.get("statement") or row.get("item") or row.get("title") or "").strip()
         if not title:
-            continue
+            activity = str(row.get("activity") or "").strip()
+            title = activity or f"بند {i + 1}"
         try:
-            amount = Decimal(str(row.get("amount") or 0))
+            amount = Decimal(str(row.get("line_total") or row.get("amount") or 0))
         except Exception:
             amount = Decimal("0")
         key = (title, _money_key(amount))
         if key in existing:
             continue
-        # نفس العنوان بمبلغ مختلف → بند جديد (تراكم تاريخي)
+        phase_label = ""
+        phase_key = str(row.get("phase_key") or "")
+        for p in catalog.DOCUMENT_FIXED_PHASES:
+            if p["key"] == phase_key:
+                phase_label = p["label"]
+                break
+        notes_parts = [
+            phase_label and f"المرحلة: {phase_label}",
+            row.get("activity") and f"النشاط: {row.get('activity')}",
+            row.get("quantity") is not None and f"الكمية: {row.get('quantity')}",
+            row.get("unit_price") is not None and f"سعر الوحدة: {row.get('unit_price')}",
+        ]
         bl = BudgetLine.objects.create(
             dossier=dossier,
             title=title,
-            source=str(row.get("source") or ""),
-            notes=str(row.get("notes") or ""),
+            source=phase_key or str(row.get("source") or ""),
+            notes=" | ".join(str(p) for p in notes_parts if p),
             proposed_amount=amount,
             allocated_amount=Decimal("0"),
             spent_amount=Decimal("0"),
@@ -461,7 +684,7 @@ def sync_budget_lines_from_section(dossier: ProjectDossier, data: dict, user=Non
             line=bl,
             kind="adjust",
             amount=amount,
-            note="إنشاء من التكلفة المقترحة",
+            note="إنشاء من تكلفة الوثيقة",
             created_by=user,
         )
         created.append(bl)
@@ -584,7 +807,7 @@ def document_closure_comparison(dossier: ProjectDossier) -> dict:
         ("risks", "risk_log", "المخاطر"),
         ("budget", "financial_performance", "الأداء المالي / التكلفة"),
         ("budget", "final_cost", "التكلفة النهائية"),
-        ("objectives_kpis", "scope_measure", "النطاق / الأهداف"),
+        ("objectives", "scope_measure", "النطاق / الأهداف"),
         ("main_phases", "time_performance", "الأداء الزمني"),
         ("stakeholders", "stakeholder_satisfaction", "أصحاب المصلحة"),
     ]
@@ -620,6 +843,60 @@ def document_closure_comparison(dossier: ProjectDossier) -> dict:
 
 
 @transaction.atomic
+def decide_document_section(
+    *,
+    dossier: ProjectDossier,
+    key: str,
+    decision: str,
+    user,
+    note: str = "",
+    request=None,
+) -> DossierSection:
+    """اعتماد/إعادة بطاقة وثيقة من المدير (مشرف أو راعي). O(S)."""
+    if decision not in ("approved", "returned"):
+        raise ValidationError({"decision": "قرار غير صالح"})
+    if not can_bypass_workspace_gates(user, dossier):
+        raise PermissionDenied("اعتماد بطاقات الوثيقة للمشرف أو مدير الإدارة فقط")
+    assert_workspace_open_for_work(user, dossier, "document")
+    if not catalog.get_section_def("document", key):
+        raise ValidationError({"key": "قسم غير معروف"})
+    section = dossier.sections.select_for_update().filter(kind="document", key=key).first()
+    if not section:
+        raise ValidationError({"key": "القسم غير موجود — أعد مزامنة الوثيقة"})
+    if decision == "approved":
+        if section.status not in ("filled", "submitted", "returned", "approved"):
+            raise ValidationError({"status": "لا يمكن اعتماد بطاقة فارغة"})
+        section.status = "approved"
+    else:
+        section.status = "returned"
+    section.updated_by = user
+    section.save(update_fields=["status", "updated_by", "updated_at"])
+
+    # عند اكتمال اعتماد كل البطاقات → اعتماد تبويب الوثيقة تلقائياً
+    if decision == "approved":
+        keys = catalog.all_section_keys("document")
+        pending = (
+            dossier.sections.filter(kind="document", key__in=keys)
+            .exclude(status="approved")
+            .count()
+        )
+        if pending == 0:
+            ws = dossier.workspaces.filter(key="document").first()
+            if ws and ws.status in ("active", "returned", "submitted"):
+                _approve_workspace(dossier, "document", actor=user, request=request)
+
+    log_activity(
+        actor=user,
+        action=ACTION_STAGE_APPROVE if decision == "approved" else ACTION_STAGE_RETURN,
+        summary=f"{'اعتماد' if decision == 'approved' else 'إعادة'} بطاقة وثيقة {key} — {dossier.code}"
+        + (f" ({note})" if note else ""),
+        request=request,
+        target=dossier,
+    )
+    return section
+
+
+@transaction.atomic
 def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -> ApprovalRequest:
     """إرسال تبويب (وثيقة/خطة/إغلاق/لوحة) لاعتماد مدير الإدارة. O(1)."""
     assert_can_edit(user, dossier)
@@ -635,7 +912,16 @@ def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -
         raise ValidationError({"sponsor_email": "بريد الراعي (مدير الإدارة) مطلوب قبل الإرسال"})
 
     if key == "document":
-        dossier.sections.filter(kind="document", status__in=("filled", "returned", "submitted")).update(status="submitted")
+        keys = catalog.all_section_keys("document")
+        secs = list(dossier.sections.filter(kind="document", key__in=keys))
+        if len(secs) < len(keys):
+            sync_document_from_card(dossier)
+            secs = list(dossier.sections.filter(kind="document", key__in=keys))
+        not_ready = [s.key for s in secs if s.status not in ("filled", "submitted", "approved", "returned")]
+        if not_ready:
+            raise ValidationError({"sections": f"بطاقات غير مكتملة: {', '.join(not_ready)}"})
+        # للإيميل: تُرسل البطاقات غير المعتمدة بعد كـ submitted؛ المعتمدة تبقى
+        dossier.sections.filter(kind="document", status__in=("filled", "returned")).update(status="submitted")
     elif key == "closure":
         dossier.sections.filter(kind="closure", status__in=("filled", "returned", "submitted")).update(status="submitted")
 
@@ -685,15 +971,24 @@ def _approve_workspace(dossier: ProjectDossier, key: str, *, actor=None, request
     ws = dossier.workspaces.select_for_update().filter(key=key).first()
     if not ws:
         raise ValidationError({"workspace": "تبويب غير موجود"})
+
+    if key == "document":
+        keys = catalog.all_section_keys("document")
+        not_ready = (
+            dossier.sections.filter(kind="document", key__in=keys)
+            .exclude(status__in=("approved", "submitted", "filled"))
+            .count()
+        )
+        if not_ready:
+            raise ValidationError({"sections": "لا يمكن اعتماد الوثيقة قبل اكتمال كل البطاقات"})
+        dossier.sections.filter(kind="document", key__in=keys).update(status="approved")
+    elif key == "closure":
+        dossier.sections.filter(kind="closure").update(status="approved")
+
     ws.status = "approved"
     ws.approved_at = timezone.now()
     ws.return_note = ""
     ws.save(update_fields=["status", "approved_at", "return_note", "updated_at"])
-
-    if key == "document":
-        dossier.sections.filter(kind="document").update(status="approved")
-    elif key == "closure":
-        dossier.sections.filter(kind="closure").update(status="approved")
 
     nxt = dossier.workspaces.filter(order=ws.order + 1).first()
     if nxt and nxt.status == "locked":

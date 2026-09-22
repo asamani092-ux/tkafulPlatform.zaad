@@ -148,6 +148,14 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         if not dossier:
             return Response({"detail": "لا يوجد ملف"}, status=404)
         self.check_object_permissions(request, dossier)
+        services.sync_document_from_card(dossier)
+        dossier.refresh_from_db()
+        return Response(ProjectDossierSerializer(dossier, context={"request": request}).data)
+
+    def retrieve(self, request, *args, **kwargs):
+        dossier = self.get_object()
+        services.sync_document_from_card(dossier)
+        dossier.refresh_from_db()
         return Response(ProjectDossierSerializer(dossier, context={"request": request}).data)
 
     @action(detail=True, methods=["patch"], url_path=r"sections/(?P<kind>[^/.]+)/(?P<key>[^/.]+)")
@@ -163,6 +171,64 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             user=request.user,
         )
         return Response(DossierSectionSerializer(section).data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"sections/document/(?P<key>[^/.]+)/decide",
+    )
+    def decide_document_section(self, request, pk=None, key=None):
+        dossier = self.get_object()
+        ser = DecideSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        section = services.decide_document_section(
+            dossier=dossier,
+            key=key,
+            decision=ser.validated_data["decision"],
+            note=ser.validated_data.get("note") or "",
+            user=request.user,
+            request=request,
+        )
+        # إبطال كاش prefetch بعد تحديث حالة التبويبات
+        if hasattr(dossier, "_prefetched_objects_cache"):
+            dossier._prefetched_objects_cache.pop("workspaces", None)
+            dossier._prefetched_objects_cache.pop("sections", None)
+        return Response(
+            {
+                "section": DossierSectionSerializer(section).data,
+                "workspaces": [
+                    {"key": w.key, "status": w.status}
+                    for w in dossier.workspaces.order_by("order")
+                ],
+            }
+        )
+
+    @action(detail=True, methods=["get"], url_path="team-candidates")
+    def team_candidates(self, request, pk=None):
+        """أعضاء المشروع لاختيار فريق العمل في الوثيقة. O(M)."""
+        dossier = self.get_object()
+        from projects.models import ProjectMember
+
+        members = (
+            ProjectMember.objects.filter(project=dossier.project)
+            .select_related("user", "user__profile")
+            .order_by("user_id")
+        )
+        out = []
+        for m in members:
+            u = m.user
+            profile = getattr(u, "profile", None)
+            name = (getattr(profile, "name", None) or "").strip() or u.get_full_name() or u.username
+            out.append(
+                {
+                    "user_id": u.id,
+                    "name": name,
+                    "job_title": (getattr(profile, "qualification", None) or m.role or ""),
+                    "phone": (getattr(profile, "phone", None) or ""),
+                    "email": u.email or "",
+                }
+            )
+        return Response({"results": out})
 
     @action(detail=True, methods=["post"], url_path=r"workspaces/(?P<key>[^/.]+)/submit")
     def submit_workspace(self, request, pk=None, key=None):
