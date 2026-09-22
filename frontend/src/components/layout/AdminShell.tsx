@@ -78,7 +78,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         <NotificationBell />
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto">
+      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto">
         {loading ? (
           <p className="px-3 py-2 text-sm text-brand-gray">جاري تحميل الصلاحيات…</p>
         ) : (
@@ -178,7 +178,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="flex min-h-screen flex-col bg-surface-muted md:h-screen md:flex-row md:overflow-hidden" dir="rtl">
+    <div className="flex min-h-screen flex-col bg-surface-muted md:h-dvh md:max-h-dvh md:flex-row md:overflow-hidden" dir="rtl">
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-surface-border bg-surface px-4 py-3 md:hidden">
         <button
           type="button"
@@ -193,7 +193,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         <NotificationBell />
       </header>
 
-      <aside className="hidden w-64 shrink-0 flex-col border-l border-surface-border bg-surface p-4 sm:p-5 md:flex md:h-full md:overflow-y-auto">
+      <aside className="hidden w-64 shrink-0 flex-col border-l border-surface-border bg-surface p-4 sm:p-5 md:flex md:h-full md:min-h-0 md:overflow-hidden">
         {navBody}
       </aside>
 
@@ -214,7 +214,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <main className="min-w-0 flex-1 p-4 sm:p-6 md:overflow-y-auto">{children}</main>
+      <main className="min-h-0 min-w-0 flex-1 p-4 sm:p-6 md:overflow-y-auto">{children}</main>
     </div>
   );
 }

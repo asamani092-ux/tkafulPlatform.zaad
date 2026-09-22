@@ -15,7 +15,7 @@ export default function CollapsibleCard({ title, subtitle, defaultOpen = false, 
   const panelId = useId();
 
   return (
-    <div className="card overflow-hidden" dir="rtl">
+    <div className="card overflow-hidden" dir="rtl" data-collapsed={open ? "false" : "true"}>
       <button
         type="button"
         aria-expanded={open}
@@ -36,13 +36,10 @@ export default function CollapsibleCard({ title, subtitle, defaultOpen = false, 
       </button>
       <div
         id={panelId}
-        className={`grid transition-[grid-template-rows] duration-300 ease-out ${
-          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-        }`}
+        hidden={!open}
+        className={open ? "border-t border-surface-border px-4 pb-4 pt-3 sm:px-5" : undefined}
       >
-        <div className="min-h-0 overflow-hidden">
-          <div className="border-t border-surface-border px-4 pb-4 pt-3 sm:px-5">{children}</div>
-        </div>
+        {open ? children : null}
       </div>
     </div>
   );
