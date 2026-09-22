@@ -13,6 +13,7 @@ export type HeaderGroup = { key: string; label: string };
 
 type Props = {
   label: string;
+  hideTitle?: boolean;
   columns: TableColumn[];
   headerGroups?: HeaderGroup[];
   rows: Record<string, string | number>[];
@@ -39,6 +40,7 @@ function applyComputed(row: Record<string, string | number>, cols: TableColumn[]
 /** جدول قابل للإضافة/التعديل/الحذف مع رؤوس مجموعات اختيارية. O(R·C). */
 export default function EditableDataTable({
   label,
+  hideTitle = false,
   columns,
   headerGroups = [],
   rows,
@@ -71,7 +73,7 @@ export default function EditableDataTable({
   return (
     <div className="space-y-2" dir="rtl">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-base font-bold text-primary">{label}</h3>
+        {!hideTitle ? <h3 className="text-base font-bold text-primary">{label}</h3> : <span />}
         {!disabled && (
           <Button type="button" variant="secondary" onClick={addRow}>
             إضافة صف

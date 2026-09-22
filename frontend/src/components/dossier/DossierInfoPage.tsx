@@ -1,6 +1,6 @@
-import Card from "../ui/Card";
 import Button from "../ui/Button";
 import Badge from "../ui/Badge";
+import CollapsibleCard from "./CollapsibleCard";
 
 export type InfoPagePayload = {
   code: string;
@@ -31,50 +31,45 @@ type Props = {
 };
 
 function ReadTable({
-  title,
   columns,
   rows,
 }: {
-  title: string;
   columns: Array<{ key: string; label: string }>;
   rows: Array<Record<string, unknown>>;
 }) {
   return (
-    <Card>
-      <h3 className="mb-3 text-base font-extrabold text-primary">{title}</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[480px] border-collapse text-sm">
-          <thead>
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[480px] border-collapse text-sm">
+        <thead>
+          <tr>
+            {columns.map((c) => (
+              <th key={c.key} className="border-b border-surface-border px-2 py-2 text-right text-primary">
+                {c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
             <tr>
-              {columns.map((c) => (
-                <th key={c.key} className="border-b border-surface-border px-2 py-2 text-right text-primary">
-                  {c.label}
-                </th>
-              ))}
+              <td colSpan={columns.length} className="py-3 text-center text-brand-gray">
+                لا بيانات بعد
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="py-3 text-center text-brand-gray">
-                  لا بيانات بعد
-                </td>
+          ) : (
+            rows.map((row, i) => (
+              <tr key={i} className="odd:bg-surface">
+                {columns.map((c) => (
+                  <td key={c.key} className="border-b border-surface-border px-2 py-2">
+                    {String(row[c.key] ?? "—")}
+                  </td>
+                ))}
               </tr>
-            ) : (
-              rows.map((row, i) => (
-                <tr key={i} className="odd:bg-surface">
-                  {columns.map((c) => (
-                    <td key={c.key} className="border-b border-surface-border px-2 py-2">
-                      {String(row[c.key] ?? "—")}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </Card>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -82,7 +77,7 @@ function ReadTable({
 export default function DossierInfoPage({ data, onBack }: Props) {
   const summary = data.phases_budget_summary;
   return (
-    <div className="space-y-4" dir="rtl">
+    <div className="space-y-3" dir="rtl">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-xl font-extrabold text-primary">صفحة المعلومات</h2>
@@ -96,8 +91,7 @@ export default function DossierInfoPage({ data, onBack }: Props) {
         </div>
       </div>
 
-      <Card>
-        <h3 className="mb-3 font-bold text-primary">بيانات المشروع</h3>
+      <CollapsibleCard title="بيانات المشروع" defaultOpen={false}>
         <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
           {(
             [
@@ -118,23 +112,27 @@ export default function DossierInfoPage({ data, onBack }: Props) {
           ))}
           <div className="rounded-lg bg-surface-muted/30 px-3 py-2 sm:col-span-2">
             <dt className="text-xs text-brand-gray">الهدف الاستراتيجي</dt>
-            <dd className="font-bold text-primary whitespace-pre-wrap">{data.strategic_goal || "—"}</dd>
+            <dd className="whitespace-pre-wrap font-bold text-primary">{data.strategic_goal || "—"}</dd>
           </div>
         </dl>
-      </Card>
+      </CollapsibleCard>
 
-      <ReadTable
+      <CollapsibleCard
         title="المؤشرات الرئيسية"
-        columns={[
-          { key: "goal", label: "الهدف" },
-          { key: "indicator_name", label: "اسم المؤشر" },
-          { key: "target", label: "المستهدف" },
-        ]}
-        rows={data.indicators}
-      />
+        defaultOpen={false}
+        subtitle={data.indicators.length ? `${data.indicators.length} مؤشر` : "لا مؤشرات"}
+      >
+        <ReadTable
+          columns={[
+            { key: "goal", label: "الهدف" },
+            { key: "indicator_name", label: "اسم المؤشر" },
+            { key: "target", label: "المستهدف" },
+          ]}
+          rows={data.indicators}
+        />
+      </CollapsibleCard>
 
-      <Card>
-        <h3 className="mb-2 font-bold text-primary">ملخص المخصص وفق المراحل</h3>
+      <CollapsibleCard title="ملخص المخصص وفق المراحل" defaultOpen={false}>
         <div className="mb-3 grid grid-cols-3 gap-2 text-center text-sm">
           <div className="rounded-lg bg-emerald-50 px-2 py-3">
             <div className="text-xs text-brand-gray">من الجمعية</div>
@@ -150,7 +148,6 @@ export default function DossierInfoPage({ data, onBack }: Props) {
           </div>
         </div>
         <ReadTable
-          title="تفصيل المراحل"
           columns={[
             { key: "activity_type", label: "نوع النشاط" },
             { key: "executor", label: "المنفذ" },
@@ -160,17 +157,18 @@ export default function DossierInfoPage({ data, onBack }: Props) {
           ]}
           rows={summary.rows}
         />
-      </Card>
+      </CollapsibleCard>
 
-      <ReadTable
-        title="المخصص المالي لكامل المشروع"
-        columns={[
-          { key: "from_association", label: "من الجمعية" },
-          { key: "from_donation", label: "من التبرع" },
-          { key: "total", label: "الاجمالي" },
-        ]}
-        rows={data.project_budget}
-      />
+      <CollapsibleCard title="المخصص المالي لكامل المشروع" defaultOpen={false}>
+        <ReadTable
+          columns={[
+            { key: "from_association", label: "من الجمعية" },
+            { key: "from_donation", label: "من التبرع" },
+            { key: "total", label: "الاجمالي" },
+          ]}
+          rows={data.project_budget}
+        />
+      </CollapsibleCard>
     </div>
   );
 }
