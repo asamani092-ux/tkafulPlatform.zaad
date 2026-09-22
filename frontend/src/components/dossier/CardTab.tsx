@@ -191,12 +191,29 @@ export default function CardTab({
             }
           >
             {sec.key === "phases" ? (
-              <PhasesEditor
-                columns={columns}
-                rows={rows}
-                disabled={!canEdit}
-                onChange={(next) => onDraftChange(sec.key, { [tableField.key]: next })}
-              />
+              <>
+                <div className="md:hidden">
+                  <PhasesEditor
+                    columns={columns}
+                    rows={rows}
+                    disabled={!canEdit}
+                    onChange={(next) => onDraftChange(sec.key, { [tableField.key]: next })}
+                  />
+                </div>
+                <div className="hidden md:block">
+                  <EditableDataTable
+                    label={sec.label}
+                    hideTitle
+                    columns={columns}
+                    headerGroups={headerGroups}
+                    rows={rows}
+                    disabled={!canEdit}
+                    primaryKey="activity_type"
+                    budgetGroup="budget"
+                    onChange={(next) => onDraftChange(sec.key, { [tableField.key]: next })}
+                  />
+                </div>
+              </>
             ) : (
               <EditableDataTable
                 label={sec.label}
