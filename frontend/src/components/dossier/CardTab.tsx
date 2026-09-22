@@ -4,6 +4,7 @@ import Input from "../ui/Input";
 import Badge from "../ui/Badge";
 import CollapsibleCard from "./CollapsibleCard";
 import EditableDataTable, { type TableColumn, type HeaderGroup } from "./EditableDataTable";
+import PhasesEditor from "./PhasesEditor";
 import { DOSSIER_STATUS_AR, type DossierSchema, type SchemaField } from "./types";
 
 export type CardScalars = {
@@ -174,7 +175,13 @@ export default function CardTab({
             key={sec.key}
             title={sec.label}
             defaultOpen={false}
-            subtitle={rows.length ? `${rows.length} صف` : "لا صفوف بعد"}
+            subtitle={
+              rows.length
+                ? `${rows.length} ${sec.key === "phases" ? "مرحلة" : "صف"}`
+                : sec.key === "phases"
+                  ? "لا مراحل بعد"
+                  : "لا صفوف بعد"
+            }
             badge={
               rows.length > 0 ? (
                 <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
@@ -183,15 +190,24 @@ export default function CardTab({
               ) : null
             }
           >
-            <EditableDataTable
-              label={sec.label}
-              hideTitle
-              columns={columns}
-              headerGroups={headerGroups}
-              rows={rows}
-              disabled={!canEdit}
-              onChange={(next) => onDraftChange(sec.key, { [tableField.key]: next })}
-            />
+            {sec.key === "phases" ? (
+              <PhasesEditor
+                columns={columns}
+                rows={rows}
+                disabled={!canEdit}
+                onChange={(next) => onDraftChange(sec.key, { [tableField.key]: next })}
+              />
+            ) : (
+              <EditableDataTable
+                label={sec.label}
+                hideTitle
+                columns={columns}
+                headerGroups={headerGroups}
+                rows={rows}
+                disabled={!canEdit}
+                onChange={(next) => onDraftChange(sec.key, { [tableField.key]: next })}
+              />
+            )}
             {sec.key === "project_budget" && typeof phasesHintTotal === "number" && (
               <p className="mt-2 text-xs text-brand-gray">
                 مجموع مخصصات المراحل (تلميح): {phasesHintTotal.toLocaleString("ar-SA")}
