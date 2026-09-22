@@ -1,11 +1,11 @@
 import { STAGE_STATUS_AR, type DossierStageRow } from "./types";
 
 const STAGE_LABEL: Record<string, string> = {
-  define: "التعريف",
-  prepare: "التجهيز",
-  plan: "التخطيط",
-  execute: "التنفيذ",
-  close: "الإغلاق",
+  define: "تحديد وتعريف المشروع",
+  prepare: "إعداد المشروع",
+  plan: "التخطيط للمشروع",
+  execute: "تنفيذ المشروع",
+  close: "إغلاق المشروع",
 };
 
 const tone: Record<string, string> = {

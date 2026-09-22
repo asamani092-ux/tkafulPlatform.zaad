@@ -7,13 +7,13 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-# مراحل: define · prepare · plan · execute · close
+# مراحل الاعتماد — أسماء العرض من مرجع الإكسل (المراحل الرئيسية)
 STAGES = (
-    {"order": 1, "key": "define", "label": "التعريف"},
-    {"order": 2, "key": "prepare", "label": "التجهيز"},
-    {"order": 3, "key": "plan", "label": "التخطيط"},
-    {"order": 4, "key": "execute", "label": "التنفيذ"},
-    {"order": 5, "key": "close", "label": "الإغلاق"},
+    {"order": 1, "key": "define", "label": "تحديد وتعريف المشروع"},
+    {"order": 2, "key": "prepare", "label": "إعداد المشروع"},
+    {"order": 3, "key": "plan", "label": "التخطيط للمشروع"},
+    {"order": 4, "key": "execute", "label": "تنفيذ المشروع"},
+    {"order": 5, "key": "close", "label": "إغلاق المشروع"},
 )
 
 FieldDef = dict  # key, type, label, required?, options?, columns?

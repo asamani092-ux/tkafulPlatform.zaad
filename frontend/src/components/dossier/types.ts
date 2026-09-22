@@ -131,9 +131,9 @@ export const DOSSIER_STATUS_AR: Record<string, string> = {
 };
 
 export const STAGE_KEY_AR: Record<string, string> = {
-  define: "التعريف",
-  prepare: "التجهيز",
-  plan: "التخطيط",
-  execute: "التنفيذ",
-  close: "الإغلاق",
+  define: "تحديد وتعريف المشروع",
+  prepare: "إعداد المشروع",
+  plan: "التخطيط للمشروع",
+  execute: "تنفيذ المشروع",
+  close: "إغلاق المشروع",
 };
