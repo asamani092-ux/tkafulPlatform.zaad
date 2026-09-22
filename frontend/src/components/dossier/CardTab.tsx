@@ -93,7 +93,7 @@ export default function CardTab({
         )}
       </div>
 
-      <CollapsibleCard title="البيانات المطلوبة" defaultOpen subtitle="الاسم والإدارة والتواريخ والراعي">
+      <CollapsibleCard title="البيانات المطلوبة" defaultOpen={false} subtitle="الاسم والإدارة والتواريخ والراعي">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Input
             label="الاسم"
@@ -166,14 +166,14 @@ export default function CardTab({
         )}
       </CollapsibleCard>
 
-      {sectionMeta.map(({ sec, tableField, draftKey, rows }, idx) => {
+      {sectionMeta.map(({ sec, tableField, draftKey, rows }) => {
         if (!tableField) return null;
         const { columns, headerGroups } = fieldColumns(tableField);
         return (
           <CollapsibleCard
             key={sec.key}
             title={sec.label}
-            defaultOpen={idx === 0}
+            defaultOpen={false}
             subtitle={rows.length ? `${rows.length} صف` : "لا صفوف بعد"}
             badge={
               rows.length > 0 ? (
