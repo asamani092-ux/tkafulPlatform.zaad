@@ -1,4 +1,5 @@
 import Button from "../ui/Button";
+import CollapsibleCard from "./CollapsibleCard";
 import type { TableColumn } from "./EditableDataTable";
 
 type Row = Record<string, string | number>;
@@ -59,7 +60,7 @@ function FieldInput({
 }
 
 /**
- * عرض المراحل كبطاقات: عمود أساسي ملوّن + حقول عادية + كتلة مخصص بلون موحّد.
+ * عرض المراحل كبطاقات قابلة للطي (مغلقة افتراضياً) بنفس سلوك أقسام البطاقة.
  * التعقيد: O(R·C) زمن/مكان لعرض وتحديث الصفوف.
  */
 export default function PhasesEditor({
@@ -113,71 +114,81 @@ export default function PhasesEditor({
         </div>
       )}
 
-      {rows.map((row, i) => (
-        <article
-          key={i}
-          className="overflow-hidden rounded-xl border border-surface-border bg-surface shadow-sm"
-        >
-          {/* العمود الأساسي — لون مميَّز */}
-          {primaryCol && (
-            <div className="border-b border-primary/30 bg-primary/[0.07] px-4 py-3 sm:px-5">
-              <div className="rounded-md border-2 border-primary/40 bg-surface/60 px-3 py-2">
-                <FieldInput
-                  col={primaryCol}
-                  value={row[primaryCol.key] ?? ""}
-                  disabled={disabled}
-                  onChange={(v) => updateRow(i, primaryCol.key, v)}
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-3 px-4 py-3 sm:px-5">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {otherCols.map((col) => (
-                <FieldInput
-                  key={col.key}
-                  col={col}
-                  value={row[col.key] ?? (col.type === "number" ? 0 : "")}
-                  disabled={disabled}
-                  onChange={(v) => updateRow(i, col.key, v)}
-                  className={col.key === "output" ? "sm:col-span-2" : undefined}
-                />
-              ))}
-            </div>
-
-            {/* أعمدة المخصص — لون موحّد يختلف عن الباقي */}
-            {budgetCols.length > 0 && (
-              <div className="rounded-lg border-2 border-amber-300 bg-amber-50/60 p-3">
-                <p className="mb-2 text-xs font-extrabold text-amber-950">المخصص المالي</p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  {budgetCols.map((col) => (
-                    <FieldInput
-                      key={col.key}
-                      col={col}
-                      value={row[col.key] ?? 0}
-                      disabled={disabled}
-                      onChange={(v) => updateRow(i, col.key, v)}
-                    />
-                  ))}
+      {rows.map((row, i) => {
+        const primaryLabel = String(row[primaryKey] ?? "").trim();
+        const title = primaryLabel || `مرحلة ${i + 1}`;
+        const total = Number(row.budget_total) || 0;
+        return (
+          <CollapsibleCard
+            key={i}
+            title={title}
+            defaultOpen={false}
+            subtitle={total > 0 ? `إجمالي المخصص: ${total.toLocaleString("ar-SA")}` : "بدون مخصص بعد"}
+            badge={
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+                {i + 1}
+              </span>
+            }
+          >
+            {primaryCol && (
+              <div className="mb-3 rounded-lg border-b border-primary/30 bg-primary/[0.07] p-3">
+                <div className="rounded-md border-2 border-primary/40 bg-surface/60 px-3 py-2">
+                  <FieldInput
+                    col={primaryCol}
+                    value={row[primaryCol.key] ?? ""}
+                    disabled={disabled}
+                    onChange={(v) => updateRow(i, primaryCol.key, v)}
+                  />
                 </div>
               </div>
             )}
 
-            {!disabled && (
-              <div className="flex justify-start">
-                <button
-                  type="button"
-                  className="text-xs font-bold text-red-700 hover:underline"
-                  onClick={() => removeRow(i)}
-                >
-                  حذف المرحلة
-                </button>
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {otherCols.map((col) => (
+                  <FieldInput
+                    key={col.key}
+                    col={col}
+                    value={row[col.key] ?? (col.type === "number" ? 0 : "")}
+                    disabled={disabled}
+                    onChange={(v) => updateRow(i, col.key, v)}
+                    className={col.key === "output" ? "sm:col-span-2" : undefined}
+                  />
+                ))}
               </div>
-            )}
-          </div>
-        </article>
-      ))}
+
+              {budgetCols.length > 0 && (
+                <div className="rounded-lg border-2 border-amber-300 bg-amber-50/60 p-3">
+                  <p className="mb-2 text-xs font-extrabold text-amber-950">المخصص المالي</p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    {budgetCols.map((col) => (
+                      <FieldInput
+                        key={col.key}
+                        col={col}
+                        value={row[col.key] ?? 0}
+                        disabled={disabled}
+                        onChange={(v) => updateRow(i, col.key, v)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!disabled && (
+                <div className="flex justify-start">
+                  <button
+                    type="button"
+                    className="text-xs font-bold text-red-700 hover:underline"
+                    onClick={() => removeRow(i)}
+                  >
+                    حذف المرحلة
+                  </button>
+                </div>
+              )}
+            </div>
+          </CollapsibleCard>
+        );
+      })}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import ActivitiesPanel from "../../dossier/ActivitiesPanel";
 import DossierDashboard from "../../dossier/DossierDashboard";
 import ClosureComparison from "../../dossier/ClosureComparison";
 import CardTab, { type CardScalars } from "../../dossier/CardTab";
+import DocumentTab from "../../dossier/DocumentTab";
 import DossierInfoPage, { type InfoPagePayload } from "../../dossier/DossierInfoPage";
 import {
   SECTION_STATUS_AR,
@@ -59,6 +60,10 @@ export default function ProjectDossierWorkspace() {
   const [sectionDrafts, setSectionDrafts] = useState<Record<string, Record<string, unknown>>>({});
   const [savingKey, setSavingKey] = useState("");
   const [infoPage, setInfoPage] = useState<InfoPagePayload | null>(null);
+  const [teamCandidates, setTeamCandidates] = useState<
+    Array<{ user_id: number; name: string; job_title: string; phone: string; email: string }>
+  >([]);
+  const [decidingKey, setDecidingKey] = useState("");
   const [card, setCard] = useState<CardScalars>({
     marketing_name: "",
     department: "",
@@ -116,12 +121,19 @@ export default function ProjectDossierWorkspace() {
       });
       setSectionDrafts(drafts);
 
-      const [actRes, dashRes, cmpRes, infoRes] = await Promise.all([
+      const [actRes, dashRes, cmpRes, infoRes, teamRes] = await Promise.all([
         authFetch(`/api/projectdocs/dossiers/${d.id}/activities/`),
         authFetch(`/api/projectdocs/dossiers/${d.id}/dashboard/`),
         authFetch(`/api/projectdocs/dossiers/${d.id}/comparison/`),
         authFetch(`/api/projectdocs/dossiers/${d.id}/info-page/`),
+        authFetch(`/api/projectdocs/dossiers/${d.id}/team-candidates/`),
       ]);
+      if (teamRes.ok) {
+        const tj = await teamRes.json();
+        setTeamCandidates(Array.isArray(tj.results) ? tj.results : []);
+      } else {
+        setTeamCandidates([]);
+      }
       if (actRes.ok) setActivities(await actRes.json());
       if (dashRes.ok) setDash(await dashRes.json());
       if (cmpRes.ok) setComparison(await cmpRes.json());
@@ -244,11 +256,32 @@ export default function ProjectDossierWorkspace() {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      toast.error({ title: data.detail || "تعذّر القرار" });
+      toast.error({ title: data.detail || data.sections || "تعذّر القرار" });
       return;
     }
     toast.success({ title: decision === "approved" ? "اعتُمد التبويب" : "أُعيد للتعديل" });
     await load();
+  };
+
+  const decideDocumentSection = async (key: string, decision: "approved" | "returned") => {
+    if (!dossier) return;
+    setDecidingKey(key);
+    try {
+      const note = decision === "returned" ? window.prompt("سبب الإعادة") || "" : "";
+      const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/sections/document/${key}/decide/`, {
+        method: "POST",
+        body: JSON.stringify({ decision, note }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error({ title: data.detail || data.status || data.sections || "تعذّر اعتماد البطاقة" });
+        return;
+      }
+      toast.success({ title: decision === "approved" ? "اعتُمدت البطاقة" : "أُعيدت للتعديل" });
+      await load();
+    } finally {
+      setDecidingKey("");
+    }
   };
 
   const exportKind = async (kind: "document" | "closure") => {
@@ -402,9 +435,6 @@ export default function ProjectDossierWorkspace() {
               )}
               {wsOpen(tab) && (
                 <>
-              {tab === "document" && (
-                <p className="text-sm text-brand-gray">أقسام وثيقة المشروع — تُرسل كاملة لاعتماد مدير الإدارة.</p>
-              )}
               {tab === "closure" && comparison && (
                 <Card>
                   <h3 className="mb-2 font-bold text-primary">مقارنة الوثيقة والإغلاق</h3>
@@ -421,10 +451,10 @@ export default function ProjectDossierWorkspace() {
                   {currentWs?.status === "submitted" && (
                     <>
                       <Button type="button" onClick={() => void adminDecideWorkspace("approved")}>
-                        اعتماد (مدير/مشرف)
+                        اعتماد التبويب (مدير/مشرف)
                       </Button>
                       <Button type="button" variant="secondary" onClick={() => void adminDecideWorkspace("returned")}>
-                        إعادة للتعديل
+                        إعادة التبويب للتعديل
                       </Button>
                     </>
                   )}
@@ -433,38 +463,56 @@ export default function ProjectDossierWorkspace() {
                   تصدير PDF
                 </Button>
               </div>
-              {sectionsFor(tab === "document" ? "document" : "closure").map(({ def, status }) => {
-                const kind = tab === "document" ? "document" : "closure";
-                const draftKey = `${kind}:${def.key}`;
-                const editable = canEditWorkspace(tab);
-                return (
-                  <Card key={def.key}>
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <h3 className="font-bold text-primary">{def.label}</h3>
-                        <p className="text-xs text-brand-gray">
-                          {SECTION_STATUS_AR[status] || status}
-                        </p>
+              {tab === "document" ? (
+                <DocumentTab
+                  sections={sectionsFor("document")}
+                  drafts={sectionDrafts}
+                  canEdit={canEditWorkspace("document")}
+                  canApprove={!!dossier.bypass_workspace_gates}
+                  savingKey={savingKey}
+                  decidingKey={decidingKey}
+                  fixedPhases={schema?.document_fixed_phases || []}
+                  teamCandidates={teamCandidates}
+                  onDraftChange={(sectionKey, data) =>
+                    setSectionDrafts((p) => ({ ...p, [`document:${sectionKey}`]: data }))
+                  }
+                  onSave={(sectionKey) => void saveSection("document", sectionKey)}
+                  onDecide={(sectionKey, decision) => void decideDocumentSection(sectionKey, decision)}
+                />
+              ) : (
+                sectionsFor("closure").map(({ def, status }) => {
+                  const kind = "closure" as const;
+                  const draftKey = `${kind}:${def.key}`;
+                  const editable = canEditWorkspace("closure");
+                  return (
+                    <Card key={def.key}>
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <h3 className="font-bold text-primary">{def.label}</h3>
+                          <p className="text-xs text-brand-gray">
+                            {SECTION_STATUS_AR[status] || status}
+                          </p>
+                        </div>
+                        {editable && (
+                          <Button
+                            type="button"
+                            onClick={() => void saveSection(kind, def.key)}
+                            disabled={savingKey === draftKey}
+                          >
+                            حفظ القسم
+                          </Button>
+                        )}
                       </div>
-                      {editable && (
-                        <Button
-                          type="button"
-                          onClick={() => void saveSection(kind, def.key)}
-                          disabled={savingKey === draftKey}
-                        >
-                          حفظ القسم
-                        </Button>
-                      )}
-                    </div>
-                    <SectionRenderer
-                      section={def}
-                      data={sectionDrafts[draftKey] || {}}
-                      disabled={!editable}
-                      onChange={(next) => setSectionDrafts((p) => ({ ...p, [draftKey]: next }))}
-                    />
-                  </Card>
-                );
-              })}
+                      <SectionRenderer
+                        section={def}
+                        data={sectionDrafts[draftKey] || {}}
+                        disabled={!editable}
+                        onChange={(next) => setSectionDrafts((p) => ({ ...p, [draftKey]: next }))}
+                      />
+                    </Card>
+                  );
+                })
+              )}
                 </>
               )}
             </div>
