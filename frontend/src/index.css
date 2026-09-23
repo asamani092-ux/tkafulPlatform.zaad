@@ -75,6 +75,14 @@ body {
 @keyframes zad-spin {
   to { transform: rotate(360deg); }
 }
+@keyframes activity-chip-pop {
+  0% { transform: scale(0.55); }
+  60% { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+.activity-chip-pop {
+  animation: activity-chip-pop 0.4s ease-out;
+}
 
 /* ── مكوّنات إضافية (عقود components.md — var(--*) فقط) ── */
 .zad-breadcrumb {
