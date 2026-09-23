@@ -627,6 +627,10 @@ def _coerce_field(fdef: FieldDef, val):
             if not isinstance(row, dict):
                 raise serializers.ValidationError({fdef["key"]: f"صف {i + 1} غير صالح"})
             cleaned_row = {}
+            if row.get("_locked"):
+                cleaned_row["_locked"] = True
+            if row.get("_source"):
+                cleaned_row["_source"] = str(row.get("_source"))
             for col_key, col_def in col_defs.items():
                 if col_def.get("computed"):
                     continue
