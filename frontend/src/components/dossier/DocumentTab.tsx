@@ -166,67 +166,68 @@ function FixedPhasesActivities({
   };
 
   return (
-    <div className="space-y-3" dir="rtl">
-      {phases.map((phase, i) => (
-        <CollapsibleCard
-          key={phase.key}
-          title={phase.label}
-          defaultOpen={false}
-          subtitle={
-            phase.activities.length ? `${phase.activities.length} نشاط` : "لا أنشطة بعد"
-          }
-          badge={
-            phase.activities.length > 0 ? (
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
-                {phase.activities.length}
-              </span>
-            ) : null
-          }
-        >
-          <div className="mb-2 flex flex-wrap gap-2">
-            {phase.activities.map((act, j) => (
-              <span
-                key={`${phase.key}-${j}`}
-                className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-bold text-primary"
-              >
-                {act}
+    <div className="overflow-x-auto rounded-xl border border-surface-border" dir="rtl">
+      <table className="w-full min-w-[640px] border-collapse text-sm">
+        <thead>
+          <tr className="bg-surface-muted/40">
+            <th className="w-56 border-b border-surface-border px-3 py-2 text-right font-bold text-primary">المرحلة</th>
+            <th className="border-b border-surface-border px-3 py-2 text-right font-bold text-primary">الأنشطة</th>
+          </tr>
+        </thead>
+        <tbody>
+          {phases.map((phase, i) => (
+            <tr key={phase.key}>
+              <td className="border-b border-surface-border bg-primary/[0.06] px-3 py-3 align-top font-extrabold text-primary">
+                {phase.label}
+              </td>
+              <td className="border-b border-surface-border px-3 py-3 align-top">
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {phase.activities.map((act, j) => (
+                    <span
+                      key={`${phase.key}-${j}`}
+                      className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-bold text-primary"
+                    >
+                      {act}
+                      {!disabled && (
+                        <button type="button" className="text-red-700" onClick={() => removeActivity(i, j)} aria-label="حذف">
+                          ×
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                  {!phase.activities.length && <span className="text-xs text-brand-gray">لا أنشطة بعد</span>}
+                </div>
                 {!disabled && (
-                  <button type="button" className="text-red-700" onClick={() => removeActivity(i, j)} aria-label="حذف">
-                    ×
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      className="input-field max-w-xs flex-1 text-sm"
+                      placeholder="نشاط جديد"
+                      value={drafts[i] || ""}
+                      onChange={(e) =>
+                        setDrafts((d) => {
+                          const copy = [...d];
+                          while (copy.length < phases.length) copy.push("");
+                          copy[i] = e.target.value;
+                          return copy;
+                        })
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addActivity(i);
+                        }
+                      }}
+                    />
+                    <Button type="button" variant="secondary" onClick={() => addActivity(i)}>
+                      +
+                    </Button>
+                  </div>
                 )}
-              </span>
-            ))}
-            {!phase.activities.length && <span className="text-xs text-brand-gray">لا أنشطة بعد</span>}
-          </div>
-          {!disabled && (
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                className="input-field max-w-xs flex-1 text-sm"
-                placeholder="نشاط جديد"
-                value={drafts[i] || ""}
-                onChange={(e) =>
-                  setDrafts((d) => {
-                    const copy = [...d];
-                    while (copy.length < phases.length) copy.push("");
-                    copy[i] = e.target.value;
-                    return copy;
-                  })
-                }
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addActivity(i);
-                  }
-                }}
-              />
-              <Button type="button" variant="secondary" onClick={() => addActivity(i)}>
-                +
-              </Button>
-            </div>
-          )}
-        </CollapsibleCard>
-      ))}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
