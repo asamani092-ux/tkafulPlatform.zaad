@@ -40,6 +40,14 @@ def dossier_schema(request):
     return Response(schema_payload())
 
 
+def _drop_prefetched(dossier) -> None:
+    """إبطال كاش prefetch بعد مزامنة الأقسام حتى تُعاد البيانات الجديدة. O(1)."""
+    cache = getattr(dossier, "_prefetched_objects_cache", None)
+    if cache is not None:
+        cache.pop("sections", None)
+        cache.pop("workspaces", None)
+
+
 class ProjectDossierViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, CanManageDossier]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
@@ -140,6 +148,8 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             dossier.manager_id = mid or None
         dossier.recompute_budget_total()
         dossier.save()
+        services.sync_document_from_card(dossier)
+        _drop_prefetched(dossier)
         return Response(ProjectDossierSerializer(dossier, context={"request": request}).data)
 
     @action(detail=False, methods=["get"], url_path=r"by-project/(?P<slug>[^/.]+)")
@@ -150,12 +160,14 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         self.check_object_permissions(request, dossier)
         services.sync_document_from_card(dossier)
         dossier.refresh_from_db()
+        _drop_prefetched(dossier)
         return Response(ProjectDossierSerializer(dossier, context={"request": request}).data)
 
     def retrieve(self, request, *args, **kwargs):
         dossier = self.get_object()
         services.sync_document_from_card(dossier)
         dossier.refresh_from_db()
+        _drop_prefetched(dossier)
         return Response(ProjectDossierSerializer(dossier, context={"request": request}).data)
 
     @action(detail=True, methods=["patch"], url_path=r"sections/(?P<kind>[^/.]+)/(?P<key>[^/.]+)")

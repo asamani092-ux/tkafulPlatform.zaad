@@ -33,6 +33,10 @@ Always invoke backend management commands via `backend/venv/bin/python manage.py
 - **Frontend → backend URL**: the SPA reads `VITE_API_BASE_URL` (defaults to `http://127.0.0.1:8000`).
 - Health check: `GET http://127.0.0.1:8000/api/ping/` returns `{"message":"Takaful backend is working"}`.
 
+### Pull request base
+
+Always open pull requests against `main`. A merge into `refactor/project-first-architecture` does not publish. Do not stop after merging only into the refactor branch.
+
 ### Checks / build
 
 - Frontend type-check + build: `npm run build` (runs `tsc && vite build`). There is no separate lint script.

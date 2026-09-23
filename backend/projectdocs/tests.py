@@ -964,3 +964,15 @@ class DocumentTwelveCardsTests(APITestCase):
         )
         self.assertEqual(len(cleaned["phases"]), 5)
         self.assertEqual(cleaned["phases"][0]["activities"], ["أ"])
+
+    def test_card_scalars_appear_on_document_basics(self):
+        dossier_id = self._create()
+        self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/",
+            {"marketing_name": "من البطاقة", "location": "جدة", "department": "التكافل"},
+            format="json",
+        )
+        detail = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/")
+        basics = next(s for s in detail.data["sections"] if s["kind"] == "document" and s["key"] == "basics")
+        self.assertEqual(basics["data"]["marketing_name"], "من البطاقة")
+        self.assertEqual(basics["data"]["location"], "جدة")
