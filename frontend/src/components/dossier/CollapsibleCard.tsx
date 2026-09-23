@@ -6,11 +6,12 @@ type Props = {
   subtitle?: string;
   defaultOpen?: boolean;
   badge?: ReactNode;
+  actions?: ReactNode;
   children: ReactNode;
 };
 
 /** بطاقة قابلة للطي بانزلاق بسيط لترتيب الأقسام. */
-export default function CollapsibleCard({ title, subtitle, defaultOpen = false, badge, children }: Props) {
+export default function CollapsibleCard({ title, subtitle, defaultOpen = false, badge, actions, children }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   const panelId = useId();
 
@@ -30,8 +31,19 @@ export default function CollapsibleCard({ title, subtitle, defaultOpen = false, 
           </div>
           {subtitle && <p className="mt-0.5 text-xs text-brand-gray">{subtitle}</p>}
         </div>
-        <span className="shrink-0 text-primary" aria-hidden>
-          {open ? <ChevronDown size={18} /> : <ChevronLeft size={18} />}
+        <span className="flex shrink-0 items-center gap-2">
+          {actions ? (
+            <span
+              className="flex flex-wrap items-center gap-1"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              {actions}
+            </span>
+          ) : null}
+          <span className="text-primary" aria-hidden>
+            {open ? <ChevronDown size={18} /> : <ChevronLeft size={18} />}
+          </span>
         </span>
       </button>
       <div

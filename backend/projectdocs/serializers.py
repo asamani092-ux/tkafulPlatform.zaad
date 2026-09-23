@@ -277,7 +277,7 @@ class SectionPatchSerializer(serializers.Serializer):
 
 
 class DecideSerializer(serializers.Serializer):
-    decision = serializers.ChoiceField(choices=["approved", "returned"])
+    decision = serializers.ChoiceField(choices=["approved", "returned", "revoke"])
     note = serializers.CharField(required=False, allow_blank=True, default="")
 
 

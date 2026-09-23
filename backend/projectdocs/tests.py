@@ -136,6 +136,16 @@ def fill_all_document_sections(client, dossier_id):
         assert res.status_code == 200, f"{key}: {res.content}"
 
 
+def approve_card_workspace(client, dossier_id):
+    """اعتماد البطاقة لفتح الوثيقة. O(1)."""
+    res = client.post(
+        f"/api/projectdocs/dossiers/{dossier_id}/workspaces/card/decide/",
+        {"decision": "approved"},
+        format="json",
+    )
+    assert res.status_code == 200, res.content
+
+
 def make_user(username, role="user"):
     user = User.objects.create_user(username=username, email=f"{username}@t.local", password="pass12345")
     user.profile.role = role
@@ -228,8 +238,8 @@ class DossierApiTests(APITestCase):
         self.assertEqual(len(res.data["stages"]), 5)
         self.assertEqual(len(res.data["workspaces"]), 5)
         self.assertEqual(res.data["workspaces"][0]["key"], "card")
-        self.assertEqual(res.data["workspaces"][0]["status"], "approved")
-        self.assertEqual(res.data["workspaces"][1]["status"], "active")
+        self.assertEqual(res.data["workspaces"][0]["status"], "active")
+        self.assertEqual(res.data["workspaces"][1]["status"], "locked")
         self.assertEqual(res.data["workspaces"][2]["status"], "locked")
 
     def test_manager_fills_active_section_and_stage_gate(self):
@@ -274,8 +284,12 @@ class DossierApiTests(APITestCase):
         self.assertEqual(ok.status_code, 200, ok.content)
         self.assertEqual(ok.data["status"], "filled")
 
-        # الخطة مقفلة قبل اعتماد الوثيقة — لا أنشطة
+        # الخطة مقفلة قبل اعتماد الوثيقة — الراعي ليس المدير فلا يضيف نشاطاً
         stage_id = ProjectDossier.objects.get(pk=dossier_id).stages.first().id
+        sponsor = make_user("cardsponsor", role="user")
+        sponsor.email = "sponsor@test.com"
+        sponsor.save(update_fields=["email"])
+        self.client.force_authenticate(sponsor)
         locked = self.client.post(
             f"/api/projectdocs/dossiers/{dossier_id}/activities/",
             {"stage": stage_id, "code": "A1", "title": "مبكر"},
@@ -297,6 +311,7 @@ class DossierApiTests(APITestCase):
         )
         dossier_id = res.data["id"]
         self.client.force_authenticate(self.manager)
+        approve_card_workspace(self.client, dossier_id)
         fill_all_document_sections(self.client, dossier_id)
         sub = self.client.post(
             f"/api/projectdocs/dossiers/{dossier_id}/workspaces/document/submit/",
@@ -388,6 +403,7 @@ class DossierApiTests(APITestCase):
         )
         dossier_id = res.data["id"]
         self.client.force_authenticate(self.manager)
+        approve_card_workspace(self.client, dossier_id)
         fill_all_document_sections(self.client, dossier_id)
         self.client.post(f"/api/projectdocs/dossiers/{dossier_id}/workspaces/document/submit/", {}, format="json")
         token = ApprovalRequest.objects.get(dossier_id=dossier_id, decision="pending").token
@@ -442,16 +458,15 @@ class DossierRestructureTests(APITestCase):
         dossier_id = res.data["id"]
         self.assertEqual(len(res.data["workspaces"]), 5)
         by_key = {w["key"]: w for w in res.data["workspaces"]}
-        self.assertEqual(by_key["card"]["status"], "approved")
-        self.assertEqual(by_key["document"]["status"], "active")
+        self.assertEqual(by_key["card"]["status"], "active")
+        self.assertEqual(by_key["document"]["status"], "locked")
         self.assertEqual(by_key["plan"]["status"], "locked")
 
-        # الموظف/مدير المشروع: نشاط على الخطة مرفوض قبل اعتماد الوثيقة
-        self.client.force_authenticate(self.manager)
-        # عيّن المدير على الملف
-        from projectdocs.models import ProjectDossier
-
-        ProjectDossier.objects.filter(pk=dossier_id).update(manager=self.manager)
+        # الراعي ليس المدير: نشاط على الخطة مرفوض قبل اعتماد الوثيقة
+        sponsor_user = make_user("deptmgr", role="user")
+        sponsor_user.email = "gate@test.com"
+        sponsor_user.save(update_fields=["email"])
+        self.client.force_authenticate(sponsor_user)
         stage = next(s for s in res.data["stages"] if s["order"] == 1)
         deny_act = self.client.post(
             f"/api/projectdocs/dossiers/{dossier_id}/activities/",
@@ -460,14 +475,9 @@ class DossierRestructureTests(APITestCase):
         )
         self.assertEqual(deny_act.status_code, 400, deny_act.content)
 
-        # مدير الإدارة يتجاوز القفل
-        sponsor_user = make_user("deptmgr", role="user")
-        sponsor_user.email = "gate@test.com"
-        sponsor_user.save(update_fields=["email"])
-        self.client.force_authenticate(sponsor_user)
-        # الراعي ليس manager — يجب أن يُرفض التعديل بصلاحية التحرير
-        # المشرف يتجاوز ويعتمد الوثيقة ثم تُفتح الخطة
+        # المشرف يعتمد الوثيقة ثم تُفتح الخطة
         self.client.force_authenticate(self.manager)
+        approve_card_workspace(self.client, dossier_id)
         fill_all_document_sections(self.client, dossier_id)
         self.client.force_authenticate(self.admin)
         with patch("projectdocs.services.send_approval_email", return_value=True):
@@ -522,14 +532,12 @@ class DossierRestructureTests(APITestCase):
         )
         self.assertEqual(ok_act.status_code, 201, ok_act.content)
 
-        # موظف عادي (مدير مشروع فقط، بريد مختلف) يبقى مقفولاً
-        plain_pm = make_user("plainpm", role="user")
-        plain_pm.email = "plain@test.com"
-        plain_pm.save(update_fields=["email"])
+        # الراعي بعد نقل الإدارة لشخص آخر يبقى مقفولاً
         from projectdocs.models import ProjectDossier
 
+        plain_pm = make_user("plainpm", role="user")
         ProjectDossier.objects.filter(pk=dossier_id).update(manager=plain_pm, sponsor_email="both@test.com")
-        self.client.force_authenticate(plain_pm)
+        self.client.force_authenticate(self.manager)
         deny = self.client.post(
             f"/api/projectdocs/dossiers/{dossier_id}/activities/",
             {"stage": stage["id"], "code": "Y2", "title": "مرفوض"},
@@ -553,6 +561,7 @@ class DossierRestructureTests(APITestCase):
         dossier_id = res.data["id"]
         with patch("projectdocs.services.send_approval_email", return_value=True):
             self.client.force_authenticate(self.manager)
+            approve_card_workspace(self.client, dossier_id)
             fill_all_document_sections(self.client, dossier_id)
             sub = self.client.post(
                 f"/api/projectdocs/dossiers/{dossier_id}/workspaces/document/submit/",
@@ -891,6 +900,8 @@ class DocumentTwelveCardsTests(APITestCase):
 
     def test_per_card_approve_then_workspace(self):
         dossier_id = self._create()
+        self.client.force_authenticate(self.admin)
+        approve_card_workspace(self.client, dossier_id)
         self.client.force_authenticate(self.manager)
         fill_all_document_sections(self.client, dossier_id)
         self.client.force_authenticate(self.admin)
@@ -976,3 +987,23 @@ class DocumentTwelveCardsTests(APITestCase):
         basics = next(s for s in detail.data["sections"] if s["kind"] == "document" and s["key"] == "basics")
         self.assertEqual(basics["data"]["marketing_name"], "من البطاقة")
         self.assertEqual(basics["data"]["location"], "جدة")
+
+    def test_sponsor_does_not_bypass_and_card_starts_active(self):
+        dossier_id = self._create()
+        detail = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/")
+        by_key = {w["key"]: w for w in detail.data["workspaces"]}
+        self.assertEqual(by_key["card"]["status"], "active")
+        self.assertEqual(by_key["document"]["status"], "locked")
+        sponsor = make_user("sponsoronly", role="user")
+        sponsor.email = "sponsor12@test.com"
+        sponsor.save(update_fields=["email"])
+        self.client.force_authenticate(sponsor)
+        seen = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/")
+        self.assertEqual(seen.status_code, 200)
+        self.assertFalse(seen.data["bypass_workspace_gates"])
+        blocked = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/objectives/",
+            {"data": {"rows": [{"objective": "س", "indicator": "م"}]}},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, 400, blocked.content)

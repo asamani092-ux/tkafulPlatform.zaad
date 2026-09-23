@@ -23,6 +23,7 @@ import {
   type StageActivity,
 } from "../../dossier/types";
 import { downloadDossierPdf, type ExportPayload } from "../../../utils/dossierPdf";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
 type Tab = "card" | "document" | "plan" | "closure" | "board" | "info";
 
@@ -76,10 +77,32 @@ export default function ProjectDossierWorkspace() {
     sponsor_email: "",
   });
 
-  const load = useCallback(async () => {
+  const absorbDossier = useCallback((d: ProjectDossier) => {
+    setDossier(d);
+    setCard({
+      marketing_name: d.marketing_name || "",
+      department: d.department || "",
+      section: d.section || "",
+      strategic_goal: d.strategic_goal || "",
+      execution_start: d.execution_start || "",
+      execution_end: d.execution_end || "",
+      location: d.location || "",
+      sponsor_name: d.sponsor_name || "",
+      sponsor_email: d.sponsor_email || "",
+    });
+    const drafts: Record<string, Record<string, unknown>> = {};
+    d.sections.forEach((s) => {
+      drafts[`${s.kind}:${s.key}`] = { ...(s.data || {}) };
+    });
+    setSectionDrafts(drafts);
+  }, []);
+
+  const load = useCallback(async (mode: AdminLoadMode = "initial") => {
     if (!slug) return;
-    setLoading(true);
-    setError(false);
+    if (shouldFlipPageLoading(mode)) {
+      setLoading(true);
+      setError(false);
+    }
     try {
       const [schemaRes, byRes, projRes] = await Promise.all([
         authFetch("/api/projectdocs/schema/"),
@@ -103,23 +126,7 @@ export default function ProjectDossierWorkspace() {
       }
       if (!byRes.ok) throw new Error("fail");
       const d: ProjectDossier = await byRes.json();
-      setDossier(d);
-      setCard({
-        marketing_name: d.marketing_name || "",
-        department: d.department || "",
-        section: d.section || "",
-        strategic_goal: d.strategic_goal || "",
-        execution_start: d.execution_start || "",
-        execution_end: d.execution_end || "",
-        location: d.location || "",
-        sponsor_name: d.sponsor_name || "",
-        sponsor_email: d.sponsor_email || "",
-      });
-      const drafts: Record<string, Record<string, unknown>> = {};
-      d.sections.forEach((s) => {
-        drafts[`${s.kind}:${s.key}`] = { ...(s.data || {}) };
-      });
-      setSectionDrafts(drafts);
+      absorbDossier(d);
 
       const [actRes, dashRes, cmpRes, infoRes, teamRes] = await Promise.all([
         authFetch(`/api/projectdocs/dossiers/${d.id}/activities/`),
@@ -143,10 +150,10 @@ export default function ProjectDossierWorkspace() {
     } finally {
       setLoading(false);
     }
-  }, [slug]);
+  }, [slug, absorbDossier]);
 
   useEffect(() => {
-    void load();
+    void load("initial");
   }, [load]);
 
   const workspaces = dossier?.workspaces || [];
@@ -181,8 +188,8 @@ export default function ProjectDossierWorkspace() {
         return;
       }
       toast.success({ title: "تم إنشاء ملف المشروع" });
-      await load();
-      setTab("document");
+      await load("silent");
+      setTab("card");
     } finally {
       setCreating(false);
     }
@@ -200,12 +207,13 @@ export default function ProjectDossierWorkspace() {
           execution_end: card.execution_end || null,
         }),
       });
+      const data: ProjectDossier = await res.json();
       if (!res.ok) {
         toast.error({ title: "تعذّر حفظ البطاقة" });
         return;
       }
+      absorbDossier(data);
       toast.success({ title: "حُفظت البيانات المطلوبة" });
-      await load();
     } finally {
       setSavingKey("");
     }
@@ -226,14 +234,34 @@ export default function ProjectDossierWorkspace() {
         return;
       }
       toast.success({ title: "حُفظ القسم" });
-      await load();
+      const rows = [
+        ...(data.section ? [data.section] : data.kind && data.key ? [data] : []),
+        ...(Array.isArray(data.synced_document) ? data.synced_document : []),
+      ];
+      if (rows.length) {
+        setDossier((prev) => {
+          if (!prev) return prev;
+          const sections = [...prev.sections];
+          for (const row of rows) {
+            const i = sections.findIndex((s) => s.kind === row.kind && s.key === row.key);
+            if (i >= 0) sections[i] = { ...sections[i], ...row };
+            else sections.push(row);
+          }
+          return { ...prev, sections };
+        });
+        setSectionDrafts((prev) => {
+          const next = { ...prev };
+          for (const row of rows) next[`${row.kind}:${row.key}`] = { ...(row.data || {}) };
+          return next;
+        });
+      }
     } finally {
       setSavingKey("");
     }
   };
 
   const submitActiveWorkspace = async () => {
-    if (!dossier || !currentWs || currentWs.key === "card" || !currentWs.needs_approval) return;
+    if (!dossier || !currentWs || !currentWs.needs_approval) return;
     const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/workspaces/${currentWs.key}/submit/`, {
       method: "POST",
       body: "{}",
@@ -244,41 +272,66 @@ export default function ProjectDossierWorkspace() {
       return;
     }
     toast.success({ title: "أُرسل التبويب للاعتماد" });
-    await load();
+    await load("silent");
   };
 
-  const adminDecideWorkspace = async (decision: "approved" | "returned") => {
+  const applyWorkspaces = (rows: Array<{ key: string; status: string }>) => {
+    setDossier((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        workspaces: (prev.workspaces || []).map((w) => {
+          const hit = rows.find((x) => x.key === w.key);
+          return hit ? { ...w, status: hit.status } : w;
+        }),
+      };
+    });
+  };
+
+  const adminDecideWorkspace = async (decision: "approved" | "returned" | "revoke") => {
     if (!dossier || !currentWs) return;
     const note = decision === "returned" ? window.prompt("سبب الإعادة") || "" : "";
     const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/workspaces/${currentWs.key}/decide/`, {
       method: "POST",
       body: JSON.stringify({ decision, note }),
     });
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      toast.error({ title: data.detail || data.sections || "تعذّر القرار" });
+      toast.error({ title: data.detail || data.sections || data.status || "تعذّر القرار" });
       return;
     }
-    toast.success({ title: decision === "approved" ? "اعتُمد التبويب" : "أُعيد للتعديل" });
-    await load();
+    if (Array.isArray(data.workspaces)) applyWorkspaces(data.workspaces);
+    toast.success({
+      title: decision === "approved" ? "اعتُمد التبويب" : decision === "revoke" ? "أُزيل الاعتماد" : "أُعيد للتعديل",
+    });
   };
 
-  const decideDocumentSection = async (key: string, decision: "approved" | "returned") => {
+  const decideDocumentSection = async (key: string, decision: "approved" | "revoke") => {
     if (!dossier) return;
     setDecidingKey(key);
     try {
-      const note = decision === "returned" ? window.prompt("سبب الإعادة") || "" : "";
       const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/sections/document/${key}/decide/`, {
         method: "POST",
-        body: JSON.stringify({ decision, note }),
+        body: JSON.stringify({ decision, note: "" }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast.error({ title: data.detail || data.status || data.sections || "تعذّر اعتماد البطاقة" });
         return;
       }
-      toast.success({ title: decision === "approved" ? "اعتُمدت البطاقة" : "أُعيدت للتعديل" });
-      await load();
+      if (data.section) {
+        setDossier((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            sections: prev.sections.map((s) =>
+              s.kind === "document" && s.key === key ? { ...s, ...data.section } : s,
+            ),
+          };
+        });
+      }
+      if (Array.isArray(data.workspaces)) applyWorkspaces(data.workspaces);
+      toast.success({ title: decision === "approved" ? "اعتُمدت البطاقة" : "أُزيل الاعتماد" });
     } finally {
       setDecidingKey("");
     }
@@ -318,7 +371,7 @@ export default function ProjectDossierWorkspace() {
 
   const canSubmitWorkspace = (key: Tab) => {
     const w = workspaces.find((x) => x.key === key);
-    if (!w || !w.needs_approval || w.key === "card") return false;
+    if (!w || !w.needs_approval) return false;
     return w.status === "active" || w.status === "returned";
   };
 
@@ -397,6 +450,26 @@ export default function ProjectDossierWorkspace() {
                 سبب الإعادة: {currentWs.return_note}
               </p>
             )}
+            {(canSubmitWorkspace(tab) ||
+              (dossier.bypass_workspace_gates && currentWs && currentWs.key !== "info" && currentWs.status !== "locked")) && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {canSubmitWorkspace(tab) && (
+                  <Button type="button" onClick={() => void submitActiveWorkspace()}>
+                    إرسال التبويب للاعتماد
+                  </Button>
+                )}
+                {dossier.bypass_workspace_gates && currentWs && currentWs.status !== "locked" && currentWs.status !== "approved" && (
+                  <Button type="button" onClick={() => void adminDecideWorkspace("approved")}>
+                    اعتماد التبويب
+                  </Button>
+                )}
+                {dossier.bypass_workspace_gates && currentWs?.status === "approved" && (
+                  <Button type="button" variant="secondary" onClick={() => void adminDecideWorkspace("revoke")}>
+                    إزالة الاعتماد
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           {tab === "info" && infoPage && (
@@ -430,7 +503,7 @@ export default function ProjectDossierWorkspace() {
             <div className="space-y-3">
               {!wsOpen(tab) && (
                 <Card>
-                  <p className="text-sm text-brand-gray">هذا التبويب مقفل حتى اعتماد التبويب السابق من مدير الإدارة.</p>
+                  <p className="text-sm text-brand-gray">هذا التبويب مقفل حتى اعتماد التبويب السابق من المدير.</p>
                 </Card>
               )}
               {wsOpen(tab) && (
@@ -441,24 +514,7 @@ export default function ProjectDossierWorkspace() {
                   <ClosureComparison pairs={comparison.pairs} budgetLines={comparison.budget_lines} />
                 </Card>
               )}
-              <div className="flex flex-wrap justify-between gap-2">
-                <div className="flex flex-wrap gap-2">
-                  {canSubmitWorkspace(tab) && (
-                    <Button type="button" onClick={() => void submitActiveWorkspace()}>
-                      إرسال التبويب للاعتماد
-                    </Button>
-                  )}
-                  {currentWs?.status === "submitted" && (
-                    <>
-                      <Button type="button" onClick={() => void adminDecideWorkspace("approved")}>
-                        اعتماد التبويب (مدير/مشرف)
-                      </Button>
-                      <Button type="button" variant="secondary" onClick={() => void adminDecideWorkspace("returned")}>
-                        إعادة التبويب للتعديل
-                      </Button>
-                    </>
-                  )}
-                </div>
+              <div className="flex flex-wrap justify-end gap-2">
                 <Button type="button" variant="secondary" onClick={() => void exportKind(tab === "document" ? "document" : "closure")}>
                   تصدير PDF
                 </Button>
@@ -555,7 +611,7 @@ export default function ProjectDossierWorkspace() {
                     return;
                   }
                   toast.success({ title: "أُضيف النشاط" });
-                  await load();
+                  await load("silent");
                 }}
                 onComplete={async (id, payload) => {
                   const fd = new FormData();
@@ -576,7 +632,7 @@ export default function ProjectDossierWorkspace() {
                     return;
                   }
                   toast.success({ title: "تم إتمام النشاط مع الشاهد" });
-                  await load();
+                  await load("silent");
                 }}
                 onDelete={async (id) => {
                   const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/activities/${id}/`, {
@@ -586,7 +642,7 @@ export default function ProjectDossierWorkspace() {
                     toast.error({ title: "تعذّر الحذف" });
                     return;
                   }
-                  await load();
+                  await load("silent");
                 }}
               />
                 </>
@@ -632,7 +688,7 @@ export default function ProjectDossierWorkspace() {
                     return;
                   }
                   toast.success({ title: "حُدّث المخصص" });
-                  await load();
+                  await load("silent");
                 }}
                 onSpend={async (lineId, amount) => {
                   const res = await authFetch(
@@ -645,7 +701,7 @@ export default function ProjectDossierWorkspace() {
                     return;
                   }
                   toast.success({ title: "تم الخصم من البند" });
-                  await load();
+                  await load("silent");
                 }}
               />
                 </>

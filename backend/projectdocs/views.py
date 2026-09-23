@@ -182,7 +182,18 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             data=ser.validated_data["data"],
             user=request.user,
         )
-        return Response(DossierSectionSerializer(section).data)
+        body = DossierSectionSerializer(section).data
+        if kind == "card":
+            _drop_prefetched(dossier)
+            mirrored = dossier.sections.filter(
+                kind="document",
+                key__in=("basics", "indicators", "similar_experiences", "budget"),
+            )
+            body = {
+                **body,
+                "synced_document": DossierSectionSerializer(mirrored, many=True).data,
+            }
+        return Response(body)
 
     @action(
         detail=True,
@@ -274,7 +285,17 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             user=request.user,
             request=request,
         )
-        return Response({"decision": approval.decision, "note": approval.note})
+        _drop_prefetched(dossier)
+        return Response(
+            {
+                "decision": approval.decision if approval else ser.validated_data["decision"],
+                "note": approval.note if approval else "",
+                "workspaces": [
+                    {"key": w.key, "status": w.status}
+                    for w in dossier.workspaces.order_by("order")
+                ],
+            }
+        )
 
     @action(detail=True, methods=["post"], url_path=r"stages/(?P<order>[0-9]+)/submit")
     def submit_stage(self, request, pk=None, order=None):

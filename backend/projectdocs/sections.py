@@ -10,7 +10,7 @@ from rest_framework import serializers
 # تبويبات ملف المشروع — سلسلة الاعتماد (الإكسل: بطاقة/وثيقة/خطة/إغلاق + لوحة)
 # البطاقة بلا اعتماد؛ الباقي متسلسل لعمل الموظف.
 WORKSPACES = (
-    {"order": 1, "key": "card", "label": "البطاقة", "needs_approval": False},
+    {"order": 1, "key": "card", "label": "البطاقة", "needs_approval": True},
     {"order": 2, "key": "document", "label": "الوثيقة", "needs_approval": True},
     {"order": 3, "key": "plan", "label": "الخطة التنفيذية", "needs_approval": True},
     {"order": 4, "key": "closure", "label": "الإغلاق", "needs_approval": True},

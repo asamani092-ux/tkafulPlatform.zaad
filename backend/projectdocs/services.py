@@ -150,8 +150,6 @@ def create_dossier_for_project(
     ws_rows = []
     for w in catalog.WORKSPACES:
         if w["key"] == "card":
-            status = "approved"  # بلا اعتماد
-        elif w["key"] == "document":
             status = "active"
         else:
             status = "locked"
@@ -365,14 +363,12 @@ def active_stage(dossier: ProjectDossier) -> DossierStage | None:
 
 
 def can_bypass_workspace_gates(user, dossier: ProjectDossier) -> bool:
-    """مشرف عام أو مدير الإدارة (الراعي) — وإن كان هو نفسه مدير المشروع. O(1)."""
+    """مشرف عام أو المدير المعيّن على الملف فقط. الراعي لا يتجاوز القفل. O(1)."""
     if not user or not user.is_authenticated:
         return False
     if is_super_admin(user):
         return True
-    email = (getattr(user, "email", "") or "").strip().lower()
-    sponsor = (dossier.sponsor_email or "").strip().lower()
-    return bool(email and sponsor and email == sponsor)
+    return bool(dossier.manager_id and dossier.manager_id == user.id)
 
 
 def workspace_def(key: str) -> dict | None:
@@ -387,13 +383,13 @@ def get_workspace(dossier: ProjectDossier, key: str) -> DossierWorkspace:
 
 
 def assert_workspace_open_for_work(user, dossier: ProjectDossier, key: str) -> DossierWorkspace:
-    """قفل تسلسل التبويبات على الموظف/مدير المشروع؛ مفتوح لمدير الإدارة والمشرف. O(1)."""
+    """الموظف والراعي يعملان على التبويب النشط فقط. المدير المعيّن والمشرف يتجاوزان القفل. O(1)."""
     ws = get_workspace(dossier, key)
-    if key == "card" or can_bypass_workspace_gates(user, dossier):
+    if can_bypass_workspace_gates(user, dossier):
         return ws
     if ws.status not in ("active", "returned"):
         raise ValidationError(
-            {"workspace": "هذا التبويب مقفل حتى اعتماد التبويب السابق من مدير الإدارة"}
+            {"workspace": "هذا التبويب مقفل حتى اعتماد التبويب السابق من المدير"}
         )
     return ws
 
@@ -851,10 +847,10 @@ def decide_document_section(
     request=None,
 ) -> DossierSection:
     """اعتماد/إعادة بطاقة وثيقة من المدير (مشرف أو راعي). O(S)."""
-    if decision not in ("approved", "returned"):
+    if decision not in ("approved", "returned", "revoke"):
         raise ValidationError({"decision": "قرار غير صالح"})
     if not can_bypass_workspace_gates(user, dossier):
-        raise PermissionDenied("اعتماد بطاقات الوثيقة للمشرف أو مدير الإدارة فقط")
+        raise PermissionDenied("اعتماد بطاقات الوثيقة للمشرف أو المدير المعيّن فقط")
     assert_workspace_open_for_work(user, dossier, "document")
     if not catalog.get_section_def("document", key):
         raise ValidationError({"key": "قسم غير معروف"})
@@ -865,12 +861,16 @@ def decide_document_section(
         if section.status not in ("filled", "submitted", "returned", "approved"):
             raise ValidationError({"status": "لا يمكن اعتماد بطاقة فارغة"})
         section.status = "approved"
+    elif decision == "revoke":
+        if section.status != "approved":
+            raise ValidationError({"status": "البطاقة ليست معتمدة"})
+        section.status = "filled" if catalog.section_is_filled(section.data or {}) else "empty"
     else:
         section.status = "returned"
     section.updated_by = user
     section.save(update_fields=["status", "updated_by", "updated_at"])
 
-    # عند اكتمال اعتماد كل البطاقات → اعتماد تبويب الوثيقة تلقائياً
+    doc_ws = dossier.workspaces.filter(key="document").first()
     if decision == "approved":
         keys = catalog.all_section_keys("document")
         pending = (
@@ -878,10 +878,13 @@ def decide_document_section(
             .exclude(status="approved")
             .count()
         )
-        if pending == 0:
-            ws = dossier.workspaces.filter(key="document").first()
-            if ws and ws.status in ("active", "returned", "submitted"):
-                _approve_workspace(dossier, "document", actor=user, request=request)
+        if pending == 0 and doc_ws and doc_ws.status in ("active", "returned", "submitted"):
+            _approve_workspace(dossier, "document", actor=user, request=request)
+    elif decision == "revoke" and doc_ws and doc_ws.status == "approved":
+        doc_ws.status = "active"
+        doc_ws.approved_at = None
+        doc_ws.save(update_fields=["status", "approved_at", "updated_at"])
+        _lock_following_unapproved(dossier, doc_ws.order)
 
     log_activity(
         actor=user,
@@ -959,6 +962,40 @@ def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -
         roles=["admin"],
     )
     return approval
+
+
+def _lock_following_unapproved(dossier: ProjectDossier, order: int) -> None:
+    """يقفل التبويبات اللاحقة غير المعتمدة. O(W)."""
+    for nxt in dossier.workspaces.filter(order__gt=order).order_by("order"):
+        if nxt.status == "approved":
+            continue
+        if nxt.status != "locked":
+            nxt.status = "locked"
+            nxt.return_note = ""
+            nxt.save(update_fields=["status", "return_note", "updated_at"])
+
+
+def _revoke_workspace(dossier: ProjectDossier, key: str, *, actor=None, request=None):
+    """إزالة اعتماد تبويب وإقفال ما فُتح بعده ولم يُعتمد. O(W)."""
+    ws = dossier.workspaces.select_for_update().filter(key=key).first()
+    if not ws:
+        raise ValidationError({"workspace": "تبويب غير موجود"})
+    if ws.status != "approved":
+        raise ValidationError({"status": "التبويب ليس معتمداً"})
+    ws.status = "active"
+    ws.approved_at = None
+    ws.return_note = ""
+    ws.save(update_fields=["status", "approved_at", "return_note", "updated_at"])
+    _lock_following_unapproved(dossier, ws.order)
+    dossier.status = "in_progress"
+    dossier.save(update_fields=["status", "updated_at"])
+    log_activity(
+        actor=actor,
+        action=ACTION_STAGE_RETURN,
+        summary=f"إزالة اعتماد تبويب {key} — {dossier.code}",
+        request=request,
+        target=dossier,
+    )
 
 
 def _workspace_label(key: str) -> str:
@@ -1148,9 +1185,10 @@ def apply_approval_decision(
         else:
             _return_workspace(dossier, locked.scope, note=note, actor=actor, request=request)
     elif locked.scope == "card":
-        # البطاقة بلا اعتماد عمليًا
-        dossier.status = "in_progress"
-        dossier.save(update_fields=["status", "updated_at"])
+        if decision == "approved":
+            _approve_workspace(dossier, "card", actor=actor, request=request)
+        else:
+            _return_workspace(dossier, "card", note=note, actor=actor, request=request)
 
     log_activity(
         actor=actor,
@@ -1226,15 +1264,22 @@ def _return_stage(dossier: ProjectDossier, stage: DossierStage, *, note: str, ac
 
 @transaction.atomic
 def admin_decide_workspace(*, dossier: ProjectDossier, key: str, decision: str, note: str, user, request=None):
-    """اعتماد/إعادة تبويب من داخل المنصة (مشرف أو مدير الإدارة)."""
-    if not (is_super_admin(user) or can_bypass_workspace_gates(user, dossier)):
-        raise PermissionDenied("الاعتماد الداخلي للمشرف أو مدير الإدارة فقط")
+    """اعتماد أو إزالة اعتماد تبويب من المنصة (مشرف أو المدير المعيّن)."""
+    if not can_bypass_workspace_gates(user, dossier):
+        raise PermissionDenied("الاعتماد الداخلي للمشرف أو المدير المعيّن فقط")
     ws = dossier.workspaces.select_for_update().filter(key=key).first()
     if not ws:
         raise ValidationError({"workspace": "تبويب غير موجود"})
+    if decision == "revoke":
+        _revoke_workspace(dossier, key, actor=user, request=request)
+        return None
+    if decision == "approved" and ws.status != "submitted":
+        if ws.status not in ("active", "returned"):
+            raise ValidationError({"status": "لا يمكن اعتماد هذا التبويب الآن"})
+        _approve_workspace(dossier, key, actor=user, request=request)
+        return None
     if ws.status != "submitted":
         raise ValidationError({"status": "التبويب ليس بانتظار الاعتماد"})
-    # استخدم طلب الإيميل القائم إن وُجد حتى لا يبقى الرمز صالحاً بعد القرار الداخلي
     approval = (
         ApprovalRequest.objects.select_for_update()
         .filter(dossier=dossier, scope=key, decision="pending")

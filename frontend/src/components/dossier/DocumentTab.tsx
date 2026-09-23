@@ -24,7 +24,7 @@ type Props = {
   teamCandidates: TeamCandidate[];
   onDraftChange: (sectionKey: string, data: Record<string, unknown>) => void;
   onSave: (sectionKey: string) => void;
-  onDecide: (sectionKey: string, decision: "approved" | "returned") => void;
+  onDecide: (sectionKey: string, decision: "approved" | "revoke") => void;
 };
 
 type Row = Record<string, string | number | boolean>;
@@ -624,6 +624,28 @@ export default function DocumentTab({
                 ) : null}
               </span>
             }
+            actions={
+              canApprove ? (
+                status === "approved" ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => onDecide(def.key, "revoke")}
+                    disabled={decidingKey === def.key}
+                  >
+                    إزالة الاعتماد
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={() => onDecide(def.key, "approved")}
+                    disabled={decidingKey === def.key || status === "empty"}
+                  >
+                    اعتماد
+                  </Button>
+                )
+              ) : null
+            }
           >
             {ui === "logical_matrix" && (
               <LogicalImpactMatrix data={data} disabled={!editable} onChange={(n) => onDraftChange(def.key, n)} />
@@ -700,25 +722,6 @@ export default function DocumentTab({
               {editable && (
                 <Button type="button" onClick={() => onSave(def.key)} disabled={savingKey === draftKey}>
                   حفظ {def.label}
-                </Button>
-              )}
-              {canApprove && status !== "approved" && (
-                <Button
-                  type="button"
-                  onClick={() => onDecide(def.key, "approved")}
-                  disabled={decidingKey === def.key || status === "empty"}
-                >
-                  اعتماد
-                </Button>
-              )}
-              {canApprove && status === "approved" && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => onDecide(def.key, "returned")}
-                  disabled={decidingKey === def.key}
-                >
-                  إعادة للتعديل
                 </Button>
               )}
             </div>
