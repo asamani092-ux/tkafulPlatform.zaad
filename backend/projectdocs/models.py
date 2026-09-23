@@ -86,6 +86,7 @@ class DossierSection(models.Model):
     KIND_CHOICES = [
         ("card", "بطاقة المشروع"),
         ("document", "وثيقة المشروع"),
+        ("plan", "الخطة التنفيذية"),
         ("closure", "وثيقة الإغلاق"),
     ]
     STATUS_CHOICES = [
@@ -196,6 +197,8 @@ class StageActivity(models.Model):
     notes = models.TextField(blank=True)
     risks = models.TextField(blank=True)
     sort_order = models.PositiveIntegerField(default=0)
+    source = models.CharField(max_length=20, default="plan")
+    locked = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

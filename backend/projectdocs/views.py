@@ -159,6 +159,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             return Response({"detail": "لا يوجد ملف"}, status=404)
         self.check_object_permissions(request, dossier)
         services.sync_document_from_card(dossier)
+        services.sync_plan_from_document(dossier)
         dossier.refresh_from_db()
         _drop_prefetched(dossier)
         return Response(ProjectDossierSerializer(dossier, context={"request": request}).data)
@@ -166,6 +167,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         dossier = self.get_object()
         services.sync_document_from_card(dossier)
+        services.sync_plan_from_document(dossier)
         dossier.refresh_from_db()
         _drop_prefetched(dossier)
         return Response(ProjectDossierSerializer(dossier, context={"request": request}).data)
@@ -216,6 +218,37 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         if hasattr(dossier, "_prefetched_objects_cache"):
             dossier._prefetched_objects_cache.pop("workspaces", None)
             dossier._prefetched_objects_cache.pop("sections", None)
+        return Response(
+            {
+                "section": DossierSectionSerializer(section).data,
+                "workspaces": [
+                    {"key": w.key, "status": w.status}
+                    for w in dossier.workspaces.order_by("order")
+                ],
+            }
+        )
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"sections/plan/(?P<key>[^/.]+)/decide",
+    )
+    def decide_plan_phase(self, request, pk=None, key=None):
+        dossier = self.get_object()
+        ser = DecideSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            section = services.decide_plan_phase(
+                dossier=dossier,
+                key=key,
+                decision=ser.validated_data["decision"],
+                note=ser.validated_data.get("note") or "",
+                user=request.user,
+                request=request,
+            )
+        except ValidationError as exc:
+            return Response(exc.detail, status=400)
+        _drop_prefetched(dossier)
         return Response(
             {
                 "section": DossierSectionSerializer(section).data,
@@ -348,10 +381,11 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
     def activities(self, request, pk=None):
         dossier = self.get_object()
         if request.method == "GET":
+            services.sync_plan_from_document(dossier)
             qs = StageActivity.objects.filter(stage__dossier=dossier).select_related("stage", "parent")
             return Response(StageActivitySerializer(qs, many=True).data)
         services.assert_can_edit(request.user, dossier)
-        data = {**request.data}
+        data = {k: v for k, v in request.data.items() if k not in ("source", "locked")}
         stage_id = data.get("stage")
         stage = dossier.stages.filter(pk=stage_id).first() if stage_id else None
         if stage_id and not stage:
@@ -360,6 +394,16 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             services.assert_workspace_open_for_work(request.user, dossier, "plan")
         except ValidationError as exc:
             return Response(exc.detail, status=400)
+        parent_id = data.get("parent")
+        if parent_id:
+            parent = StageActivity.objects.filter(
+                pk=parent_id, stage__dossier=dossier, parent__isnull=True
+            ).first()
+            if not parent:
+                return Response({"parent": "النشاط الرئيسي غير موجود"}, status=400)
+            data["stage"] = parent.stage_id
+        if not data.get("code"):
+            data["code"] = services._next_activity_code(dossier)
         ser = StageActivitySerializer(data=data)
         ser.is_valid(raise_exception=True)
         obj = ser.save()
@@ -378,10 +422,15 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             services.assert_workspace_open_for_work(request.user, dossier, "plan")
         except ValidationError as exc:
             return Response(exc.detail, status=400)
+        if activity.locked and request.method == "DELETE":
+            return Response({"detail": "النشاط منسوخ من الوثيقة ولا يُحذف"}, status=400)
         if request.method == "DELETE":
             activity.delete()
             return Response(status=204)
-        ser = StageActivitySerializer(activity, data=request.data, partial=True)
+        if activity.locked and "title" in request.data and str(request.data.get("title") or "").strip() != activity.title:
+            return Response({"title": "عنوان النشاط المنسوخ من الوثيقة مقفل"}, status=400)
+        payload = {k: v for k, v in request.data.items() if k not in ("source", "locked", "code")}
+        ser = StageActivitySerializer(activity, data=payload, partial=True)
         ser.is_valid(raise_exception=True)
         obj = ser.save()
         return Response(StageActivitySerializer(obj).data)

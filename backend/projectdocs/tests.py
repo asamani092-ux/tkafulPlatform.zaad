@@ -234,7 +234,7 @@ class DossierApiTests(APITestCase):
         )
         self.assertEqual(res.status_code, 201, res.content)
         self.assertTrue(res.data["code"].startswith("PRJ-"))
-        self.assertEqual(len(res.data["sections"]), 29)
+        self.assertEqual(len(res.data["sections"]), 34)
         self.assertEqual(len(res.data["stages"]), 5)
         self.assertEqual(len(res.data["workspaces"]), 5)
         self.assertEqual(res.data["workspaces"][0]["key"], "card")
@@ -1007,3 +1007,111 @@ class DocumentTwelveCardsTests(APITestCase):
             format="json",
         )
         self.assertEqual(blocked.status_code, 400, blocked.content)
+
+
+class PlanFromPhasesTests(APITestCase):
+    """مزامنة أنشطة الوثيقة إلى الخطة، قفل العنوان، واعتماد المراحل. O(P+A)."""
+
+    def setUp(self):
+        self.admin = make_user("planadmin", role="admin")
+        self.manager = make_user("planmgr", role="user")
+
+    def _create(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/projectdocs/dossiers/",
+            {
+                "name": "خطة",
+                "sponsor_email": "plan@test.com",
+                "sponsor_name": "راعٍ",
+                "manager_id": self.manager.id,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        return res.data["id"]
+
+    def _phases(self, activities):
+        return {
+            "phases": [
+                {"key": "define", "label": "تحديد وتعريف المشروع", "activities": activities},
+                {"key": "prepare", "label": "إعداد المشروع", "activities": []},
+                {"key": "plan", "label": "التخطيط للمشروع", "activities": []},
+                {"key": "execute", "label": "تنفيذ المشروع", "activities": []},
+                {"key": "close", "label": "إغلاق المشروع", "activities": []},
+            ]
+        }
+
+    def test_sync_locks_title_and_keeps_row_after_chip_removed(self):
+        dossier_id = self._create()
+        saved = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/main_phases/",
+            {"data": self._phases(["حفر"])},
+            format="json",
+        )
+        self.assertEqual(saved.status_code, 200, saved.content)
+        listed = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/activities/")
+        self.assertEqual(listed.status_code, 200, listed.content)
+        row = next(a for a in listed.data if a["title"] == "حفر")
+        self.assertTrue(row["locked"])
+        self.assertEqual(row["source"], "document")
+        self.assertIsNone(row["parent"])
+
+        renamed = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{row['id']}/",
+            {"title": "عنوان آخر"},
+            format="json",
+        )
+        self.assertEqual(renamed.status_code, 400, renamed.content)
+        removed = self.client.delete(f"/api/projectdocs/dossiers/{dossier_id}/activities/{row['id']}/")
+        self.assertEqual(removed.status_code, 400, removed.content)
+
+        child = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/",
+            {"parent": row["id"], "title": "فرعي"},
+            format="json",
+        )
+        self.assertEqual(child.status_code, 201, child.content)
+        self.assertEqual(child.data["parent"], row["id"])
+        self.assertFalse(child.data["locked"])
+
+        self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/main_phases/",
+            {"data": self._phases([])},
+            format="json",
+        )
+        again = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/activities/")
+        titles = [a["title"] for a in again.data]
+        self.assertIn("حفر", titles)
+        self.assertIn("فرعي", titles)
+
+    def test_plan_workspace_requires_five_phase_approvals(self):
+        dossier_id = self._create()
+        approve_card_workspace(self.client, dossier_id)
+        self.client.force_authenticate(self.manager)
+        fill_all_document_sections(self.client, dossier_id)
+        self.client.force_authenticate(self.admin)
+        for key in [s["key"] for s in DOC_SECS]:
+            res = self.client.post(
+                f"/api/projectdocs/dossiers/{dossier_id}/sections/document/{key}/decide/",
+                {"decision": "approved"},
+                format="json",
+            )
+            self.assertEqual(res.status_code, 200, res.content)
+        early = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/workspaces/plan/decide/",
+            {"decision": "approved"},
+            format="json",
+        )
+        self.assertEqual(early.status_code, 400, early.content)
+        keys = ["define", "prepare", "plan", "execute", "close"]
+        last = None
+        for key in keys:
+            last = self.client.post(
+                f"/api/projectdocs/dossiers/{dossier_id}/sections/plan/{key}/decide/",
+                {"decision": "approved"},
+                format="json",
+            )
+            self.assertEqual(last.status_code, 200, last.content)
+        ws = next(w for w in last.data["workspaces"] if w["key"] == "plan")
+        self.assertEqual(ws["status"], "approved")
