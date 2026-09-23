@@ -168,8 +168,21 @@ function FixedPhasesActivities({
   return (
     <div className="space-y-3" dir="rtl">
       {phases.map((phase, i) => (
-        <div key={phase.key} className="rounded-xl border border-surface-border bg-surface p-3">
-          <h4 className="mb-2 text-sm font-extrabold text-primary">{phase.label}</h4>
+        <CollapsibleCard
+          key={phase.key}
+          title={phase.label}
+          defaultOpen={false}
+          subtitle={
+            phase.activities.length ? `${phase.activities.length} نشاط` : "لا أنشطة بعد"
+          }
+          badge={
+            phase.activities.length > 0 ? (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+                {phase.activities.length}
+              </span>
+            ) : null
+          }
+        >
           <div className="mb-2 flex flex-wrap gap-2">
             {phase.activities.map((act, j) => (
               <span
@@ -212,7 +225,7 @@ function FixedPhasesActivities({
               </Button>
             </div>
           )}
-        </div>
+        </CollapsibleCard>
       ))}
     </div>
   );
@@ -582,48 +595,36 @@ export default function DocumentTab({
         const approved = status === "approved";
         const editable = canEdit && !approved;
         const ui = def.ui || "default";
+        const statusLabel = SECTION_STATUS_AR[status] || status;
+        const rowCount = Array.isArray(data.rows)
+          ? data.rows.length
+          : Array.isArray(data.phases)
+            ? data.phases.length
+            : Array.isArray(data.lines)
+              ? data.lines.length
+              : 0;
 
         return (
           <CollapsibleCard
             key={def.key}
             title={def.label}
             defaultOpen={false}
-            subtitle={SECTION_STATUS_AR[status] || status}
+            subtitle={rowCount > 0 ? `${statusLabel} · ${rowCount} عنصر` : statusLabel}
             badge={
-              def.from_card ? (
-                <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-800">من البطاقة</span>
-              ) : null
+              <span className="flex flex-wrap items-center gap-1">
+                {def.from_card ? (
+                  <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-800">
+                    من البطاقة
+                  </span>
+                ) : null}
+                {rowCount > 0 ? (
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+                    {rowCount}
+                  </span>
+                ) : null}
+              </span>
             }
           >
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap gap-2">
-                {editable && (
-                  <Button type="button" onClick={() => onSave(def.key)} disabled={savingKey === draftKey}>
-                    حفظ
-                  </Button>
-                )}
-                {canApprove && status !== "approved" && (
-                  <Button
-                    type="button"
-                    onClick={() => onDecide(def.key, "approved")}
-                    disabled={decidingKey === def.key || status === "empty"}
-                  >
-                    اعتماد
-                  </Button>
-                )}
-                {canApprove && status === "approved" && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => onDecide(def.key, "returned")}
-                    disabled={decidingKey === def.key}
-                  >
-                    إعادة للتعديل
-                  </Button>
-                )}
-              </div>
-            </div>
-
             {ui === "logical_matrix" && (
               <LogicalImpactMatrix data={data} disabled={!editable} onChange={(n) => onDraftChange(def.key, n)} />
             )}
@@ -694,6 +695,33 @@ export default function DocumentTab({
                 )}
               </>
             )}
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {editable && (
+                <Button type="button" onClick={() => onSave(def.key)} disabled={savingKey === draftKey}>
+                  حفظ {def.label}
+                </Button>
+              )}
+              {canApprove && status !== "approved" && (
+                <Button
+                  type="button"
+                  onClick={() => onDecide(def.key, "approved")}
+                  disabled={decidingKey === def.key || status === "empty"}
+                >
+                  اعتماد
+                </Button>
+              )}
+              {canApprove && status === "approved" && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => onDecide(def.key, "returned")}
+                  disabled={decidingKey === def.key}
+                >
+                  إعادة للتعديل
+                </Button>
+              )}
+            </div>
           </CollapsibleCard>
         );
       })}
