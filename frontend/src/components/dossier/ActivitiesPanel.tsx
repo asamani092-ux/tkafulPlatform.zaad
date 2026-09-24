@@ -289,7 +289,7 @@ export default function ActivitiesPanel({
             }}
           />
         </td>
-        <td className="border-b border-surface-border px-2 py-2">
+        <td className="sticky left-0 z-10 border-b border-surface-border bg-surface px-2 py-2">
           <div className="flex items-center gap-2">
             <div className="flex flex-wrap gap-1">
               {canEdit && a.manual_status !== "done" && (
@@ -353,11 +353,14 @@ export default function ActivitiesPanel({
         }
       >
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] border-collapse text-sm">
+          <table className="w-full min-w-[1100px] border-separate border-spacing-0 text-sm">
             <thead>
               <tr className="bg-surface-muted/40">
-                {["المستوى", "المرحلة", "النشاط الرئيسي", "النشاط الفرعي", "حالة التنفيذ", "الحالة التلقائية", "تاريخ البدء", "تاريخ الانتهاء", "المدة / عداد الإغلاق", "مؤشر الأداء", "المسؤول", ""].map((h) => (
-                  <th key={h || "add"} className="border-b border-surface-border px-2 py-2 text-right font-bold text-primary">
+                {["المستوى", "المرحلة", "النشاط الرئيسي", "النشاط الفرعي", "حالة التنفيذ", "الحالة التلقائية", "تاريخ البدء", "تاريخ الانتهاء", "المدة / عداد الإغلاق", "مؤشر الأداء", "المسؤول", ""].map((h, idx, arr) => (
+                  <th
+                    key={h || "add"}
+                    className={`border-b border-surface-border px-2 py-2 text-right font-bold text-primary ${idx === arr.length - 1 ? "sticky left-0 z-10 bg-surface" : ""}`}
+                  >
                     {h}
                   </th>
                 ))}
@@ -386,7 +389,7 @@ export default function ActivitiesPanel({
                             ))}
                         </span>
                       </td>
-                      <td className="border-b border-surface-border px-2 py-2">{renderAdder(stage.id, null)}</td>
+                      <td className="sticky left-0 z-10 border-b border-surface-border bg-primary/[0.06] px-2 py-2">{renderAdder(stage.id, null)}</td>
                     </tr>
                     {stageMains.map((main) => (
                       <Fragment key={main.id}>
