@@ -298,5 +298,12 @@ class AllocateSerializer(serializers.Serializer):
 class CompleteActivitySerializer(serializers.Serializer):
     lessons = serializers.CharField(required=False, allow_blank=True, default="")
     notes = serializers.CharField(required=False, allow_blank=True, default="")
-    evidence_url = serializers.URLField(required=False, allow_blank=True, default="")
+    evidence_url = serializers.CharField(required=False, allow_blank=True, default="")
     evidence_title = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_evidence_url(self, value):
+        text = (value or "").strip()
+        if not text:
+            return ""
+        serializers.URLField().run_validation(text)
+        return text

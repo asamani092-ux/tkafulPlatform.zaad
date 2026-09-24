@@ -132,6 +132,7 @@ export default function ActivitiesPanel({
   const [openAdd, setOpenAdd] = useState<OpenAdd | null>(null);
   const [draft, setDraft] = useState("");
   const [dateError, setDateError] = useState("");
+  const [completeError, setCompleteError] = useState("");
   const [completeId, setCompleteId] = useState<number | null>(null);
   const [completeForm, setCompleteForm] = useState({
     lessons: "",
@@ -191,11 +192,19 @@ export default function ActivitiesPanel({
   const submitComplete = async (e: React.FormEvent) => {
     e.preventDefault();
     if (completeId == null) return;
+    if (!completeForm.evidence_url.trim() && !completeForm.file) {
+      setCompleteError("الشاهد مطلوب عند الإتمام (ملف أو رابط)");
+      return;
+    }
+    setCompleteError("");
     setBusy(true);
     try {
       await onComplete(completeId, completeForm);
       setCompleteId(null);
+      setCompleteError("");
       setCompleteForm({ lessons: "", notes: "", evidence_url: "", evidence_title: "", file: null });
+    } catch {
+      /* رسالة الخادم تظهر في التنبيه وتبقى النافذة */
     } finally {
       setBusy(false);
     }
@@ -264,7 +273,14 @@ export default function ActivitiesPanel({
             className="input-field text-sm"
             disabled={!canEdit}
             value={a.manual_status || ""}
-            onChange={(e) => void patch(a.id, { manual_status: e.target.value })}
+            onChange={(e) => {
+              if (e.target.value === "done") {
+                setCompleteError("");
+                setCompleteId(a.id);
+                return;
+              }
+              void patch(a.id, { manual_status: e.target.value });
+            }}
           >
             <option value="">—</option>
             <option value="in_progress">جاري التنفيذ</option>
@@ -286,7 +302,7 @@ export default function ActivitiesPanel({
           <div className="flex flex-wrap items-center gap-2">
             {level === "رئيسي" ? renderAdder(stage.id, a.id) : null}
             {canEdit && a.manual_status !== "done" && (
-              <Button type="button" variant="secondary" size="sm" onClick={() => setCompleteId(a.id)}>
+              <Button type="button" variant="secondary" size="sm" onClick={() => { setCompleteError(""); setCompleteId(a.id); }}>
                 إتمام
               </Button>
             )}
@@ -416,6 +432,7 @@ export default function ActivitiesPanel({
               </table>
             </div>
             <h4 className="mb-2 mt-4 font-bold text-primary">أسابيع التنفيذ</h4>
+            <p className="mb-2 text-sm text-brand-gray">اضغط مربع الأسبوع الذي وقع فيه التنفيذ داخل تاريخ الواجهة. اللون الأخضر يعني تم التنفيذ في هذا الأسبوع.</p>
             {!range.start || !range.end ? (
               <p className="text-sm text-brand-gray">حدد تاريخ البداية والإغلاق في الواجهة الرئيسية</p>
             ) : !datesOrdered(range.start, range.end) ? (
@@ -489,6 +506,7 @@ export default function ActivitiesPanel({
             onSubmit={submitComplete}
           >
             <h3 className="font-extrabold text-primary">إتمام النشاط</h3>
+            {completeError && <p className="text-sm text-red-600">{completeError}</p>}
             <label className="block text-sm">
               الدرس المستفاد
               <textarea

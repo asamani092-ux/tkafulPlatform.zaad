@@ -492,6 +492,11 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             if error:
                 return error
             payload["executed_weeks"] = cleaned
+        marks_done = payload.get("manual_status") == "done" or (
+            "progress_pct" in payload and str(payload.get("progress_pct") or "0").isdigit() and int(payload.get("progress_pct") or 0) >= 100
+        )
+        if marks_done and not activity.attachments.exists():
+            return Response({"detail": "الشاهد مطلوب عند الإتمام ولا يُغلق النشاط من الحالة وحدها"}, status=400)
         ser = StageActivitySerializer(activity, data=payload, partial=True)
         ser.is_valid(raise_exception=True)
         obj = ser.save()

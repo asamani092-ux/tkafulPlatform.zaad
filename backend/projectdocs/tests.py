@@ -707,6 +707,45 @@ class DossierRestructureTests(APITestCase):
         self.assertEqual(len(section.data["lessons"]), 2)
         self.assertEqual(section.data["lessons"][0]["lesson"], "تعلّمنا التنسيق المبكر")
 
+    def test_status_done_requires_evidence_and_child_can_complete(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/projectdocs/dossiers/",
+            {"name": "إتمام فرعي", "sponsor_email": "child@test.com", "sponsor_name": "راعٍ"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        dossier_id = res.data["id"]
+        stage_id = res.data["stages"][0]["id"]
+        parent = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/",
+            {"stage": stage_id, "title": "رئيسي"},
+            format="json",
+        )
+        self.assertEqual(parent.status_code, 201, parent.content)
+        child = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/",
+            {"parent": parent.data["id"], "title": "فرعي"},
+            format="json",
+        )
+        self.assertEqual(child.status_code, 201, child.content)
+        skipped = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{child.data['id']}/",
+            {"manual_status": "done"},
+            format="json",
+        )
+        self.assertEqual(skipped.status_code, 400, skipped.content)
+        blank_url = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{child.data['id']}/complete/",
+            {"lessons": "درس الفرع", "evidence_url": "", "file": SimpleUploadedFile("شاهد.txt", b"proof")},
+            format="multipart",
+        )
+        self.assertEqual(blank_url.status_code, 200, blank_url.content)
+        self.assertEqual(blank_url.data["manual_status"], "done")
+        self.assertEqual(blank_url.data["parent"], parent.data["id"])
+
     def test_document_closure_comparison_endpoint(self):
         self.client.force_authenticate(self.admin)
         res = self.client.post(
