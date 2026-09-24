@@ -238,8 +238,7 @@ export default function ActivitiesPanel({
           type="button"
           variant="secondary"
           size="sm"
-          iconOnly
-          aria-label="إضافة نشاط"
+          aria-label={parentId == null ? "نشاط رئيسي" : "نشاط فرعي"}
           disabled={busy}
           onClick={() => {
             if (open) {
@@ -250,7 +249,7 @@ export default function ActivitiesPanel({
             setOpenAdd({ stageId, parentId });
           }}
         >
-          +
+          {parentId == null ? "نشاط رئيسي" : "نشاط فرعي"}
         </Button>
       </div>
     );
