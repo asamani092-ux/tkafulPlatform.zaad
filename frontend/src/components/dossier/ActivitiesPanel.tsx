@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import Button from "../ui/Button";
 import CollapsibleCard from "./CollapsibleCard";
-import { AUTO_STATUS_AR, STAGE_KEY_AR, type DossierStageRow, type StageActivity } from "./types";
+import { STAGE_KEY_AR, type DossierStageRow, type StageActivity } from "./types";
 
 type Props = {
   stages: DossierStageRow[];
@@ -284,7 +284,6 @@ export default function ActivitiesPanel({
             <option value="done">تم التنفيذ</option>
           </select>
         </td>
-        <td className={`${cell} text-xs`}>{AUTO_STATUS_AR[a.auto_status] || a.auto_status}</td>
         <td className={cell}>
           <input
             type="date"
@@ -303,17 +302,6 @@ export default function ActivitiesPanel({
             defaultValue={a.end_date || ""}
             key={`${a.id}-e-${a.end_date}`}
             onBlur={(e) => saveActivityDates(a, a.start_date, e.target.value || null)}
-          />
-        </td>
-        <td className={cell}>
-          <input
-            className="input-field w-full text-sm"
-            disabled={!canEdit}
-            defaultValue={a.kpi || ""}
-            key={`${a.id}-k-${a.kpi}`}
-            onBlur={(e) => {
-              if (e.target.value !== (a.kpi || "")) void patch(a.id, { kpi: e.target.value });
-            }}
           />
         </td>
         <td className={cell}>
@@ -341,36 +329,6 @@ export default function ActivitiesPanel({
               </Button>
             )}
           </div>
-          {completeId === a.id && (
-            <form className="mt-2 space-y-2" onSubmit={submitComplete}>
-              <input
-                className="input-field w-full text-sm"
-                placeholder="الدرس المستفاد"
-                required
-                value={completeForm.lessons}
-                onChange={(e) => setCompleteForm({ ...completeForm, lessons: e.target.value })}
-              />
-              <input
-                className="input-field w-full text-sm"
-                placeholder="ملاحظات"
-                value={completeForm.notes}
-                onChange={(e) => setCompleteForm({ ...completeForm, notes: e.target.value })}
-              />
-              <input
-                className="input-field w-full text-sm"
-                placeholder="رابط الشاهد"
-                value={completeForm.evidence_url}
-                onChange={(e) => setCompleteForm({ ...completeForm, evidence_url: e.target.value })}
-              />
-              <input
-                type="file"
-                onChange={(e) => setCompleteForm({ ...completeForm, file: e.target.files?.[0] || null })}
-              />
-              <Button type="submit" disabled={busy}>
-                تأكيد الإتمام
-              </Button>
-            </form>
-          )}
         </td>
       </tr>
     );
@@ -479,7 +437,7 @@ export default function ActivitiesPanel({
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="bg-surface-muted/40">
-                    {["المستوى", "النشاط", "الحالة اليدوية", "الحالة التلقائية", "البداية", "الإغلاق", "المؤشر", "المسؤول", ""].map((h) => (
+                    {["المستوى", "النشاط", "الحالة", "البداية", "الإغلاق", "المسؤول", ""].map((h) => (
                       <th key={h || "add"} className={`${cell} text-right font-bold text-primary`}>
                         {h}
                       </th>
@@ -543,6 +501,53 @@ export default function ActivitiesPanel({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {completeId != null && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setCompleteId(null)}>
+          <form
+            className="w-full max-w-md space-y-3 rounded-xl bg-surface p-4 shadow-lg"
+            dir="rtl"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={submitComplete}
+          >
+            <h3 className="font-extrabold text-primary">إتمام النشاط</h3>
+            <label className="block text-sm">
+              الدرس المستفاد
+              <textarea
+                className="input-field mt-1 w-full text-sm"
+                required
+                rows={3}
+                value={completeForm.lessons}
+                onChange={(e) => setCompleteForm({ ...completeForm, lessons: e.target.value })}
+              />
+            </label>
+            <input
+              className="input-field w-full text-sm"
+              placeholder="ملاحظات"
+              value={completeForm.notes}
+              onChange={(e) => setCompleteForm({ ...completeForm, notes: e.target.value })}
+            />
+            <input
+              className="input-field w-full text-sm"
+              placeholder="رابط الشاهد"
+              value={completeForm.evidence_url}
+              onChange={(e) => setCompleteForm({ ...completeForm, evidence_url: e.target.value })}
+            />
+            <input
+              type="file"
+              onChange={(e) => setCompleteForm({ ...completeForm, file: e.target.files?.[0] || null })}
+            />
+            <div className="flex gap-2">
+              <Button type="submit" disabled={busy}>
+                تأكيد الإتمام
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setCompleteId(null)}>
+                إلغاء
+              </Button>
+            </div>
+          </form>
         </div>
       )}
     </div>

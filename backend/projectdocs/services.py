@@ -844,6 +844,7 @@ def complete_activity(
     activity.progress_pct = 100
     refresh_activity_auto_status(activity, save=False)
     activity.save()
+    _append_closure_lesson(dossier, activity, activity.lessons)
     if has_file or has_url:
         DossierAttachment.objects.create(
             dossier=dossier,
@@ -855,6 +856,29 @@ def complete_activity(
             uploaded_by=user,
         )
     return activity
+
+
+def _append_closure_lesson(dossier: ProjectDossier, activity: StageActivity, lesson: str) -> None:
+    """يُلحق الدرس بصفوف الإغلاق دون استبدال السابق. O(R)."""
+    text = (lesson or "").strip()
+    if not text:
+        return
+    section = dossier.sections.filter(kind="closure", key="lessons_learned").first()
+    if not section:
+        return
+    data = dict(section.data or {})
+    rows = [row for row in (data.get("lessons") or []) if isinstance(row, dict)]
+    rows.append(
+        {
+            "activity_code": activity.code or "",
+            "lesson": text,
+            "recommendation": "",
+        }
+    )
+    data["lessons"] = rows
+    section.data = data
+    section.status = "filled"
+    section.save(update_fields=["data", "status", "updated_at"])
 
 
 def document_closure_comparison(dossier: ProjectDossier) -> dict:
