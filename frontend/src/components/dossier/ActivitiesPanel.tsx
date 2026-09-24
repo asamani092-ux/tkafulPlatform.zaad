@@ -70,13 +70,6 @@ function buildMonthWeeks(startIso: string | null, endIso: string | null): MonthB
   return blocks;
 }
 
-function weekHits(activity: StageActivity, week: WeekCell): boolean {
-  if (!activity.start_date || !activity.end_date) return false;
-  const ws = isoDay(week.start);
-  const we = isoDay(week.end);
-  return ws <= activity.end_date && we >= activity.start_date;
-}
-
 function phaseActivities(stageId: number, activities: StageActivity[]): StageActivity[] {
   return activities.filter((a) => a.stage === stageId);
 }
@@ -90,15 +83,6 @@ function execStatus(acts: StageActivity[]): string {
     done(a) || a.auto_status === "in_progress" || a.manual_status === "in_progress";
   if (acts.some(started)) return "جاري";
   return "لم يحن";
-}
-
-function phaseRange(stage: DossierStageRow, acts: StageActivity[]): { start: string | null; end: string | null } {
-  const starts = acts.map((a) => a.start_date).filter((d): d is string => !!d).sort();
-  const ends = acts.map((a) => a.end_date).filter((d): d is string => !!d).sort();
-  return {
-    start: starts[0] || stage.planned_start,
-    end: ends[ends.length - 1] || stage.planned_end,
-  };
 }
 
 function remainingDays(end: string | null): string {
@@ -154,7 +138,10 @@ export default function ActivitiesPanel({
   const detailStage = ordered.find((s) => s.key === detailKey) || null;
   const detailActs = detailStage ? phaseActivities(detailStage.id, activities) : [];
   const detailMains = detailActs.filter((a) => a.parent == null);
-  const range = detailStage ? phaseRange(detailStage, detailActs) : { start: null, end: null };
+  const range = {
+    start: detailStage?.planned_start ?? null,
+    end: detailStage?.planned_end ?? null,
+  };
   const months = useMemo(() => buildMonthWeeks(range.start, range.end), [range.start, range.end]);
 
   const addActivity = async (stageId: number, parentId: number | null) => {
@@ -175,16 +162,10 @@ export default function ActivitiesPanel({
     await onUpdate(id, payload);
   };
 
-  const saveActivityDates = (a: StageActivity, nextStart: string | null, nextEnd: string | null) => {
-    if (!datesOrdered(nextStart, nextEnd)) {
-      setDateError(DATE_ORDER_MSG);
-      return;
-    }
-    setDateError("");
-    const payload: Record<string, unknown> = {};
-    if (nextStart !== a.start_date) payload.start_date = nextStart;
-    if (nextEnd !== a.end_date) payload.end_date = nextEnd;
-    if (Object.keys(payload).length) void patch(a.id, payload);
+  const toggleWeek = (a: StageActivity, weekStart: string) => {
+    const current = a.executed_weeks || [];
+    const next = current.includes(weekStart) ? current.filter((w) => w !== weekStart) : [...current, weekStart];
+    void patch(a.id, { executed_weeks: next });
   };
 
   const saveStageDates = (stage: DossierStageRow, nextStart: string | null, nextEnd: string | null) => {
@@ -285,26 +266,6 @@ export default function ActivitiesPanel({
         </td>
         <td className={cell}>
           <input
-            type="date"
-            className="input-field text-sm"
-            disabled={!canEdit}
-            defaultValue={a.start_date || ""}
-            key={`${a.id}-s-${a.start_date}`}
-            onBlur={(e) => saveActivityDates(a, e.target.value || null, a.end_date)}
-          />
-        </td>
-        <td className={cell}>
-          <input
-            type="date"
-            className="input-field text-sm"
-            disabled={!canEdit}
-            defaultValue={a.end_date || ""}
-            key={`${a.id}-e-${a.end_date}`}
-            onBlur={(e) => saveActivityDates(a, a.start_date, e.target.value || null)}
-          />
-        </td>
-        <td className={cell}>
-          <input
             className="input-field w-full text-sm"
             disabled={!canEdit}
             defaultValue={a.responsible || ""}
@@ -349,7 +310,6 @@ export default function ActivitiesPanel({
           <tbody>
             {ordered.map((stage) => {
               const acts = phaseActivities(stage.id, activities);
-              const span = phaseRange(stage, acts);
               const status = phaseStatus?.[stage.key] || "empty";
               return (
                 <tr key={stage.id}>
@@ -370,9 +330,27 @@ export default function ActivitiesPanel({
                     </span>
                   </td>
                   <td className={cell}>{execStatus(acts)}</td>
-                  <td className={cell}>{span.start || "—"}</td>
-                  <td className={cell}>{span.end || "—"}</td>
-                  <td className={cell}>{remainingDays(span.end)}</td>
+                  <td className={cell}>
+                    <input
+                      type="date"
+                      className="input-field text-sm"
+                      disabled={!canEdit}
+                      defaultValue={stage.planned_start || ""}
+                      key={`${stage.id}-ps-${stage.planned_start}`}
+                      onBlur={(e) => saveStageDates(stage, e.target.value || null, stage.planned_end)}
+                    />
+                  </td>
+                  <td className={cell}>
+                    <input
+                      type="date"
+                      className="input-field text-sm"
+                      disabled={!canEdit}
+                      defaultValue={stage.planned_end || ""}
+                      key={`${stage.id}-pe-${stage.planned_end}`}
+                      onBlur={(e) => saveStageDates(stage, stage.planned_start, e.target.value || null)}
+                    />
+                  </td>
+                  <td className={cell}>{remainingDays(stage.planned_end)}</td>
                   <td className={cell}>
                     <Button
                       type="button"
@@ -391,6 +369,7 @@ export default function ActivitiesPanel({
             })}
           </tbody>
         </table>
+        {dateError && !detailStage && <p className="mt-2 text-sm text-red-600">{dateError}</p>}
       </CollapsibleCard>
 
       {detailStage && (
@@ -406,37 +385,13 @@ export default function ActivitiesPanel({
                 إغلاق
               </Button>
             </div>
-            <div className="mb-3 flex flex-wrap items-end gap-3">
-              <label className="text-sm">
-                بداية المرحلة
-                <input
-                  type="date"
-                  className="input-field mt-1 text-sm"
-                  disabled={!canEdit}
-                  defaultValue={detailStage.planned_start || ""}
-                  key={`${detailStage.id}-ps-${detailStage.planned_start}`}
-                  onBlur={(e) => saveStageDates(detailStage, e.target.value || null, detailStage.planned_end)}
-                />
-              </label>
-              <label className="text-sm">
-                إغلاق المرحلة
-                <input
-                  type="date"
-                  className="input-field mt-1 text-sm"
-                  disabled={!canEdit}
-                  defaultValue={detailStage.planned_end || ""}
-                  key={`${detailStage.id}-pe-${detailStage.planned_end}`}
-                  onBlur={(e) => saveStageDates(detailStage, detailStage.planned_start, e.target.value || null)}
-                />
-              </label>
-              {renderAdder(detailStage.id, null)}
-            </div>
+            <div className="mb-3 flex flex-wrap items-end gap-3">{renderAdder(detailStage.id, null)}</div>
             {dateError && <p className="mb-3 text-sm text-red-600">{dateError}</p>}
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="bg-surface-muted/40">
-                    {["المستوى", "النشاط", "الحالة", "البداية", "الإغلاق", "المسؤول", ""].map((h) => (
+                    {["المستوى", "النشاط", "الحالة", "المسؤول", ""].map((h) => (
                       <th key={h || "add"} className={`${cell} text-right font-bold text-primary`}>
                         {h}
                       </th>
@@ -454,10 +409,10 @@ export default function ActivitiesPanel({
               </table>
             </div>
             <h4 className="mb-2 mt-4 font-bold text-primary">أسابيع التنفيذ</h4>
-            {range.start && range.end && !datesOrdered(range.start, range.end) ? (
+            {!range.start || !range.end ? (
+              <p className="text-sm text-brand-gray">حدد تاريخ البداية والإغلاق في الواجهة الرئيسية</p>
+            ) : !datesOrdered(range.start, range.end) ? (
               <p className="text-sm text-red-600">{DATE_ORDER_MSG}</p>
-            ) : !months.length ? (
-              <p className="text-sm text-brand-gray">لا تواريخ تنفيذ بعد.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="border-collapse text-xs">
@@ -486,12 +441,22 @@ export default function ActivitiesPanel({
                       <tr key={`cal-${a.id}`}>
                         <td className={`${cell} font-bold`}>{a.title}</td>
                         {months.flatMap((m) =>
-                          m.weeks.map((w) => (
-                            <td
-                              key={`${a.id}-${m.label}-${w.label}`}
-                              className={`${cell} ${weekHits(a, w) ? "bg-emerald-200" : ""}`}
-                            />
-                          )),
+                          m.weeks.map((w) => {
+                            const on = (a.executed_weeks || []).includes(w.label);
+                            return (
+                              <td key={`${a.id}-${m.label}-${w.label}`} className={cell}>
+                                <button
+                                  type="button"
+                                  className={`min-h-8 w-full rounded px-1 py-1 text-[10px] leading-tight ${on ? "bg-emerald-500 font-bold text-white" : "bg-transparent"}`}
+                                  disabled={!canEdit}
+                                  aria-pressed={on}
+                                  onClick={() => toggleWeek(a, w.label)}
+                                >
+                                  {on ? "تم التنفيذ في هذا الأسبوع" : w.label}
+                                </button>
+                              </td>
+                            );
+                          }),
                         )}
                       </tr>
                     ))}

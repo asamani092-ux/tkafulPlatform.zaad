@@ -48,6 +48,39 @@ def _dates_out_of_order(start, end) -> bool:
     return bool(s and e and s >= e)
 
 
+def _phase_week_starts(start, end) -> set[str]:
+    """بدايات الأسابيع الأربعة لكل شهر داخل النطاق. O(M)."""
+    s = _date_text(start)
+    e = _date_text(end)
+    if not s or not e or s >= e:
+        return set()
+    y, m = int(s[:4]), int(s[5:7])
+    end_y, end_m = int(e[:4]), int(e[5:7])
+    found: set[str] = set()
+    while (y, m) <= (end_y, end_m):
+        for day in (1, 8, 15, 22):
+            found.add(f"{y:04d}-{m:02d}-{day:02d}")
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    return found
+
+
+def _clean_executed_weeks(activity, weeks):
+    if not isinstance(weeks, list):
+        return None, Response({"executed_weeks": "قائمة أسابيع غير صالحة"}, status=400)
+    allowed = _phase_week_starts(activity.stage.planned_start, activity.stage.planned_end)
+    cleaned: list[str] = []
+    for item in weeks:
+        text = _date_text(item)
+        if not text or text not in allowed:
+            return None, Response({"detail": "الأسبوع خارج نطاق تاريخ الواجهة الرئيسية"}, status=400)
+        if text not in cleaned:
+            cleaned.append(text)
+    return cleaned, None
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def dossier_schema(request):
@@ -454,6 +487,11 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         end = payload["end_date"] if "end_date" in payload else activity.end_date
         if _dates_out_of_order(start, end):
             return Response({"detail": _DATE_ORDER_MSG}, status=400)
+        if "executed_weeks" in payload:
+            cleaned, error = _clean_executed_weeks(activity, payload.get("executed_weeks"))
+            if error:
+                return error
+            payload["executed_weeks"] = cleaned
         ser = StageActivitySerializer(activity, data=payload, partial=True)
         ser.is_valid(raise_exception=True)
         obj = ser.save()

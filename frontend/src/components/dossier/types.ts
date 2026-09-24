@@ -121,6 +121,7 @@ export interface StageActivity {
   responsible: string;
   start_date: string | null;
   end_date: string | null;
+  executed_weeks?: string[];
   manual_status: string;
   auto_status: string;
   progress_pct: number;
