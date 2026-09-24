@@ -337,6 +337,31 @@ export default function ProjectDossierWorkspace() {
     }
   };
 
+  const decidePlanPhase = async (key: string, decision: "approved" | "revoke") => {
+    if (!dossier) return;
+    const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/sections/plan/${key}/decide/`, {
+      method: "POST",
+      body: JSON.stringify({ decision, note: "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error({ title: data.detail || data.status || data.sections || "تعذّر اعتماد المرحلة" });
+      return;
+    }
+    if (data.section) {
+      setDossier((prev) => {
+        if (!prev) return prev;
+        const exists = prev.sections.some((s) => s.kind === "plan" && s.key === key);
+        const sections = exists
+          ? prev.sections.map((s) => (s.kind === "plan" && s.key === key ? { ...s, ...data.section } : s))
+          : [...prev.sections, data.section];
+        return { ...prev, sections };
+      });
+    }
+    if (Array.isArray(data.workspaces)) applyWorkspaces(data.workspaces);
+    toast.success({ title: decision === "approved" ? "اعتُمدت المرحلة" : "أُزيل الاعتماد" });
+  };
+
   const exportKind = async (kind: "document" | "closure") => {
     if (!dossier) return;
     const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/export-payload/`);
@@ -586,21 +611,28 @@ export default function ProjectDossierWorkspace() {
                     إرسال الخطة للاعتماد
                   </Button>
                 )}
-                {workspaces.find((w) => w.key === "plan")?.status === "submitted" && (
-                  <>
-                    <Button type="button" onClick={() => void adminDecideWorkspace("approved")}>
-                      اعتماد (مدير/مشرف)
-                    </Button>
-                    <Button type="button" variant="secondary" onClick={() => void adminDecideWorkspace("returned")}>
-                      إعادة للتعديل
-                    </Button>
-                  </>
-                )}
               </div>
               <ActivitiesPanel
                 stages={dossier.stages}
                 activities={activities}
                 canEdit={canEditWorkspace("plan")}
+                canApprove={!!dossier.bypass_workspace_gates}
+                phaseStatus={Object.fromEntries(
+                  dossier.sections.filter((s) => s.kind === "plan").map((s) => [s.key, s.status]),
+                )}
+                onDecidePhase={(key, decision) => void decidePlanPhase(key, decision)}
+                onUpdate={async (id, payload) => {
+                  const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/activities/${id}/`, {
+                    method: "PATCH",
+                    body: JSON.stringify(payload),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) {
+                    toast.error({ title: data.title || data.detail || "تعذّر الحفظ" });
+                    return;
+                  }
+                  setActivities((prev) => prev.map((a) => (a.id === id ? data : a)));
+                }}
                 onCreate={async (payload) => {
                   const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/activities/`, {
                     method: "POST",

@@ -116,10 +116,12 @@ class StageActivitySerializer(serializers.ModelSerializer):
             "notes",
             "risks",
             "sort_order",
+            "source",
+            "locked",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("auto_status", "created_at", "updated_at")
+        read_only_fields = ("auto_status", "source", "locked", "created_at", "updated_at")
 
     def create(self, validated):
         obj = StageActivity(**validated)

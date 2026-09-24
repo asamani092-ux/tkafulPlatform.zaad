@@ -128,6 +128,7 @@ def create_dossier_for_project(
     for kind, keys in (
         ("card", catalog.all_section_keys("card")),
         ("document", catalog.all_section_keys("document")),
+        ("plan", catalog.plan_phase_keys()),
         ("closure", catalog.all_section_keys("closure")),
     ):
         for key in keys:
@@ -173,6 +174,68 @@ def create_dossier_for_project(
         target=dossier,
     )
     return dossier
+
+
+def ensure_plan_phase_sections(dossier: ProjectDossier) -> None:
+    """أقسام اعتماد المراحل الخمس في الخطة. O(P)."""
+    existing = set(dossier.sections.filter(kind="plan").values_list("key", flat=True))
+    rows = [
+        DossierSection(dossier=dossier, kind="plan", key=key, data={}, status="empty")
+        for key in catalog.plan_phase_keys()
+        if key not in existing
+    ]
+    if rows:
+        DossierSection.objects.bulk_create(rows)
+
+
+def _next_activity_code(dossier: ProjectDossier) -> str:
+    n = StageActivity.objects.filter(stage__dossier=dossier).count() + 1
+    return f"ACT-{n}"
+
+
+@transaction.atomic
+def sync_plan_from_document(dossier: ProjectDossier) -> None:
+    """ينسخ أنشطة المراحل الرئيسية إلى الخطة دون حذف أو الكتابة فوق الموجود. O(P+A)."""
+    ensure_plan_phase_sections(dossier)
+    phases_sec = dossier.sections.filter(kind="document", key="main_phases").first()
+    phase_rows = ((phases_sec.data if phases_sec else {}) or {}).get("phases") or []
+    stages = {s.key: s for s in dossier.stages.all()}
+    existing = StageActivity.objects.filter(stage__dossier=dossier, parent__isnull=True)
+    seen = {(a.stage_id, (a.title or "").strip()) for a in existing}
+    pending: list[StageActivity] = []
+    base = StageActivity.objects.filter(stage__dossier=dossier).count()
+    for phase in phase_rows:
+        if not isinstance(phase, dict):
+            continue
+        stage = stages.get(str(phase.get("key") or ""))
+        if not stage:
+            continue
+        for raw in phase.get("activities") or []:
+            title = str(raw or "").strip()
+            if not title or (stage.id, title) in seen:
+                continue
+            seen.add((stage.id, title))
+            base += 1
+            pending.append(
+                StageActivity(
+                    stage=stage,
+                    code=f"ACT-{base}",
+                    title=title,
+                    source="document",
+                    locked=True,
+                )
+            )
+    if pending:
+        StageActivity.objects.bulk_create(pending)
+    for key in catalog.plan_phase_keys():
+        stage = stages.get(key)
+        sec = dossier.sections.filter(kind="plan", key=key).first()
+        if not stage or not sec or sec.status == "approved":
+            continue
+        has = StageActivity.objects.filter(stage=stage).exists()
+        if has and sec.status == "empty":
+            sec.status = "filled"
+            sec.save(update_fields=["status", "updated_at"])
 
 
 def ensure_document_sections(dossier: ProjectDossier) -> None:
@@ -535,6 +598,8 @@ def update_section(
         _sync_dossier_budget_from_card(dossier, cleaned)
     if kind == "card":
         sync_document_from_card(dossier)
+    if kind == "document" and key == "main_phases":
+        sync_plan_from_document(dossier)
     return section
 
 
@@ -898,6 +963,63 @@ def decide_document_section(
 
 
 @transaction.atomic
+def decide_plan_phase(
+    *,
+    dossier: ProjectDossier,
+    key: str,
+    decision: str,
+    user,
+    note: str = "",
+    request=None,
+) -> DossierSection:
+    """اعتماد مرحلة في الخطة أو إزالة اعتمادها. O(P)."""
+    if decision not in ("approved", "revoke"):
+        raise ValidationError({"decision": "قرار غير صالح"})
+    if not can_bypass_workspace_gates(user, dossier):
+        raise PermissionDenied("اعتماد مراحل الخطة للمشرف أو المدير المعيّن فقط")
+    if key not in catalog.plan_phase_keys():
+        raise ValidationError({"key": "مرحلة غير معروفة"})
+    assert_workspace_open_for_work(user, dossier, "plan")
+    ensure_plan_phase_sections(dossier)
+    section = dossier.sections.select_for_update().filter(kind="plan", key=key).first()
+    if not section:
+        raise ValidationError({"key": "مرحلة الخطة غير موجودة"})
+    if decision == "approved":
+        section.status = "approved"
+    else:
+        if section.status != "approved":
+            raise ValidationError({"status": "المرحلة ليست معتمدة"})
+        has = StageActivity.objects.filter(stage__dossier=dossier, stage__key=key).exists()
+        section.status = "filled" if has else "empty"
+    section.updated_by = user
+    section.save(update_fields=["status", "updated_by", "updated_at"])
+
+    plan_ws = dossier.workspaces.filter(key="plan").first()
+    keys = catalog.plan_phase_keys()
+    if decision == "approved":
+        pending = (
+            dossier.sections.filter(kind="plan", key__in=keys).exclude(status="approved").count()
+        )
+        if pending == 0 and plan_ws and plan_ws.status in ("active", "returned", "submitted"):
+            _approve_workspace(dossier, "plan", actor=user, request=request)
+    elif decision == "revoke" and plan_ws and plan_ws.status == "approved":
+        plan_ws.status = "active"
+        plan_ws.approved_at = None
+        plan_ws.save(update_fields=["status", "approved_at", "updated_at"])
+        _lock_following_unapproved(dossier, plan_ws.order)
+
+    log_activity(
+        actor=user,
+        action=ACTION_STAGE_APPROVE if decision == "approved" else ACTION_STAGE_RETURN,
+        summary=f"{'اعتماد' if decision == 'approved' else 'إزالة اعتماد'} مرحلة الخطة {key} — {dossier.code}"
+        + (f" ({note})" if note else ""),
+        request=request,
+        target=dossier,
+    )
+    return section
+
+
+@transaction.atomic
 def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -> ApprovalRequest:
     """إرسال تبويب (وثيقة/خطة/إغلاق/لوحة) لاعتماد مدير الإدارة. O(1)."""
     assert_can_edit(user, dossier)
@@ -923,6 +1045,16 @@ def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -
             raise ValidationError({"sections": f"بطاقات غير مكتملة: {', '.join(not_ready)}"})
         # للإيميل: تُرسل البطاقات غير المعتمدة بعد كـ submitted؛ المعتمدة تبقى
         dossier.sections.filter(kind="document", status__in=("filled", "returned")).update(status="submitted")
+    elif key == "plan":
+        ensure_plan_phase_sections(dossier)
+        keys = catalog.plan_phase_keys()
+        missing = [
+            k
+            for k in keys
+            if not dossier.sections.filter(kind="plan", key=k, status="approved").exists()
+        ]
+        if missing:
+            raise ValidationError({"sections": "اعتمد المراحل الخمس قبل إرسال الخطة"})
     elif key == "closure":
         dossier.sections.filter(kind="closure", status__in=("filled", "returned", "submitted")).update(status="submitted")
 
@@ -1017,6 +1149,12 @@ def _approve_workspace(dossier: ProjectDossier, key: str, *, actor=None, request
         if not_ready:
             raise ValidationError({"sections": "لا يمكن اعتماد الوثيقة قبل اكتمال كل البطاقات"})
         dossier.sections.filter(kind="document", key__in=keys).update(status="approved")
+    elif key == "plan":
+        ensure_plan_phase_sections(dossier)
+        keys = catalog.plan_phase_keys()
+        pending = dossier.sections.filter(kind="plan", key__in=keys).exclude(status="approved").count()
+        if pending:
+            raise ValidationError({"sections": "اعتمد المراحل الخمس قبل اعتماد الخطة"})
     elif key == "closure":
         dossier.sections.filter(kind="closure").update(status="approved")
 
@@ -1053,6 +1191,11 @@ def _return_workspace(dossier: ProjectDossier, key: str, *, note: str, actor=Non
     ws.save(update_fields=["status", "return_note", "updated_at"])
     if key == "document":
         dossier.sections.filter(kind="document").update(status="returned")
+    elif key == "plan":
+        for sec in dossier.sections.filter(kind="plan", status="approved"):
+            has = StageActivity.objects.filter(stage__dossier=dossier, stage__key=sec.key).exists()
+            sec.status = "filled" if has else "empty"
+            sec.save(update_fields=["status", "updated_at"])
     elif key == "closure":
         dossier.sections.filter(kind="closure").update(status="returned")
     dossier.status = "in_progress"

@@ -52,7 +52,7 @@ export interface DossierSchema {
 
 export interface DossierSectionRow {
   id: number;
-  kind: "card" | "document" | "closure";
+  kind: "card" | "document" | "plan" | "closure";
   key: string;
   data: Record<string, unknown>;
   status: string;
@@ -130,6 +130,8 @@ export interface StageActivity {
   notes: string;
   risks: string;
   sort_order: number;
+  source?: string;
+  locked?: boolean;
 }
 
 export const STAGE_STATUS_AR: Record<string, string> = {
