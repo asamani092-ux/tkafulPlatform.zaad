@@ -33,6 +33,20 @@ from .serializers import (
     StageActivitySerializer,
 )
 
+_DATE_ORDER_MSG = "تاريخ البداية يجب أن يسبق تاريخ الإغلاق"
+
+
+def _date_text(value):
+    if value in (None, ""):
+        return None
+    return str(value)[:10]
+
+
+def _dates_out_of_order(start, end) -> bool:
+    s = _date_text(start)
+    e = _date_text(end)
+    return bool(s and e and s >= e)
+
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -371,6 +385,10 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         stage = dossier.stages.filter(order=int(order)).first()
         if not stage:
             return Response({"detail": "مرحلة غير موجودة"}, status=404)
+        start = request.data["planned_start"] if "planned_start" in request.data else stage.planned_start
+        end = request.data["planned_end"] if "planned_end" in request.data else stage.planned_end
+        if _dates_out_of_order(start, end):
+            return Response({"detail": _DATE_ORDER_MSG}, status=400)
         for f in ("planned_start", "planned_end", "deliverable_title", "deliverable_date"):
             if f in request.data:
                 setattr(stage, f, request.data[f] or None)
@@ -404,6 +422,8 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             data["stage"] = parent.stage_id
         if not data.get("code"):
             data["code"] = services._next_activity_code(dossier)
+        if _dates_out_of_order(data.get("start_date"), data.get("end_date")):
+            return Response({"detail": _DATE_ORDER_MSG}, status=400)
         ser = StageActivitySerializer(data=data)
         ser.is_valid(raise_exception=True)
         obj = ser.save()
@@ -430,6 +450,10 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         if activity.locked and "title" in request.data and str(request.data.get("title") or "").strip() != activity.title:
             return Response({"title": "عنوان النشاط المنسوخ من الوثيقة مقفل"}, status=400)
         payload = {k: v for k, v in request.data.items() if k not in ("source", "locked", "code")}
+        start = payload["start_date"] if "start_date" in payload else activity.start_date
+        end = payload["end_date"] if "end_date" in payload else activity.end_date
+        if _dates_out_of_order(start, end):
+            return Response({"detail": _DATE_ORDER_MSG}, status=400)
         ser = StageActivitySerializer(activity, data=payload, partial=True)
         ser.is_valid(raise_exception=True)
         obj = ser.save()
