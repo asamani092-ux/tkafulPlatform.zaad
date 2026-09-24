@@ -693,6 +693,19 @@ class DossierRestructureTests(APITestCase):
         self.assertEqual(act.manual_status, "done")
         self.assertEqual(act.progress_pct, 100)
         self.assertTrue(DossierAttachment.objects.filter(activity=act).exists())
+        section = dossier.sections.get(kind="closure", key="lessons_learned")
+        self.assertEqual(section.data["lessons"][0]["lesson"], "تعلّمنا التنسيق المبكر")
+        self.assertEqual(section.data["lessons"][0]["activity_code"], "E1")
+        complete_activity(
+            dossier=dossier,
+            activity=act,
+            user=self.admin,
+            lessons="درس ثانٍ",
+            evidence_url="https://example.com/proof.pdf",
+        )
+        section.refresh_from_db()
+        self.assertEqual(len(section.data["lessons"]), 2)
+        self.assertEqual(section.data["lessons"][0]["lesson"], "تعلّمنا التنسيق المبكر")
 
     def test_document_closure_comparison_endpoint(self):
         self.client.force_authenticate(self.admin)
