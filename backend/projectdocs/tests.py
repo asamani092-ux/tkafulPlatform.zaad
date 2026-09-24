@@ -1165,3 +1165,41 @@ class PlanFromPhasesTests(APITestCase):
             format="json",
         )
         self.assertEqual(bad_stage.status_code, 400, bad_stage.content)
+
+    def test_executed_week_stays_inside_phase_range(self):
+        dossier_id = self._create()
+        saved = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/main_phases/",
+            {"data": self._phases(["حفر"])},
+            format="json",
+        )
+        self.assertEqual(saved.status_code, 200, saved.content)
+        listed = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/activities/")
+        row = next(a for a in listed.data if a["title"] == "حفر")
+        dossier = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/")
+        order = next(s["order"] for s in dossier.data["stages"] if s["key"] == "define")
+        stage = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/stages/{order}/",
+            {"planned_start": "2026-10-10", "planned_end": "2026-12-20"},
+            format="json",
+        )
+        self.assertEqual(stage.status_code, 200, stage.content)
+        outside = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{row['id']}/",
+            {"executed_weeks": ["2026-09-01"]},
+            format="json",
+        )
+        self.assertEqual(outside.status_code, 400, outside.content)
+        first = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{row['id']}/",
+            {"executed_weeks": ["2026-10-01"]},
+            format="json",
+        )
+        self.assertEqual(first.status_code, 200, first.content)
+        second = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{row['id']}/",
+            {"executed_weeks": ["2026-10-01", "2026-10-08"]},
+            format="json",
+        )
+        self.assertEqual(second.status_code, 200, second.content)
+        self.assertEqual(second.data["executed_weeks"], ["2026-10-01", "2026-10-08"])

@@ -188,6 +188,7 @@ class StageActivity(models.Model):
     responsible = models.CharField(max_length=200, blank=True)
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
+    executed_weeks = models.JSONField(default=list, blank=True)
     manual_status = models.CharField(max_length=20, choices=MANUAL_STATUS_CHOICES, blank=True, default="")
     auto_status = models.CharField(max_length=20, choices=AUTO_STATUS_CHOICES, default="not_due")
     progress_pct = models.PositiveSmallIntegerField(default=0)

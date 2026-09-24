@@ -107,6 +107,7 @@ class StageActivitySerializer(serializers.ModelSerializer):
             "responsible",
             "start_date",
             "end_date",
+            "executed_weeks",
             "manual_status",
             "auto_status",
             "progress_pct",
