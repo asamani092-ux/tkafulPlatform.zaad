@@ -171,7 +171,8 @@ export default function ActivitiesPanel({
   };
 
   const toggleWeek = (a: StageActivity, weekStart: string) => {
-    const current = a.executed_weeks || [];
+    const visible = new Set(months.flatMap((block) => block.weeks.map((week) => week.label)));
+    const current = (a.executed_weeks || []).filter((week) => visible.has(week));
     const next = current.includes(weekStart) ? current.filter((w) => w !== weekStart) : [...current, weekStart];
     void patch(a.id, { executed_weeks: next });
   };

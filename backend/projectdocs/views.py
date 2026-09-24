@@ -71,10 +71,15 @@ def _clean_executed_weeks(activity, weeks):
     if not isinstance(weeks, list):
         return None, Response({"executed_weeks": "قائمة أسابيع غير صالحة"}, status=400)
     allowed = _phase_week_starts(activity.stage.planned_start, activity.stage.planned_end)
+    previous = {_date_text(item) for item in (activity.executed_weeks or [])}
     cleaned: list[str] = []
     for item in weeks:
         text = _date_text(item)
-        if not text or text not in allowed:
+        if not text:
+            return None, Response({"detail": "الأسبوع خارج نطاق تاريخ الواجهة الرئيسية"}, status=400)
+        if text not in allowed:
+            if text in previous:
+                continue
             return None, Response({"detail": "الأسبوع خارج نطاق تاريخ الواجهة الرئيسية"}, status=400)
         if text not in cleaned:
             cleaned.append(text)
