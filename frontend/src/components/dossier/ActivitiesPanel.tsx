@@ -14,72 +14,105 @@ type Props = {
   ) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
   onUpdate?: (id: number, payload: Record<string, unknown>) => Promise<void>;
+  onUpdateStage?: (order: number, payload: Record<string, unknown>) => Promise<void>;
   canApprove?: boolean;
   phaseStatus?: Record<string, string>;
   onDecidePhase?: (phaseKey: string, decision: "approved" | "revoke") => void;
 };
 
 type OpenAdd = { stageId: number; parentId: number | null };
+type WeekCell = { start: Date; end: Date; label: string };
+type MonthBlock = { label: string; weeks: WeekCell[] };
 
-function durationLabel(start: string | null, end: string | null): string {
-  if (!start || !end) return "—";
-  const s = new Date(`${start}T00:00:00`);
-  const e = new Date(`${end}T00:00:00`);
-  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return "—";
-  const days = Math.round((e.getTime() - s.getTime()) / 86400000);
+const DATE_ORDER_MSG = "تاريخ البداية يجب أن يسبق تاريخ الإغلاق";
+const cell = "border border-surface-border px-2 py-2 align-middle";
+
+function parseDay(iso: string): Date {
+  return new Date(`${iso}T00:00:00`);
+}
+
+function isoDay(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+function datesOrdered(start: string | null, end: string | null): boolean {
+  return !start || !end || start < end;
+}
+
+/** أشهر تقويمية من البداية حتى الإغلاق، أربعة أسابيع لكل شهر. O(M). */
+function buildMonthWeeks(startIso: string | null, endIso: string | null): MonthBlock[] {
+  if (!startIso || !endIso || startIso >= endIso) return [];
+  const start = parseDay(startIso);
+  const end = parseDay(endIso);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+  const blocks: MonthBlock[] = [];
+  let y = start.getFullYear();
+  let m = start.getMonth();
+  const endY = end.getFullYear();
+  const endM = end.getMonth();
+  while (y < endY || (y === endY && m <= endM)) {
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const starts = [1, 8, 15, 22];
+    const weeks: WeekCell[] = starts.map((day, i) => {
+      const ws = new Date(y, m, day);
+      const we = i < 3 ? new Date(y, m, starts[i + 1] - 1) : new Date(y, m, lastDay);
+      return { start: ws, end: we, label: isoDay(ws) };
+    });
+    blocks.push({ label: `${m + 1}/${y}`, weeks });
+    m += 1;
+    if (m > 11) {
+      m = 0;
+      y += 1;
+    }
+  }
+  return blocks;
+}
+
+function weekHits(activity: StageActivity, week: WeekCell): boolean {
+  if (!activity.start_date || !activity.end_date) return false;
+  const ws = isoDay(week.start);
+  const we = isoDay(week.end);
+  return ws <= activity.end_date && we >= activity.start_date;
+}
+
+function phaseActivities(stageId: number, activities: StageActivity[]): StageActivity[] {
+  return activities.filter((a) => a.stage === stageId);
+}
+
+function execStatus(acts: StageActivity[]): string {
+  if (!acts.length) return "لم يحن";
+  if (acts.some((a) => a.auto_status === "delayed")) return "متعثر";
+  const done = (a: StageActivity) => a.auto_status === "done" || a.manual_status === "done";
+  if (acts.every(done)) return "منفذ";
+  const started = (a: StageActivity) =>
+    done(a) || a.auto_status === "in_progress" || a.manual_status === "in_progress";
+  if (acts.some(started)) return "جاري";
+  return "لم يحن";
+}
+
+function phaseRange(stage: DossierStageRow, acts: StageActivity[]): { start: string | null; end: string | null } {
+  const starts = acts.map((a) => a.start_date).filter((d): d is string => !!d).sort();
+  const ends = acts.map((a) => a.end_date).filter((d): d is string => !!d).sort();
+  return {
+    start: starts[0] || stage.planned_start,
+    end: ends[ends.length - 1] || stage.planned_end,
+  };
+}
+
+function remainingDays(end: string | null): string {
+  if (!end) return "—";
+  const close = parseDay(end);
+  if (Number.isNaN(close.getTime())) return "—";
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const left = Math.round((e.getTime() - today.getTime()) / 86400000);
-  const counter = left > 0 ? `متبقٍ ${left}` : left === 0 ? "اليوم" : `متأخر ${Math.abs(left)}`;
-  return `${days} يوم · ${counter}`;
+  const left = Math.round((close.getTime() - today.getTime()) / 86400000);
+  if (left < 0) return `متأخر ${Math.abs(left)}`;
+  return String(left);
 }
 
-function sundayOnOrBefore(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  x.setDate(x.getDate() - x.getDay());
-  return x;
-}
-
-function monthKey(d: Date): string {
-  return `${d.getFullYear()}-${d.getMonth()}`;
-}
-
-function buildWeeks(activities: StageActivity[]) {
-  const dates = activities.flatMap((a) => [a.start_date, a.end_date].filter(Boolean) as string[]);
-  if (!dates.length) return { months: [] as Array<{ label: string; weeks: Date[] }> };
-  const parsed = dates.map((d) => new Date(`${d}T00:00:00`)).filter((d) => !Number.isNaN(d.getTime()));
-  if (!parsed.length) return { months: [] as Array<{ label: string; weeks: Date[] }> };
-  const min = sundayOnOrBefore(new Date(Math.min(...parsed.map((d) => d.getTime()))));
-  const max = new Date(Math.max(...parsed.map((d) => d.getTime())));
-  const cap = new Date(min);
-  cap.setMonth(cap.getMonth() + 18);
-  const end = max < cap ? max : cap;
-  const weeks: Date[] = [];
-  for (let cursor = new Date(min); cursor <= end; cursor.setDate(cursor.getDate() + 7)) {
-    weeks.push(new Date(cursor));
-  }
-  const groups = new Map<string, { label: string; weeks: Date[] }>();
-  for (const week of weeks) {
-    const key = monthKey(week);
-    if (!groups.has(key)) {
-      groups.set(key, { label: week.toLocaleDateString("ar", { month: "long", year: "numeric" }), weeks: [] });
-    }
-    groups.get(key)!.weeks.push(week);
-  }
-  return { months: [...groups.values()] };
-}
-
-function weekHits(activity: StageActivity, weekStart: Date): boolean {
-  if (!activity.start_date || !activity.end_date) return false;
-  const start = new Date(`${activity.start_date}T00:00:00`).getTime();
-  const end = new Date(`${activity.end_date}T00:00:00`).getTime();
-  const ws = weekStart.getTime();
-  const we = ws + 6 * 86400000;
-  return ws <= end && we >= start;
-}
-
-/** جدول الخطة: مستويان، أعمدة الإكسل المتبقية، ونافذة أشهر/أسابيع. */
+/** جدول الخطة: خمسة صفوف، ونافذة تفاصيل بأربعة أسابيع لكل شهر. */
 export default function ActivitiesPanel({
   stages,
   activities,
@@ -88,6 +121,7 @@ export default function ActivitiesPanel({
   onComplete,
   onDelete,
   onUpdate,
+  onUpdateStage,
   canApprove,
   phaseStatus,
   onDecidePhase,
@@ -103,13 +137,10 @@ export default function ActivitiesPanel({
     }
     return map;
   }, [activities]);
-  const mains = useMemo(
-    () => activities.filter((a) => a.parent == null),
-    [activities],
-  );
+  const [detailKey, setDetailKey] = useState<string | null>(null);
   const [openAdd, setOpenAdd] = useState<OpenAdd | null>(null);
   const [draft, setDraft] = useState("");
-  const [calOpen, setCalOpen] = useState(false);
+  const [dateError, setDateError] = useState("");
   const [completeId, setCompleteId] = useState<number | null>(null);
   const [completeForm, setCompleteForm] = useState({
     lessons: "",
@@ -119,7 +150,12 @@ export default function ActivitiesPanel({
     file: null as File | null,
   });
   const [busy, setBusy] = useState(false);
-  const calendar = useMemo(() => buildWeeks(activities), [activities]);
+
+  const detailStage = ordered.find((s) => s.key === detailKey) || null;
+  const detailActs = detailStage ? phaseActivities(detailStage.id, activities) : [];
+  const detailMains = detailActs.filter((a) => a.parent == null);
+  const range = detailStage ? phaseRange(detailStage, detailActs) : { start: null, end: null };
+  const months = useMemo(() => buildMonthWeeks(range.start, range.end), [range.start, range.end]);
 
   const addActivity = async (stageId: number, parentId: number | null) => {
     const title = draft.trim();
@@ -139,6 +175,31 @@ export default function ActivitiesPanel({
     await onUpdate(id, payload);
   };
 
+  const saveActivityDates = (a: StageActivity, nextStart: string | null, nextEnd: string | null) => {
+    if (!datesOrdered(nextStart, nextEnd)) {
+      setDateError(DATE_ORDER_MSG);
+      return;
+    }
+    setDateError("");
+    const payload: Record<string, unknown> = {};
+    if (nextStart !== a.start_date) payload.start_date = nextStart;
+    if (nextEnd !== a.end_date) payload.end_date = nextEnd;
+    if (Object.keys(payload).length) void patch(a.id, payload);
+  };
+
+  const saveStageDates = (stage: DossierStageRow, nextStart: string | null, nextEnd: string | null) => {
+    if (!datesOrdered(nextStart, nextEnd)) {
+      setDateError(DATE_ORDER_MSG);
+      return;
+    }
+    setDateError("");
+    if (!onUpdateStage) return;
+    const payload: Record<string, unknown> = {};
+    if (nextStart !== stage.planned_start) payload.planned_start = nextStart;
+    if (nextEnd !== stage.planned_end) payload.planned_end = nextEnd;
+    if (Object.keys(payload).length) void onUpdateStage(stage.order, payload);
+  };
+
   const submitComplete = async (e: React.FormEvent) => {
     e.preventDefault();
     if (completeId == null) return;
@@ -156,11 +217,11 @@ export default function ActivitiesPanel({
     if (!canEdit) return null;
     const open = openAdd?.stageId === stageId && openAdd.parentId === parentId;
     return (
-      <div className="ms-auto flex shrink-0 items-center gap-2">
+      <div className="flex items-center gap-2">
         {open && (
           <input
             autoFocus
-            className="input-field w-40 text-sm"
+            className="input-field w-36 text-sm"
             placeholder="نشاط جديد"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -195,45 +256,23 @@ export default function ActivitiesPanel({
     );
   };
 
-  const renderRow = (a: StageActivity, stage: DossierStageRow, level: "رئيسي" | "فرعي", parentTitle: string) => {
+  const renderActivity = (a: StageActivity, stage: DossierStageRow, level: "رئيسي" | "فرعي") => {
     const locked = !!a.locked;
-    const mainTitle = level === "رئيسي" ? a.title : parentTitle;
-    const subTitle = level === "فرعي" ? a.title : "";
     return (
       <tr key={a.id} className={level === "فرعي" ? "bg-emerald-50/40" : undefined}>
-        <td className="border-b border-surface-border px-2 py-2 font-bold text-primary">{level}</td>
-        <td className="border-b border-surface-border px-2 py-2">{STAGE_KEY_AR[stage.key] || stage.key}</td>
-        <td className="border-b border-surface-border px-2 py-2">
-          {level === "رئيسي" ? (
-            <input
-              className="input-field w-full text-sm"
-              disabled={!canEdit || locked}
-              defaultValue={mainTitle}
-              key={`${a.id}-main-${mainTitle}`}
-              onBlur={(e) => {
-                if (e.target.value.trim() && e.target.value.trim() !== a.title) void patch(a.id, { title: e.target.value.trim() });
-              }}
-            />
-          ) : (
-            mainTitle
-          )}
+        <td className={cell}>{level}</td>
+        <td className={cell}>
+          <input
+            className="input-field w-full text-sm"
+            disabled={!canEdit || locked}
+            defaultValue={a.title}
+            key={`${a.id}-t-${a.title}`}
+            onBlur={(e) => {
+              if (e.target.value.trim() && e.target.value.trim() !== a.title) void patch(a.id, { title: e.target.value.trim() });
+            }}
+          />
         </td>
-        <td className="border-b border-surface-border px-2 py-2">
-          {level === "فرعي" ? (
-            <input
-              className="input-field w-full text-sm"
-              disabled={!canEdit || locked}
-              defaultValue={subTitle}
-              key={`${a.id}-sub-${subTitle}`}
-              onBlur={(e) => {
-                if (e.target.value.trim() && e.target.value.trim() !== a.title) void patch(a.id, { title: e.target.value.trim() });
-              }}
-            />
-          ) : (
-            "—"
-          )}
-        </td>
-        <td className="border-b border-surface-border px-2 py-2">
+        <td className={cell}>
           <select
             className="input-field text-sm"
             disabled={!canEdit}
@@ -245,31 +284,30 @@ export default function ActivitiesPanel({
             <option value="done">تم التنفيذ</option>
           </select>
         </td>
-        <td className="border-b border-surface-border px-2 py-2 text-xs">{AUTO_STATUS_AR[a.auto_status] || a.auto_status}</td>
-        <td className="border-b border-surface-border px-2 py-2">
+        <td className={`${cell} text-xs`}>{AUTO_STATUS_AR[a.auto_status] || a.auto_status}</td>
+        <td className={cell}>
           <input
             type="date"
             className="input-field text-sm"
             disabled={!canEdit}
             defaultValue={a.start_date || ""}
             key={`${a.id}-s-${a.start_date}`}
-            onBlur={(e) => void patch(a.id, { start_date: e.target.value || null })}
+            onBlur={(e) => saveActivityDates(a, e.target.value || null, a.end_date)}
           />
         </td>
-        <td className="border-b border-surface-border px-2 py-2">
+        <td className={cell}>
           <input
             type="date"
             className="input-field text-sm"
             disabled={!canEdit}
             defaultValue={a.end_date || ""}
             key={`${a.id}-e-${a.end_date}`}
-            onBlur={(e) => void patch(a.id, { end_date: e.target.value || null })}
+            onBlur={(e) => saveActivityDates(a, a.start_date, e.target.value || null)}
           />
         </td>
-        <td className="border-b border-surface-border px-2 py-2 text-xs whitespace-nowrap">{durationLabel(a.start_date, a.end_date)}</td>
-        <td className="border-b border-surface-border px-2 py-2">
+        <td className={cell}>
           <input
-            className="input-field w-28 text-sm"
+            className="input-field w-full text-sm"
             disabled={!canEdit}
             defaultValue={a.kpi || ""}
             key={`${a.id}-k-${a.kpi}`}
@@ -278,9 +316,9 @@ export default function ActivitiesPanel({
             }}
           />
         </td>
-        <td className="border-b border-surface-border px-2 py-2">
+        <td className={cell}>
           <input
-            className="input-field w-28 text-sm"
+            className="input-field w-full text-sm"
             disabled={!canEdit}
             defaultValue={a.responsible || ""}
             key={`${a.id}-r-${a.responsible}`}
@@ -289,21 +327,19 @@ export default function ActivitiesPanel({
             }}
           />
         </td>
-        <td className="sticky left-0 z-10 border-b border-surface-border bg-surface px-2 py-2">
-          <div className="flex items-center gap-2">
-            <div className="flex flex-wrap gap-1">
-              {canEdit && a.manual_status !== "done" && (
-                <Button type="button" variant="secondary" size="sm" onClick={() => setCompleteId(a.id)}>
-                  إتمام
-                </Button>
-              )}
-              {canEdit && !locked && (
-                <Button type="button" variant="secondary" size="sm" onClick={() => void onDelete(a.id)}>
-                  حذف
-                </Button>
-              )}
-            </div>
+        <td className={cell}>
+          <div className="flex flex-wrap items-center gap-2">
             {level === "رئيسي" ? renderAdder(stage.id, a.id) : null}
+            {canEdit && a.manual_status !== "done" && (
+              <Button type="button" variant="secondary" size="sm" onClick={() => setCompleteId(a.id)}>
+                إتمام
+              </Button>
+            )}
+            {canEdit && !locked && (
+              <Button type="button" variant="secondary" size="sm" onClick={() => void onDelete(a.id)}>
+                حذف
+              </Button>
+            )}
           </div>
           {completeId === a.id && (
             <form className="mt-2 space-y-2" onSubmit={submitComplete}>
@@ -342,116 +378,161 @@ export default function ActivitiesPanel({
 
   return (
     <div dir="rtl">
-      <CollapsibleCard
-        title="الخطة التنفيذية"
-        defaultOpen={false}
-        subtitle="أنشطة المراحل الرئيسية"
-        actions={
-          <Button type="button" variant="secondary" onClick={() => setCalOpen(true)}>
-            التنفيذ
-          </Button>
-        }
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] border-separate border-spacing-0 text-sm">
-            <thead>
-              <tr className="bg-surface-muted/40">
-                {["المستوى", "المرحلة", "النشاط الرئيسي", "النشاط الفرعي", "حالة التنفيذ", "الحالة التلقائية", "تاريخ البدء", "تاريخ الانتهاء", "المدة / عداد الإغلاق", "مؤشر الأداء", "المسؤول", ""].map((h, idx, arr) => (
-                  <th
-                    key={h || "add"}
-                    className={`border-b border-surface-border px-2 py-2 text-right font-bold text-primary ${idx === arr.length - 1 ? "sticky left-0 z-10 bg-surface" : ""}`}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {ordered.map((stage) => {
-                const status = phaseStatus?.[stage.key] || "empty";
-                const stageMains = mains.filter((a) => a.stage === stage.id);
-                return (
-                  <Fragment key={stage.id}>
-                    <tr className="bg-primary/[0.06]">
-                      <td colSpan={11} className="border-b border-surface-border px-2 py-2 font-extrabold text-primary">
-                        <span className="inline-flex flex-wrap items-center gap-2">
-                          {STAGE_KEY_AR[stage.key] || stage.key}
-                          <span className="text-xs font-bold text-brand-gray">{status === "approved" ? "معتمدة" : "غير معتمدة"}</span>
-                          {canApprove &&
-                            (status === "approved" ? (
-                              <Button type="button" variant="secondary" size="sm" onClick={() => onDecidePhase?.(stage.key, "revoke")}>
-                                إزالة الاعتماد
-                              </Button>
-                            ) : (
-                              <Button type="button" size="sm" onClick={() => onDecidePhase?.(stage.key, "approved")}>
-                                اعتماد
-                              </Button>
-                            ))}
-                        </span>
-                      </td>
-                      <td className="sticky left-0 z-10 border-b border-surface-border bg-primary/[0.06] px-2 py-2">{renderAdder(stage.id, null)}</td>
-                    </tr>
-                    {stageMains.map((main) => (
-                      <Fragment key={main.id}>
-                        {renderRow(main, stage, "رئيسي", main.title)}
-                        {(childrenOf.get(main.id) || []).map((child) => renderRow(child, stage, "فرعي", main.title))}
-                      </Fragment>
-                    ))}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      <CollapsibleCard title="الخطة التنفيذية" defaultOpen={false} subtitle="خمسة صفوف للمراحل">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="bg-surface-muted/40">
+              {["اسم المرحلة", "حالة التنفيذ", "تاريخ البداية", "تاريخ الإغلاق", "المدة المتبقية بالأيام", "التفاصيل"].map((h) => (
+                <th key={h} className={`${cell} text-right font-bold text-primary`}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {ordered.map((stage) => {
+              const acts = phaseActivities(stage.id, activities);
+              const span = phaseRange(stage, acts);
+              const status = phaseStatus?.[stage.key] || "empty";
+              return (
+                <tr key={stage.id}>
+                  <td className={`${cell} font-extrabold text-primary`}>
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      {STAGE_KEY_AR[stage.key] || stage.key}
+                      <span className="text-xs font-bold text-brand-gray">{status === "approved" ? "معتمدة" : "غير معتمدة"}</span>
+                      {canApprove &&
+                        (status === "approved" ? (
+                          <Button type="button" variant="secondary" size="sm" onClick={() => onDecidePhase?.(stage.key, "revoke")}>
+                            إزالة الاعتماد
+                          </Button>
+                        ) : (
+                          <Button type="button" size="sm" onClick={() => onDecidePhase?.(stage.key, "approved")}>
+                            اعتماد
+                          </Button>
+                        ))}
+                    </span>
+                  </td>
+                  <td className={cell}>{execStatus(acts)}</td>
+                  <td className={cell}>{span.start || "—"}</td>
+                  <td className={cell}>{span.end || "—"}</td>
+                  <td className={cell}>{remainingDays(span.end)}</td>
+                  <td className={cell}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setDateError("");
+                        setDetailKey(stage.key);
+                      }}
+                    >
+                      التفاصيل
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </CollapsibleCard>
 
-      {calOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setCalOpen(false)}>
+      {detailStage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDetailKey(null)}>
           <div
-            className="max-h-[80vh] w-full max-w-5xl overflow-auto rounded-xl bg-surface p-4 shadow-lg"
+            className="max-h-[85vh] w-full max-w-6xl overflow-auto rounded-xl bg-surface p-4 shadow-lg"
             dir="rtl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h3 className="font-extrabold text-primary">أشهر التنفيذ وأسابيعها</h3>
-              <Button type="button" variant="secondary" onClick={() => setCalOpen(false)}>
+              <h3 className="font-extrabold text-primary">{STAGE_KEY_AR[detailStage.key] || detailStage.key}</h3>
+              <Button type="button" variant="secondary" onClick={() => setDetailKey(null)}>
                 إغلاق
               </Button>
             </div>
-            {!calendar.months.length ? (
+            <div className="mb-3 flex flex-wrap items-end gap-3">
+              <label className="text-sm">
+                بداية المرحلة
+                <input
+                  type="date"
+                  className="input-field mt-1 text-sm"
+                  disabled={!canEdit}
+                  defaultValue={detailStage.planned_start || ""}
+                  key={`${detailStage.id}-ps-${detailStage.planned_start}`}
+                  onBlur={(e) => saveStageDates(detailStage, e.target.value || null, detailStage.planned_end)}
+                />
+              </label>
+              <label className="text-sm">
+                إغلاق المرحلة
+                <input
+                  type="date"
+                  className="input-field mt-1 text-sm"
+                  disabled={!canEdit}
+                  defaultValue={detailStage.planned_end || ""}
+                  key={`${detailStage.id}-pe-${detailStage.planned_end}`}
+                  onBlur={(e) => saveStageDates(detailStage, detailStage.planned_start, e.target.value || null)}
+                />
+              </label>
+              {renderAdder(detailStage.id, null)}
+            </div>
+            {dateError && <p className="mb-3 text-sm text-red-600">{dateError}</p>}
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="bg-surface-muted/40">
+                    {["المستوى", "النشاط", "الحالة اليدوية", "الحالة التلقائية", "البداية", "الإغلاق", "المؤشر", "المسؤول", ""].map((h) => (
+                      <th key={h || "add"} className={`${cell} text-right font-bold text-primary`}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailMains.map((main) => (
+                    <Fragment key={main.id}>
+                      {renderActivity(main, detailStage, "رئيسي")}
+                      {(childrenOf.get(main.id) || []).map((child) => renderActivity(child, detailStage, "فرعي"))}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <h4 className="mb-2 mt-4 font-bold text-primary">أسابيع التنفيذ</h4>
+            {range.start && range.end && !datesOrdered(range.start, range.end) ? (
+              <p className="text-sm text-red-600">{DATE_ORDER_MSG}</p>
+            ) : !months.length ? (
               <p className="text-sm text-brand-gray">لا تواريخ تنفيذ بعد.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="border-collapse text-xs">
                   <thead>
                     <tr>
-                      <th className="border border-surface-border px-2 py-1 text-right">النشاط</th>
-                      {calendar.months.map((m) => (
-                        <th key={m.label} className="border border-surface-border px-2 py-1 text-center" colSpan={m.weeks.length}>
+                      <th className={cell}>النشاط</th>
+                      {months.map((m) => (
+                        <th key={m.label} className={`${cell} text-center`} colSpan={4}>
                           {m.label}
                         </th>
                       ))}
                     </tr>
                     <tr>
-                      <th className="border border-surface-border px-2 py-1" />
-                      {calendar.months.flatMap((m) =>
+                      <th className={cell} />
+                      {months.flatMap((m) =>
                         m.weeks.map((w) => (
-                          <th key={w.toISOString()} className="border border-surface-border px-1 py-1 whitespace-nowrap">
-                            {w.toLocaleDateString("ar")}
+                          <th key={`${m.label}-${w.label}`} className={`${cell} whitespace-nowrap`}>
+                            {w.label}
                           </th>
                         )),
                       )}
                     </tr>
                   </thead>
                   <tbody>
-                    {activities.map((a) => (
+                    {detailActs.map((a) => (
                       <tr key={`cal-${a.id}`}>
-                        <td className="border border-surface-border px-2 py-1 font-bold">{a.title}</td>
-                        {calendar.months.flatMap((m) =>
+                        <td className={`${cell} font-bold`}>{a.title}</td>
+                        {months.flatMap((m) =>
                           m.weeks.map((w) => (
                             <td
-                              key={`${a.id}-${w.toISOString()}`}
-                              className={`border border-surface-border px-1 py-2 ${weekHits(a, w) ? "bg-emerald-200" : ""}`}
+                              key={`${a.id}-${m.label}-${w.label}`}
+                              className={`${cell} ${weekHits(a, w) ? "bg-emerald-200" : ""}`}
                             />
                           )),
                         )}

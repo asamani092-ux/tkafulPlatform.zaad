@@ -621,6 +621,22 @@ export default function ProjectDossierWorkspace() {
                   dossier.sections.filter((s) => s.kind === "plan").map((s) => [s.key, s.status]),
                 )}
                 onDecidePhase={(key, decision) => void decidePlanPhase(key, decision)}
+                onUpdateStage={async (order, payload) => {
+                  const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/stages/${order}/`, {
+                    method: "PATCH",
+                    body: JSON.stringify(payload),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) {
+                    toast.error({ title: data.detail || "تعذّر حفظ تاريخ المرحلة" });
+                    return;
+                  }
+                  setDossier((prev) =>
+                    prev
+                      ? { ...prev, stages: prev.stages.map((s) => (s.order === order ? { ...s, ...data } : s)) }
+                      : prev,
+                  );
+                }}
                 onUpdate={async (id, payload) => {
                   const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/activities/${id}/`, {
                     method: "PATCH",

@@ -1115,3 +1115,40 @@ class PlanFromPhasesTests(APITestCase):
             self.assertEqual(last.status_code, 200, last.content)
         ws = next(w for w in last.data["workspaces"] if w["key"] == "plan")
         self.assertEqual(ws["status"], "approved")
+
+    def test_rejects_start_not_before_end(self):
+        dossier_id = self._create()
+        saved = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/main_phases/",
+            {"data": self._phases(["حفر"])},
+            format="json",
+        )
+        self.assertEqual(saved.status_code, 200, saved.content)
+        listed = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/activities/")
+        row = next(a for a in listed.data if a["title"] == "حفر")
+        inverted = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{row['id']}/",
+            {"start_date": "2026-06-01", "end_date": "2026-05-01"},
+            format="json",
+        )
+        self.assertEqual(inverted.status_code, 400, inverted.content)
+        same = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{row['id']}/",
+            {"start_date": "2026-05-01", "end_date": "2026-05-01"},
+            format="json",
+        )
+        self.assertEqual(same.status_code, 400, same.content)
+        ok = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{row['id']}/",
+            {"start_date": "2026-05-01", "end_date": "2026-06-30"},
+            format="json",
+        )
+        self.assertEqual(ok.status_code, 200, ok.content)
+        dossier = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/")
+        order = next(s["order"] for s in dossier.data["stages"] if s["key"] == "define")
+        bad_stage = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/stages/{order}/",
+            {"planned_start": "2026-06-01", "planned_end": "2026-05-01"},
+            format="json",
+        )
+        self.assertEqual(bad_stage.status_code, 400, bad_stage.content)
