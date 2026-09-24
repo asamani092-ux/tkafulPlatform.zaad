@@ -1242,3 +1242,11 @@ class PlanFromPhasesTests(APITestCase):
         )
         self.assertEqual(second.status_code, 200, second.content)
         self.assertEqual(second.data["executed_weeks"], ["2026-10-01", "2026-10-08"])
+        StageActivity.objects.filter(pk=row["id"]).update(executed_weeks=["2026-06-22", "2026-10-01"])
+        kept = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{row['id']}/",
+            {"executed_weeks": ["2026-06-22", "2026-10-01", "2026-11-01"]},
+            format="json",
+        )
+        self.assertEqual(kept.status_code, 200, kept.content)
+        self.assertEqual(kept.data["executed_weeks"], ["2026-10-01", "2026-11-01"])
