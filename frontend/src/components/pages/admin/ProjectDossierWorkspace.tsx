@@ -674,10 +674,11 @@ export default function ProjectDossierWorkspace() {
                   );
                   const data = await res.json().catch(() => ({}));
                   if (!res.ok) {
-                    toast.error({
-                      title: data.evidence || data.lessons || data.detail || "تعذّر الإتمام",
-                    });
-                    return;
+                    const raw = data.detail ?? data.evidence ?? data.lessons ?? data.evidence_url;
+                    const text = Array.isArray(raw) ? raw[0] : raw;
+                    const title = typeof text === "string" && text ? text : "تعذّر الإتمام";
+                    toast.error({ title });
+                    throw new Error(title);
                   }
                   toast.success({ title: "تم إتمام النشاط مع الشاهد" });
                   await load("silent");

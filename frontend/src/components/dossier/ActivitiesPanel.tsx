@@ -25,7 +25,9 @@ type WeekCell = { start: Date; end: Date; label: string };
 type MonthBlock = { label: string; weeks: WeekCell[] };
 
 const DATE_ORDER_MSG = "تاريخ البداية يجب أن يسبق تاريخ الإغلاق";
+const WEEK_DONE_MSG = "تم التنفيذ في هذا الأسبوع";
 const cell = "border border-surface-border px-2 py-2 align-middle";
+const weekCell = "border border-surface-border px-0.5 py-0.5 align-middle";
 
 function parseDay(iso: string): Date {
   return new Date(`${iso}T00:00:00`);
@@ -35,6 +37,11 @@ function isoDay(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${m}-${day}`;
+}
+
+function weekCaption(iso: string): string {
+  const [, m, d] = iso.split("-");
+  return `${Number(d)}/${Number(m)}`;
 }
 
 function datesOrdered(start: string | null, end: string | null): boolean {
@@ -125,6 +132,7 @@ export default function ActivitiesPanel({
   const [openAdd, setOpenAdd] = useState<OpenAdd | null>(null);
   const [draft, setDraft] = useState("");
   const [dateError, setDateError] = useState("");
+  const [completeError, setCompleteError] = useState("");
   const [completeId, setCompleteId] = useState<number | null>(null);
   const [completeForm, setCompleteForm] = useState({
     lessons: "",
@@ -184,11 +192,19 @@ export default function ActivitiesPanel({
   const submitComplete = async (e: React.FormEvent) => {
     e.preventDefault();
     if (completeId == null) return;
+    if (!completeForm.evidence_url.trim() && !completeForm.file) {
+      setCompleteError("الشاهد مطلوب عند الإتمام (ملف أو رابط)");
+      return;
+    }
+    setCompleteError("");
     setBusy(true);
     try {
       await onComplete(completeId, completeForm);
       setCompleteId(null);
+      setCompleteError("");
       setCompleteForm({ lessons: "", notes: "", evidence_url: "", evidence_title: "", file: null });
+    } catch {
+      /* رسالة الخادم تظهر في التنبيه وتبقى النافذة */
     } finally {
       setBusy(false);
     }
@@ -257,7 +273,14 @@ export default function ActivitiesPanel({
             className="input-field text-sm"
             disabled={!canEdit}
             value={a.manual_status || ""}
-            onChange={(e) => void patch(a.id, { manual_status: e.target.value })}
+            onChange={(e) => {
+              if (e.target.value === "done") {
+                setCompleteError("");
+                setCompleteId(a.id);
+                return;
+              }
+              void patch(a.id, { manual_status: e.target.value });
+            }}
           >
             <option value="">—</option>
             <option value="in_progress">جاري التنفيذ</option>
@@ -279,7 +302,7 @@ export default function ActivitiesPanel({
           <div className="flex flex-wrap items-center gap-2">
             {level === "رئيسي" ? renderAdder(stage.id, a.id) : null}
             {canEdit && a.manual_status !== "done" && (
-              <Button type="button" variant="secondary" size="sm" onClick={() => setCompleteId(a.id)}>
+              <Button type="button" variant="secondary" size="sm" onClick={() => { setCompleteError(""); setCompleteId(a.id); }}>
                 إتمام
               </Button>
             )}
@@ -409,28 +432,30 @@ export default function ActivitiesPanel({
               </table>
             </div>
             <h4 className="mb-2 mt-4 font-bold text-primary">أسابيع التنفيذ</h4>
+            <p className="mb-2 text-sm text-brand-gray">اضغط مربع الأسبوع الذي وقع فيه التنفيذ داخل تاريخ الواجهة. اللون الأخضر يعني تم التنفيذ في هذا الأسبوع.</p>
             {!range.start || !range.end ? (
               <p className="text-sm text-brand-gray">حدد تاريخ البداية والإغلاق في الواجهة الرئيسية</p>
             ) : !datesOrdered(range.start, range.end) ? (
               <p className="text-sm text-red-600">{DATE_ORDER_MSG}</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="border-collapse text-xs">
+              <>
+              <div className="max-w-full overflow-x-auto">
+                <table className="w-max border-collapse text-xs">
                   <thead>
                     <tr>
-                      <th className={cell}>النشاط</th>
+                      <th className={`${weekCell} sticky right-0 z-10 bg-surface px-2 text-right`}>النشاط</th>
                       {months.map((m) => (
-                        <th key={m.label} className={`${cell} text-center`} colSpan={4}>
+                        <th key={m.label} className={`${weekCell} text-center`} colSpan={4}>
                           {m.label}
                         </th>
                       ))}
                     </tr>
                     <tr>
-                      <th className={cell} />
+                      <th className={`${weekCell} sticky right-0 z-10 bg-surface`} />
                       {months.flatMap((m) =>
                         m.weeks.map((w) => (
-                          <th key={`${m.label}-${w.label}`} className={`${cell} whitespace-nowrap`}>
-                            {w.label}
+                          <th key={`${m.label}-${w.label}`} className={`${weekCell} w-9 whitespace-nowrap text-center`}>
+                            {weekCaption(w.label)}
                           </th>
                         )),
                       )}
@@ -439,21 +464,21 @@ export default function ActivitiesPanel({
                   <tbody>
                     {detailActs.map((a) => (
                       <tr key={`cal-${a.id}`}>
-                        <td className={`${cell} font-bold`}>{a.title}</td>
+                        <td className={`${weekCell} sticky right-0 z-10 bg-surface px-2 font-bold`}>{a.title}</td>
                         {months.flatMap((m) =>
                           m.weeks.map((w) => {
                             const on = (a.executed_weeks || []).includes(w.label);
                             return (
-                              <td key={`${a.id}-${m.label}-${w.label}`} className={cell}>
+                              <td key={`${a.id}-${m.label}-${w.label}`} className={`${weekCell} w-9`}>
                                 <button
                                   type="button"
-                                  className={`min-h-8 w-full rounded px-1 py-1 text-[10px] leading-tight ${on ? "bg-emerald-500 font-bold text-white" : "bg-transparent"}`}
+                                  title={on ? WEEK_DONE_MSG : weekCaption(w.label)}
+                                  className={`block h-7 w-full min-w-8 rounded ${on ? "bg-emerald-500" : "bg-surface-muted/40"}`}
                                   disabled={!canEdit}
                                   aria-pressed={on}
+                                  aria-label={on ? WEEK_DONE_MSG : weekCaption(w.label)}
                                   onClick={() => toggleWeek(a, w.label)}
-                                >
-                                  {on ? "تم التنفيذ في هذا الأسبوع" : w.label}
-                                </button>
+                                />
                               </td>
                             );
                           }),
@@ -463,6 +488,10 @@ export default function ActivitiesPanel({
                   </tbody>
                 </table>
               </div>
+              {detailActs.some((a) => (a.executed_weeks || []).some((week) => months.some((m) => m.weeks.some((w) => w.label === week)))) && (
+                <p className="mt-2 text-sm text-brand-gray">{WEEK_DONE_MSG}</p>
+              )}
+              </>
             )}
           </div>
         </div>
@@ -477,6 +506,7 @@ export default function ActivitiesPanel({
             onSubmit={submitComplete}
           >
             <h3 className="font-extrabold text-primary">إتمام النشاط</h3>
+            {completeError && <p className="text-sm text-red-600">{completeError}</p>}
             <label className="block text-sm">
               الدرس المستفاد
               <textarea
