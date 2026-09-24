@@ -456,7 +456,7 @@ export default function ActivitiesPanel({
                                 <button
                                   type="button"
                                   title={on ? WEEK_DONE_MSG : weekCaption(w.label)}
-                                  className={`mx-auto block h-6 w-6 rounded ${on ? "bg-emerald-500" : "bg-transparent"}`}
+                                  className={`block h-7 w-full min-w-8 rounded ${on ? "bg-emerald-500" : "bg-surface-muted/40"}`}
                                   disabled={!canEdit}
                                   aria-pressed={on}
                                   aria-label={on ? WEEK_DONE_MSG : weekCaption(w.label)}
@@ -471,7 +471,9 @@ export default function ActivitiesPanel({
                   </tbody>
                 </table>
               </div>
-              <p className="mt-2 text-sm text-brand-gray">{WEEK_DONE_MSG}</p>
+              {detailActs.some((a) => (a.executed_weeks || []).some((week) => months.some((m) => m.weeks.some((w) => w.label === week)))) && (
+                <p className="mt-2 text-sm text-brand-gray">{WEEK_DONE_MSG}</p>
+              )}
               </>
             )}
           </div>
