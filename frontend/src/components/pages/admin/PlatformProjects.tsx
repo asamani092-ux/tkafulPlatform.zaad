@@ -740,18 +740,19 @@ export default function PlatformProjects() {
               setDossierCreate((s) => ({
                 ...s,
                 approver_id: id,
-                approver_name: u?.name || s.sponsor_name,
-                approver_email: u?.email || s.sponsor_email,
+                approver_name: u?.name || "",
+                approver_email: u?.email || "",
               }));
             }}
           >
-            <option value="">— نفس الراعي إن تُرك فارغاً —</option>
+            <option value="">— مدير النظام إن تُرك فارغاً —</option>
             {allUsers.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name} ({u.email})
               </option>
             ))}
           </Select>
+          <p className="text-xs text-brand-gray">إن تُرك فارغاً يُعيَّن مدير النظام صاحب اعتماد.</p>
           <Button type="submit" disabled={dossierCreate.saving}>
             {dossierCreate.saving ? "جاري الإنشاء…" : "إنشاء والانتقال للبطاقة"}
           </Button>

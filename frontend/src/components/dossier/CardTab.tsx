@@ -60,7 +60,7 @@ function fieldColumns(f: SchemaField): { columns: TableColumn[]; headerGroups: H
   return { columns, headerGroups };
 }
 
-function UserPick({
+export function UserPick({
   label,
   users,
   valueId,
@@ -69,6 +69,8 @@ function UserPick({
   disabled,
   onPick,
   onInvite,
+  emptyLabel = "— اختر مستخدماً —",
+  hint,
 }: {
   label: string;
   users: UserOption[];
@@ -78,6 +80,8 @@ function UserPick({
   disabled?: boolean;
   onPick: (u: UserOption | null) => void;
   onInvite?: (payload: { name: string; email: string }) => Promise<UserOption | null>;
+  emptyLabel?: string;
+  hint?: string;
 }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteName, setInviteName] = useState("");
@@ -97,13 +101,14 @@ function UserPick({
           onPick(hit);
         }}
       >
-        <option value="">— اختر مستخدماً —</option>
+        <option value="">{emptyLabel}</option>
         {users.map((u) => (
           <option key={u.id} value={u.id}>
             {(u.name || u.email) + (u.email ? ` (${u.email})` : "")}
           </option>
         ))}
       </select>
+      {hint ? <p className="text-xs text-brand-gray">{hint}</p> : null}
       {(valueName || valueEmail) && (
         <p className="text-xs text-brand-gray">
           {valueName || "—"} · {valueEmail || "—"}
@@ -274,6 +279,8 @@ export default function CardTab({
             valueName={card.approver_name}
             valueEmail={card.approver_email}
             disabled={!canEdit}
+            emptyLabel="— مدير النظام إن تُرك فارغاً —"
+            hint="إن تُرك فارغاً يُعيَّن مدير النظام"
             onInvite={onInviteUser}
             onPick={(u) =>
               onCardChange({

@@ -62,6 +62,23 @@ def _resolve_user_ref(*, user_id=None, email: str = "", name: str = "") -> tuple
     return None, name_clean, email_clean
 
 
+def _default_platform_admin(actor: User | None) -> User:
+    """صاحب الاعتماد الافتراضي: المنشئ إن كان مدير نظام، وإلا أول مدير نظام. O(1)."""
+    if actor is not None and getattr(actor, "is_authenticated", False) and is_super_admin(actor):
+        return actor
+    admin = (
+        User.objects.filter(profile__role="admin")
+        .select_related("profile")
+        .order_by("id")
+        .first()
+    )
+    if not admin:
+        raise ValidationError(
+            {"approver_email": "لا يوجد مدير نظام لتعيينه صاحب اعتماد افتراضي"}
+        )
+    return admin
+
+
 def next_dossier_code(year: int | None = None) -> str:
     """رمز داخلي فريد PRJ-YYYY-NNNN. O(1) تقريباً مع فهرس code."""
     y = year or timezone.now().year
@@ -132,11 +149,20 @@ def create_dossier_for_project(
     )
     approver, approver_name, approver_email = _resolve_user_ref(
         user_id=card.get("approver_id"),
-        email=card.get("approver_email") or card.get("sponsor_email") or "",
-        name=card.get("approver_name") or card.get("sponsor_name") or "",
+        email=card.get("approver_email") or "",
+        name=card.get("approver_name") or "",
     )
-    if not approver_email and sponsor_email:
-        approver, approver_name, approver_email = sponsor, sponsor_name, sponsor_email
+    if not approver_email and not approver:
+        admin = _default_platform_admin(actor)
+        approver, approver_name, approver_email = (
+            admin,
+            _user_display_name(admin),
+            (admin.email or "").strip(),
+        )
+        if not approver_email:
+            raise ValidationError(
+                {"approver_email": "لا يوجد مدير نظام لتعيينه صاحب اعتماد افتراضي"}
+            )
 
     budget_a = Decimal(str(card.get("budget_association") or 0))
     budget_d = Decimal(str(card.get("budget_donation") or 0))

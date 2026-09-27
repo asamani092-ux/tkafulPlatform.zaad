@@ -442,9 +442,27 @@ class DossierRestructureTests(APITestCase):
         self.assertEqual(res.status_code, 201, res.content)
         self.assertTrue(res.data["project_slug"])
         self.assertEqual(res.data["sponsor_email"], "sponsor2@test.com")
-        self.assertEqual(res.data["approver_email"], "sponsor2@test.com")
+        self.assertEqual(res.data["approver_email"], self.admin.email)
+        self.assertEqual(res.data["approver"], self.admin.id)
         self.assertTrue(Project.objects.filter(slug=res.data["project_slug"]).exists())
         self.assertEqual(len(res.data["stages"]), 5)
+
+    def test_empty_approver_defaults_to_first_platform_admin(self):
+        """عند فراغ صاحب الاعتماد والمنشئ ليس مديراً: أول مدير نظام. O(1)."""
+        from projects.models import Project
+        from projectdocs.services import create_dossier_for_project
+
+        staff = make_user("staff_creator", role="employee")
+        project = Project.objects.create(name="ملف بلا اعتماد", slug="no-approver-proj")
+        dossier = create_dossier_for_project(
+            project=project,
+            actor=staff,
+            card={"sponsor_email": "only-sponsor@test.com", "sponsor_name": "راعي"},
+        )
+        self.assertEqual(dossier.approver_id, self.admin.id)
+        self.assertEqual(dossier.approver_email, self.admin.email)
+        self.assertEqual(dossier.sponsor_email, "only-sponsor@test.com")
+        self.assertNotEqual(dossier.approver_email, dossier.sponsor_email)
 
     def test_locked_stage_blocks_work_until_approver_approval(self):
         """قفل تبويب الخطة حتى اعتماد الوثيقة من صاحب الاعتماد. O(1)."""

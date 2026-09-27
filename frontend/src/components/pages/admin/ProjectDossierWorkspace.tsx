@@ -12,7 +12,7 @@ import StageBar from "../../dossier/StageBar";
 import ActivitiesPanel from "../../dossier/ActivitiesPanel";
 import DossierDashboard from "../../dossier/DossierDashboard";
 import ClosureComparison from "../../dossier/ClosureComparison";
-import CardTab, { type CardScalars, type UserOption } from "../../dossier/CardTab";
+import CardTab, { UserPick, type CardScalars, type UserOption } from "../../dossier/CardTab";
 import DocumentTab from "../../dossier/DocumentTab";
 import DossierInfoPage, { type InfoPagePayload } from "../../dossier/DossierInfoPage";
 import {
@@ -492,7 +492,7 @@ export default function ProjectDossierWorkspace() {
         <Card>
           <h2 className="mb-2 text-lg font-bold text-primary">لا يوجد ملف لهذا المشروع</h2>
           <p className="mb-4 text-sm text-brand-gray">
-            أنشئ ملف مشروع جديد من قائمة المشاريع عبر «إنشاء ملف مشروع» (اسم + راعي)، أو أنشئ ملفاً هنا إن كان المشروع موجوداً مسبقاً.
+            أنشئ ملف مشروع جديد من قائمة المشاريع عبر «إنشاء ملف مشروع»، أو أنشئ ملفاً هنا إن كان المشروع موجوداً مسبقاً.
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input
@@ -500,25 +500,39 @@ export default function ProjectDossierWorkspace() {
               value={card.marketing_name}
               onChange={(e) => setCard({ ...card, marketing_name: e.target.value })}
             />
-            <Input
-              label="ايميل الراعي"
-              value={card.sponsor_email}
-              onChange={(e) => setCard({ ...card, sponsor_email: e.target.value })}
-            />
-            <Input
+            <UserPick
               label="راعي المشروع"
-              value={card.sponsor_name}
-              onChange={(e) => setCard({ ...card, sponsor_name: e.target.value })}
+              users={users}
+              valueId={card.sponsor_id}
+              valueName={card.sponsor_name}
+              valueEmail={card.sponsor_email}
+              onInvite={inviteUser}
+              onPick={(u) =>
+                setCard({
+                  ...card,
+                  sponsor_id: u?.id ?? null,
+                  sponsor_name: u?.name || "",
+                  sponsor_email: u?.email || "",
+                })
+              }
             />
-            <Input
-              label="ايميل صاحب الاعتماد"
-              value={card.approver_email}
-              onChange={(e) => setCard({ ...card, approver_email: e.target.value })}
-            />
-            <Input
+            <UserPick
               label="صاحب الاعتماد"
-              value={card.approver_name}
-              onChange={(e) => setCard({ ...card, approver_name: e.target.value })}
+              users={users}
+              valueId={card.approver_id}
+              valueName={card.approver_name}
+              valueEmail={card.approver_email}
+              emptyLabel="— مدير النظام إن تُرك فارغاً —"
+              hint="إن تُرك فارغاً يُعيَّن مدير النظام"
+              onInvite={inviteUser}
+              onPick={(u) =>
+                setCard({
+                  ...card,
+                  approver_id: u?.id ?? null,
+                  approver_name: u?.name || "",
+                  approver_email: u?.email || "",
+                })
+              }
             />
           </div>
           <div className="mt-4">
