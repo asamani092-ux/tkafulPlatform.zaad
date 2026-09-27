@@ -239,8 +239,8 @@ export default function UsersAdmin() {
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="إضافة مستخدم">
         <div className="space-y-3">
-          <Input label="البريد" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <Input label="البريد" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <Select label="الدور" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
             {assignableRoles.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
