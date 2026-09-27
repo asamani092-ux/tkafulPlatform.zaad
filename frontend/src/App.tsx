@@ -24,8 +24,9 @@ import About from "./components/pages/About";
 import Suggest from "./components/pages/Suggest";
 import RequestService from "./components/pages/RequestService";
 import WaterSupplyRequestPage from "./components/pages/WaterSupplyRequestPage";
-import SignIn from "./components/pages/Auth/SignIn";
-import SignUp from "./components/pages/Auth/SignUp";
+const SignIn = lazy(() => import("./components/pages/Auth/SignIn"));
+const SignUp = lazy(() => import("./components/pages/Auth/SignUp"));
+const SetPasswordPage = lazy(() => import("./components/pages/Auth/SetPasswordPage"));
 
 // Code-split heavy portals
 const UserMain = lazy(() => import("./components/pages/user/Main"));
@@ -123,8 +124,9 @@ function AppContent() {
           <Route path="/suggest" element={<Suggest />} />
           <Route path="/request-service" element={<RequestService />} />
           <Route path="/services/water-supply" element={<WaterSupplyRequestPage />} />
-          <Route path="/signin" element={<SignIn />} />
-          <Route path="/signup" element={<SignUp />} />
+          <Route path="/signin" element={<Lazy><SignIn /></Lazy>} />
+          <Route path="/signup" element={<Lazy><SignUp /></Lazy>} />
+          <Route path="/set-password/:token" element={<Lazy><SetPasswordPage /></Lazy>} />
           <Route path="/403" element={<ForbiddenPage />} />
           <Route path="/404" element={<NotFoundPage />} />
 

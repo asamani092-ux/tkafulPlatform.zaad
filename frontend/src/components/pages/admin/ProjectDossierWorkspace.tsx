@@ -12,7 +12,7 @@ import StageBar from "../../dossier/StageBar";
 import ActivitiesPanel from "../../dossier/ActivitiesPanel";
 import DossierDashboard from "../../dossier/DossierDashboard";
 import ClosureComparison from "../../dossier/ClosureComparison";
-import CardTab, { type CardScalars } from "../../dossier/CardTab";
+import CardTab, { UserPick, type CardScalars, type UserOption } from "../../dossier/CardTab";
 import DocumentTab from "../../dossier/DocumentTab";
 import DossierInfoPage, { type InfoPagePayload } from "../../dossier/DossierInfoPage";
 import {
@@ -73,9 +73,14 @@ export default function ProjectDossierWorkspace() {
     execution_start: "",
     execution_end: "",
     location: "",
+    sponsor_id: null,
     sponsor_name: "",
     sponsor_email: "",
+    approver_id: null,
+    approver_name: "",
+    approver_email: "",
   });
+  const [users, setUsers] = useState<UserOption[]>([]);
 
   const absorbDossier = useCallback((d: ProjectDossier) => {
     setDossier(d);
@@ -87,8 +92,12 @@ export default function ProjectDossierWorkspace() {
       execution_start: d.execution_start || "",
       execution_end: d.execution_end || "",
       location: d.location || "",
+      sponsor_id: d.sponsor ?? null,
       sponsor_name: d.sponsor_name || "",
       sponsor_email: d.sponsor_email || "",
+      approver_id: d.approver ?? null,
+      approver_name: d.approver_name || "",
+      approver_email: d.approver_email || "",
     });
     const drafts: Record<string, Record<string, unknown>> = {};
     d.sections.forEach((s) => {
@@ -156,6 +165,45 @@ export default function ProjectDossierWorkspace() {
     void load("initial");
   }, [load]);
 
+  useEffect(() => {
+    void (async () => {
+      const res = await authFetch("/api/accounts/users/?page_size=200");
+      if (!res.ok) return;
+      const data = await res.json().catch(() => null);
+      const rows = data?.results || data || [];
+      setUsers(
+        rows.map((u: { id: number; name?: string; email: string }) => ({
+          id: u.id,
+          name: u.name || u.email,
+          email: u.email,
+        })),
+      );
+    })();
+  }, []);
+
+  const inviteUser = async (payload: { name: string; email: string }): Promise<UserOption | null> => {
+    const res = await authFetch("/api/accounts/auth/invite/", {
+      method: "POST",
+      body: JSON.stringify({ ...payload, role: "employee" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error({ title: data.detail || data.email || data.name || "تعذّرت الدعوة" });
+      return null;
+    }
+    const u = data.user || {};
+    const opt: UserOption = {
+      id: u.id,
+      name: u.name || payload.name,
+      email: u.email || payload.email,
+    };
+    setUsers((prev) => (prev.some((x) => x.id === opt.id) ? prev : [...prev, opt]));
+    toast.success({
+      title: data.created ? "أُنشئ الحساب وأُرسلت الدعوة" : "أُرسلت دعوة تعيين كلمة المرور",
+    });
+    return opt;
+  };
+
   const workspaces = dossier?.workspaces || [];
   const activeWorkspace = useMemo(
     () => workspaces.find((s) => s.status === "active" || s.status === "returned" || s.status === "submitted"),
@@ -202,9 +250,19 @@ export default function ProjectDossierWorkspace() {
       const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/`, {
         method: "PATCH",
         body: JSON.stringify({
-          ...card,
+          marketing_name: card.marketing_name,
+          department: card.department,
+          section: card.section,
+          strategic_goal: card.strategic_goal,
+          location: card.location,
           execution_start: card.execution_start || null,
           execution_end: card.execution_end || null,
+          sponsor_id: card.sponsor_id,
+          sponsor_name: card.sponsor_name,
+          sponsor_email: card.sponsor_email,
+          approver_id: card.approver_id,
+          approver_name: card.approver_name,
+          approver_email: card.approver_email,
         }),
       });
       const data: ProjectDossier = await res.json();
@@ -268,7 +326,7 @@ export default function ProjectDossierWorkspace() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      toast.error({ title: data.detail || data.sponsor_email || data.status || data.workspace || "تعذّر الإرسال" });
+      toast.error({ title: data.detail || data.approver_email || data.sponsor_email || data.status || data.workspace || "تعذّر الإرسال" });
       return;
     }
     toast.success({ title: "أُرسل التبويب للاعتماد" });
@@ -434,7 +492,7 @@ export default function ProjectDossierWorkspace() {
         <Card>
           <h2 className="mb-2 text-lg font-bold text-primary">لا يوجد ملف لهذا المشروع</h2>
           <p className="mb-4 text-sm text-brand-gray">
-            أنشئ ملف مشروع جديد من قائمة المشاريع عبر «إنشاء ملف مشروع» (اسم + راعي)، أو أنشئ ملفاً هنا إن كان المشروع موجوداً مسبقاً.
+            أنشئ ملف مشروع جديد من قائمة المشاريع عبر «إنشاء ملف مشروع»، أو أنشئ ملفاً هنا إن كان المشروع موجوداً مسبقاً.
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input
@@ -442,15 +500,39 @@ export default function ProjectDossierWorkspace() {
               value={card.marketing_name}
               onChange={(e) => setCard({ ...card, marketing_name: e.target.value })}
             />
-            <Input
-              label="ايميل الراعي"
-              value={card.sponsor_email}
-              onChange={(e) => setCard({ ...card, sponsor_email: e.target.value })}
-            />
-            <Input
+            <UserPick
               label="راعي المشروع"
-              value={card.sponsor_name}
-              onChange={(e) => setCard({ ...card, sponsor_name: e.target.value })}
+              users={users}
+              valueId={card.sponsor_id}
+              valueName={card.sponsor_name}
+              valueEmail={card.sponsor_email}
+              onInvite={inviteUser}
+              onPick={(u) =>
+                setCard({
+                  ...card,
+                  sponsor_id: u?.id ?? null,
+                  sponsor_name: u?.name || "",
+                  sponsor_email: u?.email || "",
+                })
+              }
+            />
+            <UserPick
+              label="صاحب الاعتماد"
+              users={users}
+              valueId={card.approver_id}
+              valueName={card.approver_name}
+              valueEmail={card.approver_email}
+              emptyLabel="— مدير النظام إن تُرك فارغاً —"
+              hint="إن تُرك فارغاً يُعيَّن مدير النظام"
+              onInvite={inviteUser}
+              onPick={(u) =>
+                setCard({
+                  ...card,
+                  approver_id: u?.id ?? null,
+                  approver_name: u?.name || "",
+                  approver_email: u?.email || "",
+                })
+              }
             />
           </div>
           <div className="mt-4">
@@ -476,19 +558,19 @@ export default function ProjectDossierWorkspace() {
               </p>
             )}
             {(canSubmitWorkspace(tab) ||
-              (dossier.bypass_workspace_gates && currentWs && currentWs.key !== "info" && currentWs.status !== "locked")) && (
+              (dossier.can_approve && currentWs && currentWs.key !== "info" && currentWs.status !== "locked")) && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {canSubmitWorkspace(tab) && (
                   <Button type="button" onClick={() => void submitActiveWorkspace()}>
                     إرسال التبويب للاعتماد
                   </Button>
                 )}
-                {dossier.bypass_workspace_gates && currentWs && currentWs.status !== "locked" && currentWs.status !== "approved" && (
+                {dossier.can_approve && currentWs && currentWs.status !== "locked" && currentWs.status !== "approved" && (
                   <Button type="button" onClick={() => void adminDecideWorkspace("approved")}>
                     اعتماد التبويب
                   </Button>
                 )}
-                {dossier.bypass_workspace_gates && currentWs?.status === "approved" && (
+                {dossier.can_approve && currentWs?.status === "approved" && (
                   <Button type="button" variant="secondary" onClick={() => void adminDecideWorkspace("revoke")}>
                     إزالة الاعتماد
                   </Button>
@@ -510,6 +592,8 @@ export default function ProjectDossierWorkspace() {
               drafts={sectionDrafts}
               canEdit={canEditWorkspace("card")}
               savingKey={savingKey}
+              users={users}
+              onInviteUser={inviteUser}
               phasesHintTotal={(() => {
                 const rows = (sectionDrafts["card:phases"]?.rows as Array<Record<string, number>>) || [];
                 return rows.reduce((acc, r) => acc + (Number(r.budget_total) || 0), 0);
@@ -528,7 +612,7 @@ export default function ProjectDossierWorkspace() {
             <div className="space-y-3">
               {!wsOpen(tab) && (
                 <Card>
-                  <p className="text-sm text-brand-gray">هذا التبويب مقفل حتى اعتماد التبويب السابق من المدير.</p>
+                  <p className="text-sm text-brand-gray">هذا التبويب مقفل حتى اعتماد التبويب السابق من صاحب الاعتماد.</p>
                 </Card>
               )}
               {wsOpen(tab) && (
@@ -549,7 +633,7 @@ export default function ProjectDossierWorkspace() {
                   sections={sectionsFor("document")}
                   drafts={sectionDrafts}
                   canEdit={canEditWorkspace("document")}
-                  canApprove={!!dossier.bypass_workspace_gates}
+                  canApprove={!!dossier.can_approve}
                   savingKey={savingKey}
                   decidingKey={decidingKey}
                   fixedPhases={schema?.document_fixed_phases || []}
@@ -616,7 +700,7 @@ export default function ProjectDossierWorkspace() {
                 stages={dossier.stages}
                 activities={activities}
                 canEdit={canEditWorkspace("plan")}
-                canApprove={!!dossier.bypass_workspace_gates}
+                canApprove={!!dossier.can_approve}
                 phaseStatus={Object.fromEntries(
                   dossier.sections.filter((s) => s.kind === "plan").map((s) => [s.key, s.status]),
                 )}
@@ -724,7 +808,7 @@ export default function ProjectDossierWorkspace() {
               </div>
               <DossierDashboard
                 data={dash as never}
-                canAllocate={!!dossier.bypass_workspace_gates || canEditWorkspace("board")}
+                canAllocate={!!dossier.can_approve || canEditWorkspace("board")}
                 canSpend={canEditWorkspace("board")}
                 onAllocate={async (lineId, amount) => {
                   const res = await authFetch(

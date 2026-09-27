@@ -48,8 +48,24 @@ class ProjectDossier(models.Model):
     location = models.CharField(max_length=300, blank=True)
     projects_office_name = models.CharField(max_length=200, blank=True, help_text="عرض فقط")
     projects_committee_name = models.CharField(max_length=200, blank=True, help_text="عرض فقط")
+    sponsor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sponsored_dossiers",
+    )
     sponsor_name = models.CharField(max_length=200, blank=True)
     sponsor_email = models.EmailField(blank=True)
+    approver = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approver_dossiers",
+    )
+    approver_name = models.CharField(max_length=200, blank=True)
+    approver_email = models.EmailField(blank=True)
     execution_start = models.DateField(null=True, blank=True)
     execution_end = models.DateField(null=True, blank=True)
     manager = models.ForeignKey(
@@ -73,6 +89,7 @@ class ProjectDossier(models.Model):
         indexes = [
             models.Index(fields=["status", "current_stage"]),
             models.Index(fields=["sponsor_email"]),
+            models.Index(fields=["approver_email"]),
         ]
 
     def __str__(self):

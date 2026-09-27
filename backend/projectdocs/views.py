@@ -106,9 +106,9 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        qs = ProjectDossier.objects.select_related("project", "manager").prefetch_related(
-            "sections", "stages", "workspaces"
-        )
+        qs = ProjectDossier.objects.select_related(
+            "project", "manager", "sponsor", "approver"
+        ).prefetch_related("sections", "stages", "workspaces")
         user = self.request.user
         if is_super_admin(user):
             return qs
@@ -116,8 +116,14 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
 
         email = (getattr(user, "email", "") or "").strip()
         if email:
-            return qs.filter(Q(manager=user) | Q(sponsor_email__iexact=email))
-        return qs.filter(manager=user)
+            return qs.filter(
+                Q(manager=user)
+                | Q(sponsor=user)
+                | Q(approver=user)
+                | Q(sponsor_email__iexact=email)
+                | Q(approver_email__iexact=email)
+            )
+        return qs.filter(Q(manager=user) | Q(sponsor=user) | Q(approver=user))
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -140,6 +146,10 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
                 name=data.get("name") or "",
                 sponsor_name=data.get("sponsor_name") or "",
                 sponsor_email=data.get("sponsor_email") or "",
+                sponsor_id=data.get("sponsor_id"),
+                approver_id=data.get("approver_id"),
+                approver_name=data.get("approver_name") or "",
+                approver_email=data.get("approver_email") or "",
                 description=data.get("description") or "",
                 manager_id=data.get("manager_id"),
                 actor=request.user,
@@ -181,6 +191,8 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             "projects_committee_name",
             "sponsor_name",
             "sponsor_email",
+            "approver_name",
+            "approver_email",
             "manager_email",
             "budget_association",
             "budget_donation",
@@ -198,6 +210,28 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
                 return Response({"detail": "تعيين المسؤول للمشرف فقط"}, status=403)
             mid = request.data.get("manager") or request.data.get("manager_id")
             dossier.manager_id = mid or None
+        if "sponsor_id" in request.data or "sponsor" in request.data:
+            sid = request.data.get("sponsor_id", request.data.get("sponsor"))
+            if sid in ("", None):
+                dossier.sponsor = None
+            else:
+                sponsor, s_name, s_email = services._resolve_user_ref(user_id=sid)
+                dossier.sponsor = sponsor
+                if s_name:
+                    dossier.sponsor_name = s_name
+                if s_email:
+                    dossier.sponsor_email = s_email
+        if "approver_id" in request.data or "approver" in request.data:
+            aid = request.data.get("approver_id", request.data.get("approver"))
+            if aid in ("", None):
+                dossier.approver = None
+            else:
+                approver, a_name, a_email = services._resolve_user_ref(user_id=aid)
+                dossier.approver = approver
+                if a_name:
+                    dossier.approver_name = a_name
+                if a_email:
+                    dossier.approver_email = a_email
         dossier.recompute_budget_total()
         dossier.save()
         services.sync_document_from_card(dossier)

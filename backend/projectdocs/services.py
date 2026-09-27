@@ -36,6 +36,49 @@ ACTION_STAGE_RETURN = "dossier_stage_return"
 ACTION_APPROVAL_DECIDE = "dossier_approval_decide"
 
 
+def _user_display_name(user: User | None) -> str:
+    if not user:
+        return ""
+    profile = getattr(user, "profile", None)
+    name = (getattr(profile, "name", "") or "").strip() if profile else ""
+    return name or (user.get_full_name() or "").strip() or (user.email or "")
+
+
+def _resolve_user_ref(*, user_id=None, email: str = "", name: str = "") -> tuple[User | None, str, str]:
+    """يرجع (مستخدم، اسم، بريد). O(1)."""
+    user = None
+    if user_id is not None and user_id != "":
+        user = User.objects.filter(pk=user_id).select_related("profile").first()
+        if not user:
+            raise ValidationError({"user_id": "مستخدم غير موجود"})
+    email_clean = (email or "").strip()
+    name_clean = (name or "").strip()
+    if user:
+        return user, name_clean or _user_display_name(user), email_clean or (user.email or "")
+    if email_clean:
+        found = User.objects.filter(email__iexact=email_clean).select_related("profile").first()
+        if found:
+            return found, name_clean or _user_display_name(found), email_clean
+    return None, name_clean, email_clean
+
+
+def _default_platform_admin(actor: User | None) -> User:
+    """صاحب الاعتماد الافتراضي: المنشئ إن كان مدير نظام، وإلا أول مدير نظام. O(1)."""
+    if actor is not None and getattr(actor, "is_authenticated", False) and is_super_admin(actor):
+        return actor
+    admin = (
+        User.objects.filter(profile__role="admin")
+        .select_related("profile")
+        .order_by("id")
+        .first()
+    )
+    if not admin:
+        raise ValidationError(
+            {"approver_email": "لا يوجد مدير نظام لتعيينه صاحب اعتماد افتراضي"}
+        )
+    return admin
+
+
 def next_dossier_code(year: int | None = None) -> str:
     """رمز داخلي فريد PRJ-YYYY-NNNN. O(1) تقريباً مع فهرس code."""
     y = year or timezone.now().year
@@ -95,9 +138,31 @@ def create_dossier_for_project(
     manager_id = card.get("manager_id")
     manager = None
     if manager_id:
-        manager = User.objects.filter(pk=manager_id).first()
+        manager = User.objects.filter(pk=manager_id).select_related("profile").first()
         if not manager:
             raise ValidationError({"manager_id": "مستخدم غير موجود"})
+
+    sponsor, sponsor_name, sponsor_email = _resolve_user_ref(
+        user_id=card.get("sponsor_id"),
+        email=card.get("sponsor_email") or "",
+        name=card.get("sponsor_name") or "",
+    )
+    approver, approver_name, approver_email = _resolve_user_ref(
+        user_id=card.get("approver_id"),
+        email=card.get("approver_email") or "",
+        name=card.get("approver_name") or "",
+    )
+    if not approver_email and not approver:
+        admin = _default_platform_admin(actor)
+        approver, approver_name, approver_email = (
+            admin,
+            _user_display_name(admin),
+            (admin.email or "").strip(),
+        )
+        if not approver_email:
+            raise ValidationError(
+                {"approver_email": "لا يوجد مدير نظام لتعيينه صاحب اعتماد افتراضي"}
+            )
 
     budget_a = Decimal(str(card.get("budget_association") or 0))
     budget_d = Decimal(str(card.get("budget_donation") or 0))
@@ -112,8 +177,12 @@ def create_dossier_for_project(
         location=card.get("location") or "",
         projects_office_name=card.get("projects_office_name") or "",
         projects_committee_name=card.get("projects_committee_name") or "",
-        sponsor_name=card.get("sponsor_name") or "",
-        sponsor_email=card.get("sponsor_email") or "",
+        sponsor=sponsor,
+        sponsor_name=sponsor_name,
+        sponsor_email=sponsor_email,
+        approver=approver,
+        approver_name=approver_name,
+        approver_email=approver_email,
         execution_start=card.get("execution_start") or None,
         execution_end=card.get("execution_end") or None,
         manager=manager,
@@ -300,6 +369,8 @@ def sync_document_from_card(dossier: ProjectDossier) -> None:
             "execution_end": str(dossier.execution_end or ""),
             "sponsor_name": dossier.sponsor_name or "",
             "sponsor_email": dossier.sponsor_email or "",
+            "approver_name": dossier.approver_name or "",
+            "approver_email": dossier.approver_email or "",
             "strategic_goal": dossier.strategic_goal or "",
         }
         basics.status = "filled" if catalog.section_is_filled(basics.data) else basics.status
@@ -370,17 +441,23 @@ def sync_document_from_card(dossier: ProjectDossier) -> None:
         budget.save(update_fields=["data", "status", "updated_at"])
 
 
+def _email_matches(user, email: str) -> bool:
+    user_email = (getattr(user, "email", "") or "").strip().lower()
+    target = (email or "").strip().lower()
+    return bool(user_email and target and user_email == target)
+
+
 def can_edit_locked_card_rows(user, dossier: ProjectDossier) -> bool:
-    """تعديل الصفوف المنقولة من البطاقة: مشرف أو مدير الملف أو الراعي."""
+    """تعديل الصفوف المنقولة من البطاقة: مشرف أو مدير الملف أو الراعي أو صاحب الاعتماد."""
     if not user or not user.is_authenticated:
         return False
     if is_super_admin(user):
         return True
     if dossier.manager_id == user.id:
         return True
-    email = (getattr(user, "email", "") or "").strip().lower()
-    sponsor = (dossier.sponsor_email or "").strip().lower()
-    return bool(email and sponsor and email == sponsor)
+    if dossier.sponsor_id == user.id or dossier.approver_id == user.id:
+        return True
+    return _email_matches(user, dossier.sponsor_email) or _email_matches(user, dossier.approver_email)
 
 
 def _enforce_locked_rows(old_data: dict, new_data: dict, *, can_edit_locked: bool, table_keys: list[str]) -> dict:
@@ -399,16 +476,16 @@ def _enforce_locked_rows(old_data: dict, new_data: dict, *, can_edit_locked: boo
 
 
 def can_edit_dossier(user, dossier: ProjectDossier) -> bool:
-    """مشرف، مدير المشروع، أو مدير الإدارة (الراعي). O(1)."""
+    """مشرف، مدير المشروع، الراعي، أو صاحب الاعتماد. O(1)."""
     if not user or not user.is_authenticated:
         return False
     if is_super_admin(user):
         return True
     if dossier.manager_id == user.id:
         return True
-    email = (getattr(user, "email", "") or "").strip().lower()
-    sponsor = (dossier.sponsor_email or "").strip().lower()
-    return bool(email and sponsor and email == sponsor)
+    if dossier.sponsor_id == user.id or dossier.approver_id == user.id:
+        return True
+    return _email_matches(user, dossier.sponsor_email) or _email_matches(user, dossier.approver_email)
 
 
 def assert_can_edit(user, dossier: ProjectDossier):
@@ -426,12 +503,21 @@ def active_stage(dossier: ProjectDossier) -> DossierStage | None:
 
 
 def can_bypass_workspace_gates(user, dossier: ProjectDossier) -> bool:
-    """مشرف عام أو المدير المعيّن على الملف فقط. الراعي لا يتجاوز القفل. O(1)."""
+    """تجاوز قفل التبويبات لمدير النظام فقط. O(1)."""
+    if not user or not user.is_authenticated:
+        return False
+    return is_super_admin(user)
+
+
+def can_approve_dossier(user, dossier: ProjectDossier) -> bool:
+    """اعتماد التبويبات: مدير النظام أو صاحب الاعتماد. O(1)."""
     if not user or not user.is_authenticated:
         return False
     if is_super_admin(user):
         return True
-    return bool(dossier.manager_id and dossier.manager_id == user.id)
+    if dossier.approver_id and dossier.approver_id == user.id:
+        return True
+    return _email_matches(user, dossier.approver_email)
 
 
 def workspace_def(key: str) -> dict | None:
@@ -446,19 +532,19 @@ def get_workspace(dossier: ProjectDossier, key: str) -> DossierWorkspace:
 
 
 def assert_workspace_open_for_work(user, dossier: ProjectDossier, key: str) -> DossierWorkspace:
-    """الموظف والراعي يعملان على التبويب النشط فقط. المدير المعيّن والمشرف يتجاوزان القفل. O(1)."""
+    """قفل تسلسل التبويبات؛ مفتوح لمدير النظام فقط كتجاوز. O(1)."""
     ws = get_workspace(dossier, key)
-    if can_bypass_workspace_gates(user, dossier):
+    if key == "card" or can_bypass_workspace_gates(user, dossier):
         return ws
     if ws.status not in ("active", "returned"):
         raise ValidationError(
-            {"workspace": "هذا التبويب مقفل حتى اعتماد التبويب السابق من المدير"}
+            {"workspace": "هذا التبويب مقفل حتى اعتماد التبويب السابق من صاحب الاعتماد"}
         )
     return ws
 
 
 def workspaces_payload(dossier: ProjectDossier, user=None) -> list[dict]:
-    """حالات التبويبات كما في قاعدة البيانات؛ الفتح للمدير عبر bypass_workspace_gates. O(W)."""
+    """حالات التبويبات كما في قاعدة البيانات. O(W)."""
     out = []
     for ws in dossier.workspaces.all():
         out.append(
@@ -492,6 +578,10 @@ def create_project_with_dossier(
     actor: User | None,
     description: str = "",
     manager_id=None,
+    sponsor_id=None,
+    approver_id=None,
+    approver_name: str = "",
+    approver_email: str = "",
     request=None,
 ) -> ProjectDossier:
     """إنشاء مشروع + ملف دفعة واحدة بعد الاسم والراعي. O(S)."""
@@ -503,7 +593,7 @@ def create_project_with_dossier(
     sponsor_name = (sponsor_name or "").strip()
     if not name:
         raise ValidationError({"name": "اسم المشروع مطلوب"})
-    if not sponsor_email:
+    if not sponsor_email and not sponsor_id:
         raise ValidationError({"sponsor_email": "بريد الراعي مطلوب"})
     project = Project.objects.create(
         name=name,
@@ -517,6 +607,10 @@ def create_project_with_dossier(
         "marketing_name": name,
         "sponsor_name": sponsor_name,
         "sponsor_email": sponsor_email,
+        "sponsor_id": sponsor_id,
+        "approver_name": (approver_name or "").strip(),
+        "approver_email": (approver_email or "").strip(),
+        "approver_id": approver_id,
     }
     if manager_id is not None:
         card["manager_id"] = manager_id
@@ -552,7 +646,7 @@ def update_section(
         raise ValidationError({"kind": "نوع قسم غير معروف"})
     cleaned = catalog.validate_section_data(kind, key, data)
     section = dossier.sections.get(kind=kind, key=key)
-    if section.status == "approved" and not can_bypass_workspace_gates(user, dossier):
+    if section.status == "approved" and not can_approve_dossier(user, dossier):
         raise ValidationError({"status": "القسم معتمد ولا يُعدَّل إلا بإعادة التبويب للتعديل"})
 
     if kind == "document":
@@ -585,6 +679,8 @@ def update_section(
                 "execution_end": str(dossier.execution_end or ""),
                 "sponsor_name": dossier.sponsor_name or "",
                 "sponsor_email": dossier.sponsor_email or "",
+                "approver_name": dossier.approver_name or "",
+                "approver_email": dossier.approver_email or "",
                 "strategic_goal": dossier.strategic_goal or "",
             }
 
@@ -656,6 +752,8 @@ def info_page_payload(dossier: ProjectDossier) -> dict:
         "location": dossier.location,
         "sponsor_name": dossier.sponsor_name,
         "sponsor_email": dossier.sponsor_email,
+        "approver_name": dossier.approver_name,
+        "approver_email": dossier.approver_email,
         "indicators": indicators,
         "phases_budget_summary": {
             "from_association": phase_assoc,
@@ -755,9 +853,13 @@ def sync_budget_lines_from_section(dossier: ProjectDossier, data: dict, user=Non
 def allocate_budget_line(*, dossier: ProjectDossier, line_id: int, amount, user, note: str = "") -> BudgetLine:
     """مخصص الراعي/المشرف على بند. O(1)."""
     email = (getattr(user, "email", "") or "").strip().lower()
-    is_sponsor = bool(email and email == (dossier.sponsor_email or "").strip().lower())
-    if not (is_super_admin(user) or is_sponsor):
-        raise PermissionDenied("ضبط المخصص للراعي أو المشرف فقط")
+    is_sponsor = bool(
+        (dossier.sponsor_id and dossier.sponsor_id == user.id)
+        or (email and email == (dossier.sponsor_email or "").strip().lower())
+    )
+    is_approver = can_approve_dossier(user, dossier)
+    if not (is_super_admin(user) or is_sponsor or is_approver):
+        raise PermissionDenied("ضبط المخصص للراعي أو صاحب الاعتماد أو المشرف فقط")
     line = get_budget_line(dossier, line_id)
     amt = Decimal(str(amount))
     if amt < 0:
@@ -935,11 +1037,11 @@ def decide_document_section(
     note: str = "",
     request=None,
 ) -> DossierSection:
-    """اعتماد/إعادة بطاقة وثيقة من المدير (مشرف أو راعي). O(S)."""
+    """اعتماد/إعادة بطاقة وثيقة من صاحب الاعتماد أو المشرف. O(S)."""
     if decision not in ("approved", "returned", "revoke"):
         raise ValidationError({"decision": "قرار غير صالح"})
-    if not can_bypass_workspace_gates(user, dossier):
-        raise PermissionDenied("اعتماد بطاقات الوثيقة للمشرف أو المدير المعيّن فقط")
+    if not can_approve_dossier(user, dossier):
+        raise PermissionDenied("اعتماد بطاقات الوثيقة لصاحب الاعتماد أو المشرف فقط")
     assert_workspace_open_for_work(user, dossier, "document")
     if not catalog.get_section_def("document", key):
         raise ValidationError({"key": "قسم غير معروف"})
@@ -999,8 +1101,8 @@ def decide_plan_phase(
     """اعتماد مرحلة في الخطة أو إزالة اعتمادها. O(P)."""
     if decision not in ("approved", "revoke"):
         raise ValidationError({"decision": "قرار غير صالح"})
-    if not can_bypass_workspace_gates(user, dossier):
-        raise PermissionDenied("اعتماد مراحل الخطة للمشرف أو المدير المعيّن فقط")
+    if not can_approve_dossier(user, dossier):
+        raise PermissionDenied("اعتماد مراحل الخطة لصاحب الاعتماد أو المشرف فقط")
     if key not in catalog.plan_phase_keys():
         raise ValidationError({"key": "مرحلة غير معروفة"})
     assert_workspace_open_for_work(user, dossier, "plan")
@@ -1055,8 +1157,8 @@ def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -
         raise ValidationError({"workspace": "تبويب غير موجود"})
     if ws.status not in ("active", "returned"):
         raise ValidationError({"status": "لا يمكن إرسال هذا التبويب الآن"})
-    if not dossier.sponsor_email:
-        raise ValidationError({"sponsor_email": "بريد الراعي (مدير الإدارة) مطلوب قبل الإرسال"})
+    if not dossier.approver_email:
+        raise ValidationError({"approver_email": "بريد صاحب الاعتماد مطلوب قبل الإرسال"})
 
     if key == "document":
         keys = catalog.all_section_keys("document")
@@ -1241,8 +1343,8 @@ def submit_stage(*, dossier: ProjectDossier, order: int, user, request=None) -> 
         raise ValidationError({"order": "مرحلة غير موجودة"})
     if stage.status not in ("active", "returned"):
         raise ValidationError({"status": "لا يمكن إرسال هذه المرحلة الآن"})
-    if not dossier.sponsor_email:
-        raise ValidationError({"sponsor_email": "بريد الراعي مطلوب قبل الإرسال"})
+    if not dossier.approver_email:
+        raise ValidationError({"approver_email": "بريد صاحب الاعتماد مطلوب قبل الإرسال"})
 
     kind = "closure" if stage.key == "close" else "document"
     for sdef in catalog.sections_for_stage(kind, stage.key):
@@ -1431,9 +1533,9 @@ def _return_stage(dossier: ProjectDossier, stage: DossierStage, *, note: str, ac
 
 @transaction.atomic
 def admin_decide_workspace(*, dossier: ProjectDossier, key: str, decision: str, note: str, user, request=None):
-    """اعتماد أو إزالة اعتماد تبويب من المنصة (مشرف أو المدير المعيّن)."""
-    if not can_bypass_workspace_gates(user, dossier):
-        raise PermissionDenied("الاعتماد الداخلي للمشرف أو المدير المعيّن فقط")
+    """اعتماد أو إزالة اعتماد تبويب من المنصة (مشرف أو صاحب الاعتماد)."""
+    if not can_approve_dossier(user, dossier):
+        raise PermissionDenied("الاعتماد الداخلي لصاحب الاعتماد أو المشرف فقط")
     ws = dossier.workspaces.select_for_update().filter(key=key).first()
     if not ws:
         raise ValidationError({"workspace": "تبويب غير موجود"})

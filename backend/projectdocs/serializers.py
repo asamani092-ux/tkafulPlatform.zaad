@@ -163,6 +163,7 @@ class ProjectDossierSerializer(serializers.ModelSerializer):
     project_name = serializers.CharField(source="project.name", read_only=True)
     manager_username = serializers.CharField(source="manager.username", read_only=True, default="")
     bypass_workspace_gates = serializers.SerializerMethodField()
+    can_approve = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectDossier
@@ -180,8 +181,12 @@ class ProjectDossierSerializer(serializers.ModelSerializer):
             "location",
             "projects_office_name",
             "projects_committee_name",
+            "sponsor",
             "sponsor_name",
             "sponsor_email",
+            "approver",
+            "approver_name",
+            "approver_email",
             "execution_start",
             "execution_end",
             "manager",
@@ -197,6 +202,7 @@ class ProjectDossierSerializer(serializers.ModelSerializer):
             "stages",
             "workspaces",
             "bypass_workspace_gates",
+            "can_approve",
             "created_at",
             "updated_at",
         )
@@ -216,6 +222,13 @@ class ProjectDossierSerializer(serializers.ModelSerializer):
 
         return can_bypass_workspace_gates(user, obj) if user else False
 
+    def get_can_approve(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        from .services import can_approve_dossier
+
+        return can_approve_dossier(user, obj) if user else False
+
 
 class ProjectDossierListSerializer(serializers.ModelSerializer):
     project_slug = serializers.CharField(source="project.slug", read_only=True)
@@ -233,6 +246,7 @@ class ProjectDossierListSerializer(serializers.ModelSerializer):
             "current_stage",
             "status",
             "sponsor_email",
+            "approver_email",
             "manager",
             "updated_at",
         )
@@ -269,6 +283,10 @@ class CreateDossierSerializer(serializers.Serializer):
     projects_committee_name = serializers.CharField(required=False, allow_blank=True)
     sponsor_name = serializers.CharField(required=False, allow_blank=True)
     sponsor_email = serializers.EmailField(required=False, allow_blank=True)
+    sponsor_id = serializers.IntegerField(required=False, allow_null=True)
+    approver_name = serializers.CharField(required=False, allow_blank=True)
+    approver_email = serializers.EmailField(required=False, allow_blank=True)
+    approver_id = serializers.IntegerField(required=False, allow_null=True)
     manager_id = serializers.IntegerField(required=False, allow_null=True)
     manager_email = serializers.EmailField(required=False, allow_blank=True)
     budget_association = serializers.DecimalField(max_digits=14, decimal_places=2, required=False)

@@ -77,10 +77,21 @@ export default function PlatformProjects() {
   const [dossierCreate, setDossierCreate] = useState({
     open: false,
     name: "",
+    sponsor_id: "" as string,
     sponsor_name: "",
     sponsor_email: "",
+    approver_id: "" as string,
+    approver_name: "",
+    approver_email: "",
     saving: false,
   });
+  const [deleteModal, setDeleteModal] = useState<{
+    open: boolean;
+    project: AdminProject | null;
+    reason: string;
+    blockers: string[];
+    saving: boolean;
+  }>({ open: false, project: null, reason: "", blockers: [], saving: false });
   const [types, setTypes] = useState<ProjectType[]>([]);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
@@ -156,37 +167,105 @@ export default function PlatformProjects() {
   };
 
   const openCreateWizard = () => {
-    setDossierCreate({ open: true, name: "", sponsor_name: "", sponsor_email: "", saving: false });
+    setDossierCreate({
+      open: true,
+      name: "",
+      sponsor_id: "",
+      sponsor_name: "",
+      sponsor_email: "",
+      approver_id: "",
+      approver_name: "",
+      approver_email: "",
+      saving: false,
+    });
+    void loadAllUsers();
   };
 
   const createDossierProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!dossierCreate.name.trim() || !dossierCreate.sponsor_email.trim()) {
-      toast.error({ title: "الاسم وبريد الراعي مطلوبان" });
+    if (!dossierCreate.name.trim() || (!dossierCreate.sponsor_email.trim() && !dossierCreate.sponsor_id)) {
+      toast.error({ title: "الاسم والراعي مطلوبان" });
       return;
     }
     setDossierCreate((s) => ({ ...s, saving: true }));
     try {
+      const body: Record<string, unknown> = {
+        name: dossierCreate.name.trim(),
+        sponsor_name: dossierCreate.sponsor_name.trim(),
+        sponsor_email: dossierCreate.sponsor_email.trim(),
+        approver_name: dossierCreate.approver_name.trim(),
+        approver_email: dossierCreate.approver_email.trim(),
+      };
+      if (dossierCreate.sponsor_id) body.sponsor_id = Number(dossierCreate.sponsor_id);
+      if (dossierCreate.approver_id) body.approver_id = Number(dossierCreate.approver_id);
       const res = await authFetch("/api/projectdocs/dossiers/", {
         method: "POST",
-        body: JSON.stringify({
-          name: dossierCreate.name.trim(),
-          sponsor_name: dossierCreate.sponsor_name.trim(),
-          sponsor_email: dossierCreate.sponsor_email.trim(),
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast.error({
-          title: data.detail || data.name || data.sponsor_email || "تعذّر إنشاء ملف المشروع",
+          title: data.detail || data.name || data.sponsor_email || data.approver_email || "تعذّر إنشاء ملف المشروع",
         });
         return;
       }
       toast.success({ title: "تم إنشاء المشروع والبطاقة" });
-      setDossierCreate({ open: false, name: "", sponsor_name: "", sponsor_email: "", saving: false });
+      setDossierCreate({
+        open: false,
+        name: "",
+        sponsor_id: "",
+        sponsor_name: "",
+        sponsor_email: "",
+        approver_id: "",
+        approver_name: "",
+        approver_email: "",
+        saving: false,
+      });
       navigate(`/Admin/projects/${encodeURIComponent(data.project_slug)}/dossier`);
     } finally {
       setDossierCreate((s) => ({ ...s, saving: false }));
+    }
+  };
+
+  const openDeleteModal = async (project: AdminProject) => {
+    const res = await authFetch(`/api/platform/projects/${project.id}/delete-check/`);
+    const data = await res.json().catch(() => ({}));
+    setDeleteModal({
+      open: true,
+      project,
+      reason: "",
+      blockers: Array.isArray(data.blockers) ? data.blockers : [],
+      saving: false,
+    });
+  };
+
+  const confirmDeleteProject = async () => {
+    if (!deleteModal.project) return;
+    if (deleteModal.blockers.length) return;
+    if (!deleteModal.reason.trim()) {
+      toast.error({ title: "سبب الحذف مطلوب" });
+      return;
+    }
+    setDeleteModal((s) => ({ ...s, saving: true }));
+    try {
+      const res = await authFetch(`/api/platform/projects/${deleteModal.project.id}/`, {
+        method: "DELETE",
+        body: JSON.stringify({ reason: deleteModal.reason.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error({ title: data.detail || data.reason || "تعذّر الحذف" });
+        if (Array.isArray(data.blockers)) {
+          setDeleteModal((s) => ({ ...s, blockers: data.blockers, saving: false }));
+          return;
+        }
+        return;
+      }
+      toast.success({ title: "حُذف المشروع" });
+      setDeleteModal({ open: false, project: null, reason: "", blockers: [], saving: false });
+      void load("silent");
+    } finally {
+      setDeleteModal((s) => ({ ...s, saving: false }));
     }
   };
 
@@ -603,6 +682,11 @@ export default function PlatformProjects() {
                   </Link>
                 )}
                 <Button type="button" variant="secondary" onClick={() => openEditWizard(p)}>التفاصيل</Button>
+                {isSuperAdmin && (
+                  <Button type="button" variant="secondary" onClick={() => void openDeleteModal(p)}>
+                    حذف
+                  </Button>
+                )}
               </div>
             </div>
           </Card>
@@ -617,7 +701,7 @@ export default function PlatformProjects() {
         title="إنشاء ملف مشروع"
       >
         <p className="mb-3 text-sm text-brand-gray">
-          ابدأ باسم المشروع والراعي (مدير الإدارة) ثم انتقل مباشرة لبطاقة الملف.
+          ابدأ باسم المشروع والراعي وصاحب الاعتماد ثم انتقل مباشرة لبطاقة الملف.
         </p>
         <form className="space-y-3" onSubmit={(e) => void createDossierProject(e)}>
           <Input
@@ -626,22 +710,99 @@ export default function PlatformProjects() {
             onChange={(e) => setDossierCreate((s) => ({ ...s, name: e.target.value }))}
             required
           />
-          <Input
-            label="اسم الراعي"
-            value={dossierCreate.sponsor_name}
-            onChange={(e) => setDossierCreate((s) => ({ ...s, sponsor_name: e.target.value }))}
-          />
-          <Input
-            label="بريد الراعي"
-            type="email"
-            value={dossierCreate.sponsor_email}
-            onChange={(e) => setDossierCreate((s) => ({ ...s, sponsor_email: e.target.value }))}
-            required
-          />
+          <Select
+            label="راعي المشروع"
+            value={dossierCreate.sponsor_id}
+            onChange={(e) => {
+              const id = e.target.value;
+              const u = allUsers.find((x) => String(x.id) === id);
+              setDossierCreate((s) => ({
+                ...s,
+                sponsor_id: id,
+                sponsor_name: u?.name || "",
+                sponsor_email: u?.email || "",
+              }));
+            }}
+          >
+            <option value="">— اختر مستخدماً —</option>
+            {allUsers.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name} ({u.email})
+              </option>
+            ))}
+          </Select>
+          <Select
+            label="صاحب الاعتماد"
+            value={dossierCreate.approver_id}
+            onChange={(e) => {
+              const id = e.target.value;
+              const u = allUsers.find((x) => String(x.id) === id);
+              setDossierCreate((s) => ({
+                ...s,
+                approver_id: id,
+                approver_name: u?.name || "",
+                approver_email: u?.email || "",
+              }));
+            }}
+          >
+            <option value="">— مدير النظام إن تُرك فارغاً —</option>
+            {allUsers.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name} ({u.email})
+              </option>
+            ))}
+          </Select>
+          <p className="text-xs text-brand-gray">إن تُرك فارغاً يُعيَّن مدير النظام صاحب اعتماد.</p>
           <Button type="submit" disabled={dossierCreate.saving}>
             {dossierCreate.saving ? "جاري الإنشاء…" : "إنشاء والانتقال للبطاقة"}
           </Button>
         </form>
+      </Modal>
+
+      <Modal
+        open={deleteModal.open}
+        onClose={() => setDeleteModal({ open: false, project: null, reason: "", blockers: [], saving: false })}
+        title={deleteModal.project ? `حذف المشروع: ${deleteModal.project.name}` : "حذف المشروع"}
+      >
+        {deleteModal.blockers.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-sm text-rose-800">لا يمكن الحذف قبل إفراغ المشروع:</p>
+            <ul className="list-disc pr-5 text-sm text-rose-800">
+              {deleteModal.blockers.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
+            </ul>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setDeleteModal({ open: false, project: null, reason: "", blockers: [], saving: false })}
+            >
+              إغلاق
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-brand-gray">الحذف نهائي لمدير النظام فقط. اذكر السبب للتأكيد.</p>
+            <Input
+              label="سبب الحذف"
+              value={deleteModal.reason}
+              onChange={(e) => setDeleteModal((s) => ({ ...s, reason: e.target.value }))}
+              required
+            />
+            <div className="flex gap-2">
+              <Button type="button" onClick={() => void confirmDeleteProject()} disabled={deleteModal.saving}>
+                {deleteModal.saving ? "جاري الحذف…" : "تأكيد الحذف"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setDeleteModal({ open: false, project: null, reason: "", blockers: [], saving: false })}
+              >
+                إلغاء
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <Modal

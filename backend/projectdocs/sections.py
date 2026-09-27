@@ -189,6 +189,8 @@ DOCUMENT_SECTIONS: list[dict] = [
             _f("execution_end", "تاريخ انتهاء التنفيذ", "date"),
             _f("sponsor_name", "راعي المشروع"),
             _f("sponsor_email", "ايميل الراعي", "text"),
+            _f("approver_name", "صاحب الاعتماد"),
+            _f("approver_email", "ايميل صاحب الاعتماد", "text"),
             _f("strategic_goal", "الهدف الاستراتيجي", "textarea"),
         ],
     },
