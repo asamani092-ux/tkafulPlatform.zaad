@@ -166,8 +166,19 @@ export default function UsersAdmin() {
         toast.error({ title: await apiError(res) });
         return;
       }
+      if (form.password.trim()) {
+        const pwRes = await authFetch(`/api/accounts/users/${edit.id}/set_password/`, {
+          method: "POST",
+          body: JSON.stringify({ password: form.password.trim() }),
+        });
+        if (!pwRes.ok) {
+          toast.error({ title: await apiError(pwRes) });
+          return;
+        }
+      }
       toast.success({ title: "تم حفظ التعديلات" });
       setEdit(null);
+      setForm(emptyForm);
       void load();
     } finally {
       setBusy(false);
@@ -251,12 +262,19 @@ export default function UsersAdmin() {
 
       <Modal open={!!edit} onClose={() => setEdit(null)} title="تعديل مستخدم">
         <div className="space-y-3">
-          <Input label="البريد" dir="ltr" value={form.email} disabled />
           <Input label="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <Input label="البريد" dir="ltr" value={form.email} disabled />
           <Select label="الدور" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
             {assignableRoles.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </Select>
-            <Checkbox label="نشط" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
+          <Checkbox label="نشط" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
+          <Input
+            label="كلمة مرور جديدة (اختياري)"
+            type="password"
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            placeholder="اتركه فارغاً إن لم ترد التغيير"
+          />
           <Button type="button" disabled={busy} onClick={() => void saveEdit()}>{busy ? "جاري الحفظ…" : "حفظ"}</Button>
         </div>
       </Modal>

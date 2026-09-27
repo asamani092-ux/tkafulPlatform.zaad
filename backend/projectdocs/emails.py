@@ -1,18 +1,13 @@
 """
-بريد ملف المشروع — الاعتماد يُرسل لصاحب الاعتماد.
+بريد ملف المشروع — الاعتماد يُرسل لصاحب الاعتماد بتنسيق RTL.
 """
 from __future__ import annotations
 
 import logging
 
-from django.conf import settings
-from django.core.mail import send_mail
+from core.email_rtl import frontend_base_url, send_rtl_email
 
 logger = logging.getLogger(__name__)
-
-
-def frontend_base_url() -> str:
-    return (getattr(settings, "FRONTEND_BASE_URL", None) or "http://localhost:3000").rstrip("/")
 
 
 def approval_review_url(token: str) -> str:
@@ -39,14 +34,7 @@ def send_approval_email(approval) -> bool:
         f"مع تحيات منصة تكافل وأثر"
     )
     try:
-        send_mail(
-            subject,
-            body,
-            settings.DEFAULT_FROM_EMAIL,
-            [to],
-            fail_silently=False,
-        )
-        return True
+        return send_rtl_email(subject=subject, body=body, to=to, fail_silently=False)
     except Exception:
         logger.exception("فشل إرسال بريد الاعتماد لـ %s", to)
         return False
@@ -56,8 +44,7 @@ def send_reminder_email(*, to: str, subject: str, body: str) -> bool:
     if not to:
         return False
     try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [to], fail_silently=False)
-        return True
+        return send_rtl_email(subject=subject, body=body, to=to, fail_silently=False)
     except Exception:
         logger.exception("فشل إرسال تذكير لـ %s", to)
         return False

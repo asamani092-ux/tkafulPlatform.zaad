@@ -375,7 +375,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path=r"workspaces/(?P<key>[^/.]+)/submit")
     def submit_workspace(self, request, pk=None, key=None):
         dossier = self.get_object()
-        approval = services.submit_workspace(
+        approval, email_sent = services.submit_workspace(
             dossier=dossier,
             key=key,
             user=request.user,
@@ -387,6 +387,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
                 "approval_id": approval.id,
                 "expires_at": approval.expires_at,
                 "token_hint": approval.token[:8],
+                "email_sent": email_sent,
             },
             status=201,
         )
@@ -419,7 +420,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path=r"stages/(?P<order>[0-9]+)/submit")
     def submit_stage(self, request, pk=None, order=None):
         dossier = self.get_object()
-        approval = services.submit_stage(
+        approval, email_sent = services.submit_stage(
             dossier=dossier,
             order=int(order),
             user=request.user,
@@ -431,6 +432,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
                 "approval_id": approval.id,
                 "expires_at": approval.expires_at,
                 "token_hint": approval.token[:8],
+                "email_sent": email_sent,
             },
             status=201,
         )

@@ -1146,8 +1146,8 @@ def decide_plan_phase(
 
 
 @transaction.atomic
-def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -> ApprovalRequest:
-    """إرسال تبويب (وثيقة/خطة/إغلاق/لوحة) لاعتماد مدير الإدارة. O(1)."""
+def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -> tuple[ApprovalRequest, bool]:
+    """إرسال تبويب (وثيقة/خطة/إغلاق/لوحة) لاعتماد صاحب الاعتماد. O(1). يُرجع (approval, email_sent)."""
     assert_can_edit(user, dossier)
     wdef = workspace_def(key)
     if not wdef or not wdef.get("needs_approval"):
@@ -1204,7 +1204,7 @@ def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -
             "project_name": dossier.project.name,
         },
     )
-    send_approval_email(approval)
+    emailed = send_approval_email(approval)
     log_activity(
         actor=user,
         action=ACTION_STAGE_SUBMIT,
@@ -1219,7 +1219,7 @@ def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -
         users=[u for u in [dossier.manager] if u],
         roles=["admin"],
     )
-    return approval
+    return approval, emailed
 
 
 def _lock_following_unapproved(dossier: ProjectDossier, order: int) -> None:
@@ -1336,7 +1336,8 @@ def _return_workspace(dossier: ProjectDossier, key: str, *, note: str, actor=Non
 
 
 @transaction.atomic
-def submit_stage(*, dossier: ProjectDossier, order: int, user, request=None) -> ApprovalRequest:
+def submit_stage(*, dossier: ProjectDossier, order: int, user, request=None) -> tuple[ApprovalRequest, bool]:
+    """إرسال مرحلة قديمة للاعتماد. يُرجع (approval, email_sent)."""
     assert_can_edit(user, dossier)
     stage = dossier.stages.select_for_update().filter(order=order).first()
     if not stage:
@@ -1374,7 +1375,7 @@ def submit_stage(*, dossier: ProjectDossier, order: int, user, request=None) -> 
             "project_name": dossier.project.name,
         },
     )
-    send_approval_email(approval)
+    emailed = send_approval_email(approval)
     log_activity(
         actor=user,
         action=ACTION_STAGE_SUBMIT,
@@ -1389,7 +1390,7 @@ def submit_stage(*, dossier: ProjectDossier, order: int, user, request=None) -> 
         users=[u for u in [dossier.manager] if u],
         roles=["admin"],
     )
-    return approval
+    return approval, emailed
 
 
 def _stage_label(key: str) -> str:
