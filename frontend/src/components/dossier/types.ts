@@ -88,6 +88,10 @@ export interface ProjectDossier {
   projects_committee_name: string;
   sponsor_name: string;
   sponsor_email: string;
+  sponsor?: number | null;
+  approver?: number | null;
+  approver_name?: string;
+  approver_email?: string;
   execution_start?: string | null;
   execution_end?: string | null;
   manager: number | null;
@@ -110,6 +114,7 @@ export interface ProjectDossier {
     needs_approval: boolean;
   }>;
   bypass_workspace_gates?: boolean;
+  can_approve?: boolean;
 }
 
 export interface StageActivity {

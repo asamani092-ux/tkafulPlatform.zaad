@@ -2,6 +2,8 @@
 منطق أعمال «المشاريع» (fat models, thin views).
 كل فحوصات النطاق (scoping) للأدمن الموحّد تمر من هنا.
 """
+from django.core.exceptions import ObjectDoesNotExist
+
 from core.permissions import is_super_admin
 
 from .models import Project, ProjectMember
@@ -72,3 +74,44 @@ def public_home_projects_queryset(limit: int = 6):
     if featured.exists():
         return featured[:limit]
     return base.order_by("-updated_at", "-id")[:limit]
+
+
+def project_delete_blockers(project: Project) -> list[str]:
+    """أسباب منع الحذف إن وُجدت بيانات مهمة. O(1) استعلامات مجمّعة."""
+    blockers: list[str] = []
+    members_qs = ProjectMember.objects.filter(project=project)
+    if project.created_by_id:
+        members_qs = members_qs.exclude(user_id=project.created_by_id)
+    extra_members = members_qs.count()
+    if extra_members:
+        blockers.append(f"يوجد {extra_members} عضواً على المشروع")
+
+    try:
+        from sponsorships.models import Sponsorship
+
+        n = Sponsorship.objects.filter(project=project).count()
+        if n:
+            blockers.append(f"يوجد {n} كفالة مرتبطة")
+    except Exception:
+        pass
+
+    try:
+        dossier = project.dossier
+    except ObjectDoesNotExist:
+        dossier = None
+    if dossier is not None:
+        from projectdocs.models import StageActivity, DossierAttachment, ApprovalRequest
+
+        filled = dossier.sections.exclude(status="empty").count()
+        if filled:
+            blockers.append(f"ملف المشروع يحتوي {filled} قسماً غير فارغ")
+        act_n = StageActivity.objects.filter(stage__dossier=dossier).count()
+        if act_n:
+            blockers.append(f"ملف المشروع يحتوي {act_n} نشاطاً")
+        att_n = DossierAttachment.objects.filter(dossier=dossier).count()
+        if att_n:
+            blockers.append(f"ملف المشروع يحتوي {att_n} مرفقاً")
+        appr_n = ApprovalRequest.objects.filter(dossier=dossier).count()
+        if appr_n:
+            blockers.append(f"ملف المشروع يحتوي {appr_n} طلب اعتماد")
+    return blockers

@@ -66,9 +66,29 @@ class ProjectMemberPermissionTests(APITestCase):
 
     def test_only_super_admin_deletes_projects(self):
         self.client.force_authenticate(self.pa)
-        res = self.client.delete(f"/api/platform/projects/{self.project.id}/")
+        res = self.client.delete(f"/api/platform/projects/{self.project.id}/", {"reason": "تجربة"}, format="json")
         self.assertEqual(res.status_code, 403)
         self.assertTrue(Project.objects.filter(pk=self.project.pk).exists())
+
+    def test_delete_requires_reason_and_empty_project(self):
+        self.client.force_authenticate(self.super_admin)
+        no_reason = self.client.delete(f"/api/platform/projects/{self.project.id}/", {}, format="json")
+        self.assertEqual(no_reason.status_code, 400, no_reason.content)
+        blocked = self.client.delete(
+            f"/api/platform/projects/{self.project.id}/",
+            {"reason": "تنظيف"},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, 400, blocked.content)
+        self.assertTrue(blocked.data.get("blockers"))
+        ProjectMember.objects.filter(project=self.project).delete()
+        ok = self.client.delete(
+            f"/api/platform/projects/{self.project.id}/",
+            {"reason": "مشروع تجريبي فارغ"},
+            format="json",
+        )
+        self.assertEqual(ok.status_code, 204, getattr(ok, "content", b""))
+        self.assertFalse(Project.objects.filter(pk=self.project.pk).exists())
 
     def test_project_admin_can_add_member_viewer_cannot(self):
         newbie = make_user("newbie")
