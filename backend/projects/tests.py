@@ -213,3 +213,35 @@ class HomeFeaturedProjectsTests(APITestCase):
         self.assertEqual(res.status_code, 200)
         slugs = [p["slug"] for p in res.json()]
         self.assertEqual(slugs, ["feat-a", "feat-b"])
+
+
+class OverviewStatsTests(APITestCase):
+    def setUp(self):
+        from accounts.models import Profile
+        self.admin = User.objects.create_user("ov_admin", email="ov_admin@t.local", password="pass12345")
+        self.admin.profile.role = "admin"
+        self.admin.profile.save()
+        self.member = User.objects.create_user("ov_emp", email="ov_emp@t.local", password="pass12345")
+        self.member.profile.role = "employee"
+        self.member.profile.save()
+
+    def test_overview_stats_admin_only_and_counts(self):
+        Project.objects.create(name="نشط", slug="ov-active", status="active", is_active=True)
+        Project.objects.create(name="مسودة", slug="ov-draft", status="draft", is_active=True)
+        self.client.force_authenticate(self.member)
+        denied = self.client.get("/api/platform/overview-stats/")
+        self.assertEqual(denied.status_code, 403)
+        self.client.force_authenticate(self.admin)
+        res = self.client.get("/api/platform/overview-stats/")
+        self.assertEqual(res.status_code, 200)
+        self.assertGreaterEqual(res.data["projects_active"], 1)
+        self.assertGreaterEqual(res.data["projects_draft"], 1)
+        for key in (
+            "dossiers_in_progress",
+            "activities_delayed",
+            "tasks_assigned_open",
+            "volunteers_approved",
+            "sponsorships_active",
+            "pending_ops",
+        ):
+            self.assertIn(key, res.data)

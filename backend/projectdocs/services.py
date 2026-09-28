@@ -94,8 +94,109 @@ def ensure_project_membership(project, user: User | None, *, role: str = "projec
     ProjectMember.objects.create(project=project, user=user, role=role)
 
 
+def _user_keeps_project_access(dossier: ProjectDossier, user_id: int | None) -> bool:
+    """هل ما زال للمستخدم دور على الحاوية (راعي/مدير/معتمد/فريق)؟ O(R)."""
+    if not user_id:
+        return False
+    if dossier.sponsor_id == user_id:
+        return True
+    if dossier.manager_id == user_id:
+        return True
+    if dossier.approver_id == user_id:
+        return True
+    return user_id in team_section_user_ids(dossier)
+
+
+def revoke_project_membership_if_unused(dossier: ProjectDossier, user: User | None) -> None:
+    """سحب عضوية إن لم يبقَ للمستخدم دور على المشروع. O(1)."""
+    if not user or not getattr(user, "id", None):
+        return
+    if _user_keeps_project_access(dossier, user.id):
+        return
+    from projects.models import ProjectMember
+
+    ProjectMember.objects.filter(project=dossier.project, user=user).delete()
+
+
+def link_dossier_role_users_from_email(dossier: ProjectDossier) -> list[str]:
+    """يربط FK من البريد إن غاب المعرف. يعيد أسماء الحقول التي تغيّرت. O(1)."""
+    changed: list[str] = []
+    if not dossier.sponsor_id and (dossier.sponsor_email or "").strip():
+        user, name, email = _resolve_user_ref(
+            email=dossier.sponsor_email, name=dossier.sponsor_name or ""
+        )
+        if user:
+            dossier.sponsor = user
+            if name:
+                dossier.sponsor_name = name
+            if email:
+                dossier.sponsor_email = email
+            changed.extend(["sponsor", "sponsor_name", "sponsor_email"])
+    if not dossier.manager_id and (dossier.manager_email or "").strip():
+        user, _name, email = _resolve_user_ref(email=dossier.manager_email)
+        if user:
+            dossier.manager = user
+            if email:
+                dossier.manager_email = email
+            changed.extend(["manager", "manager_email"])
+    if not dossier.approver_id and (dossier.approver_email or "").strip():
+        user, name, email = _resolve_user_ref(
+            email=dossier.approver_email, name=dossier.approver_name or ""
+        )
+        if user:
+            dossier.approver = user
+            if name:
+                dossier.approver_name = name
+            if email:
+                dossier.approver_email = email
+            changed.extend(["approver", "approver_name", "approver_email"])
+    return changed
+
+
+def transfer_dossier_sponsor(
+    dossier: ProjectDossier,
+    *,
+    user_id=None,
+    email: str = "",
+    name: str = "",
+    clear: bool = False,
+) -> ProjectDossier:
+    """
+    نقل حاوية المشروع لراعٍ جديد: عضوية فورية وسحب عن السابق إن لم يبقَ له دور.
+    لا تُنسخ الأقسام/الأنشطة — نفس Project وDossier. O(1).
+    """
+    old = dossier.sponsor
+    old_id = dossier.sponsor_id
+    if clear:
+        dossier.sponsor = None
+        if name:
+            dossier.sponsor_name = name
+        if email:
+            dossier.sponsor_email = (email or "").strip()
+        elif not name:
+            dossier.sponsor_name = ""
+            dossier.sponsor_email = ""
+    else:
+        sponsor, s_name, s_email = _resolve_user_ref(
+            user_id=user_id, email=email, name=name
+        )
+        dossier.sponsor = sponsor
+        dossier.sponsor_name = s_name
+        dossier.sponsor_email = s_email
+    dossier.save(update_fields=["sponsor", "sponsor_name", "sponsor_email", "updated_at"])
+    if dossier.sponsor_id:
+        ensure_project_membership(dossier.project, dossier.sponsor, role="project_editor")
+    if old_id and old_id != dossier.sponsor_id:
+        revoke_project_membership_if_unused(dossier, old)
+    return dossier
+
+
 def sync_dossier_role_memberships(dossier: ProjectDossier) -> None:
-    """مزامنة عضوية الراعي/المدير/المعتمد. O(1)."""
+    """شفاء ربط الأدوار من البريد + ضمان عضوية الراعي/المدير/المعتمد. O(1)."""
+    changed = link_dossier_role_users_from_email(dossier)
+    if changed:
+        fields = list(dict.fromkeys([*changed, "updated_at"]))
+        dossier.save(update_fields=fields)
     project = dossier.project
     if dossier.sponsor_id:
         ensure_project_membership(project, dossier.sponsor, role="project_editor")

@@ -95,6 +95,13 @@ def public_project_detail(request, slug):
 
 # ---- أدمن موحّد ----
 @api_view(["GET"])
+@permission_classes([IsAdmin])
+def overview_stats(request):
+    """مؤشرات نظرة /Admin من بيانات المنصة — مشرف عام فقط."""
+    return Response(services.platform_overview_stats())
+
+
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def my_memberships(request):
     """عضويات المستخدم الحالي + علم super-admin — للوحة الأدمن الموحّدة."""

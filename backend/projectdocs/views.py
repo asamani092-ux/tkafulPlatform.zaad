@@ -213,14 +213,14 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         if "sponsor_id" in request.data or "sponsor" in request.data:
             sid = request.data.get("sponsor_id", request.data.get("sponsor"))
             if sid in ("", None):
-                dossier.sponsor = None
+                services.transfer_dossier_sponsor(
+                    dossier,
+                    clear=True,
+                    email=request.data.get("sponsor_email") or "",
+                    name=request.data.get("sponsor_name") or "",
+                )
             else:
-                sponsor, s_name, s_email = services._resolve_user_ref(user_id=sid)
-                dossier.sponsor = sponsor
-                if s_name:
-                    dossier.sponsor_name = s_name
-                if s_email:
-                    dossier.sponsor_email = s_email
+                services.transfer_dossier_sponsor(dossier, user_id=sid)
         if "approver_id" in request.data or "approver" in request.data:
             aid = request.data.get("approver_id", request.data.get("approver"))
             if aid in ("", None):
@@ -232,6 +232,13 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
                     dossier.approver_name = a_name
                 if a_email:
                     dossier.approver_email = a_email
+        # حقول الراعي النصية مع بقاء نفس المستخدم — دون نقل
+        if "sponsor_id" not in request.data and "sponsor" not in request.data:
+            if "sponsor_name" in request.data or "sponsor_email" in request.data:
+                if "sponsor_name" in request.data:
+                    dossier.sponsor_name = request.data.get("sponsor_name") or ""
+                if "sponsor_email" in request.data:
+                    dossier.sponsor_email = request.data.get("sponsor_email") or ""
         dossier.recompute_budget_total()
         dossier.save()
         services.sync_document_from_card(dossier)
@@ -245,6 +252,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         if not dossier:
             return Response({"detail": "لا يوجد ملف"}, status=404)
         self.check_object_permissions(request, dossier)
+        services.sync_dossier_role_memberships(dossier)
         services.sync_document_from_card(dossier)
         services.sync_plan_from_document(dossier)
         dossier.refresh_from_db()
@@ -253,6 +261,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
 
     def retrieve(self, request, *args, **kwargs):
         dossier = self.get_object()
+        services.sync_dossier_role_memberships(dossier)
         services.sync_document_from_card(dossier)
         services.sync_plan_from_document(dossier)
         dossier.refresh_from_db()

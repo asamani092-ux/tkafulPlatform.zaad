@@ -1452,3 +1452,107 @@ class TeamAssignNotifyTests(APITestCase):
         self.assertEqual(mine.status_code, 200)
         titles = {r["title"] for r in mine.data["results"]}
         self.assertIn("مهمة خارجية", titles)
+
+
+class SponsorTransferTests(APITestCase):
+    """نقل حاوية المشروع بين الرعاة مع بقاء التفاصيل."""
+
+    def setUp(self):
+        self.admin = make_user("xfer_admin", role="admin")
+        self.sponsor_a = make_user("xfer_a", role="employee")
+        self.sponsor_a.profile.name = "راعي أ"
+        self.sponsor_a.profile.save()
+        self.sponsor_b = make_user("xfer_b", role="employee")
+        self.sponsor_b.profile.name = "راعي ب"
+        self.sponsor_b.profile.save()
+
+    def _create(self, sponsor):
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/projectdocs/dossiers/",
+            {
+                "name": "حاوية نقل",
+                "sponsor_id": sponsor.id,
+                "sponsor_email": sponsor.email,
+                "sponsor_name": sponsor.profile.name,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        return res.data["id"]
+
+    def test_assign_then_transfer_revokes_old_keeps_dossier(self):
+        from projects.models import ProjectMember
+        from projectdocs.models import DossierSection
+
+        dossier_id = self._create(self.sponsor_a)
+        dossier = ProjectDossier.objects.get(pk=dossier_id)
+        self.assertTrue(
+            ProjectMember.objects.filter(project=dossier.project, user=self.sponsor_a).exists()
+        )
+        self.client.force_authenticate(self.sponsor_a)
+        mine = self.client.get("/api/platform/my-memberships/")
+        self.assertEqual(mine.status_code, 200)
+        slugs = {m["project_slug"] for m in mine.data["memberships"]}
+        self.assertIn(dossier.project.slug, slugs)
+
+        section_count = DossierSection.objects.filter(dossier=dossier).count()
+        self.client.force_authenticate(self.admin)
+        moved = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/",
+            {"sponsor_id": self.sponsor_b.id},
+            format="json",
+        )
+        self.assertEqual(moved.status_code, 200, moved.content)
+        dossier.refresh_from_db()
+        self.assertEqual(dossier.sponsor_id, self.sponsor_b.id)
+        self.assertEqual(DossierSection.objects.filter(dossier=dossier).count(), section_count)
+        self.assertFalse(
+            ProjectMember.objects.filter(project=dossier.project, user=self.sponsor_a).exists()
+        )
+        self.assertTrue(
+            ProjectMember.objects.filter(project=dossier.project, user=self.sponsor_b).exists()
+        )
+
+        self.client.force_authenticate(self.sponsor_a)
+        gone = self.client.get("/api/platform/my-memberships/")
+        self.assertNotIn(dossier.project.slug, {m["project_slug"] for m in gone.data["memberships"]})
+        self.client.force_authenticate(self.sponsor_b)
+        now = self.client.get("/api/platform/my-memberships/")
+        self.assertIn(dossier.project.slug, {m["project_slug"] for m in now.data["memberships"]})
+
+    def test_old_sponsor_kept_if_on_team(self):
+        from projects.models import ProjectMember
+
+        dossier_id = self._create(self.sponsor_a)
+        dossier = ProjectDossier.objects.get(pk=dossier_id)
+        self.client.force_authenticate(self.admin)
+        self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/team/",
+            {
+                "data": {
+                    "rows": [
+                        {
+                            "name": "راعي أ",
+                            "job_title": "",
+                            "phone": "",
+                            "email": self.sponsor_a.email,
+                            "main_tasks": "",
+                            "user_id": str(self.sponsor_a.id),
+                        }
+                    ]
+                }
+            },
+            format="json",
+        )
+        self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/",
+            {"sponsor_id": self.sponsor_b.id},
+            format="json",
+        )
+        self.assertTrue(
+            ProjectMember.objects.filter(project=dossier.project, user=self.sponsor_a).exists()
+        )
+        self.assertTrue(
+            ProjectMember.objects.filter(project=dossier.project, user=self.sponsor_b).exists()
+        )

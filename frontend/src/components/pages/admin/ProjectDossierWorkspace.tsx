@@ -6,6 +6,7 @@ import Button from "../../ui/Button";
 import Input from "../../ui/Input";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
+import { useMembershipsContext } from "../../../contexts/MembershipsContext";
 import { authFetch } from "../../../lib/api";
 import SectionRenderer from "../../dossier/SectionRenderer";
 import StageBar from "../../dossier/StageBar";
@@ -25,11 +26,12 @@ import {
 import { downloadDossierPdf, type ExportPayload } from "../../../utils/dossierPdf";
 import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
-  type Tab = "card" | "document" | "plan" | "closure" | "board" | "info";
+type Tab = "card" | "document" | "plan" | "closure" | "board" | "info";
 
 export default function ProjectDossierWorkspace() {
   const { slug } = useParams();
   const toast = useToast();
+  const { reloadMemberships } = useMembershipsContext();
   const [tab, setTab] = useState<Tab>("card");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -293,6 +295,7 @@ export default function ProjectDossierWorkspace() {
       }
       absorbDossier(data);
       toast.success({ title: "حُفظت البيانات المطلوبة" });
+      await reloadMemberships();
     } finally {
       setSavingKey("");
     }
