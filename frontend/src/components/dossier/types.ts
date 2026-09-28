@@ -124,6 +124,11 @@ export interface StageActivity {
   parent: number | null;
   title: string;
   responsible: string;
+  responsible_user?: number | null;
+  responsible_user_name?: string;
+  project_name?: string;
+  project_slug?: string;
+  stage_key?: string;
   start_date: string | null;
   end_date: string | null;
   executed_weeks?: string[];
@@ -139,6 +144,12 @@ export interface StageActivity {
   source?: string;
   locked?: boolean;
 }
+
+export type TeamMemberOption = {
+  user_id: number;
+  name: string;
+  email?: string;
+};
 
 export const STAGE_STATUS_AR: Record<string, string> = {
   locked: "مقفلة",

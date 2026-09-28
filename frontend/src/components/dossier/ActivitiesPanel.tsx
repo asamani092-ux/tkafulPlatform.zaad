@@ -1,12 +1,13 @@
 import { Fragment, useMemo, useState } from "react";
 import Button from "../ui/Button";
 import CollapsibleCard from "./CollapsibleCard";
-import { STAGE_KEY_AR, type DossierStageRow, type StageActivity } from "./types";
+import { STAGE_KEY_AR, type DossierStageRow, type StageActivity, type TeamMemberOption } from "./types";
 
 type Props = {
   stages: DossierStageRow[];
   activities: StageActivity[];
   canEdit: boolean;
+  teamMembers?: TeamMemberOption[];
   onCreate: (payload: Record<string, unknown>) => Promise<void>;
   onComplete: (
     id: number,
@@ -108,6 +109,7 @@ export default function ActivitiesPanel({
   stages,
   activities,
   canEdit,
+  teamMembers = [],
   onCreate,
   onComplete,
   onDelete,
@@ -142,6 +144,13 @@ export default function ActivitiesPanel({
     file: null as File | null,
   });
   const [busy, setBusy] = useState(false);
+  const [assignActivityId, setAssignActivityId] = useState<number | "">("");
+  const [assignUserId, setAssignUserId] = useState<number | "">("");
+  const [adHocOpen, setAdHocOpen] = useState(false);
+  const [adHocTitle, setAdHocTitle] = useState("");
+  const [adHocStageId, setAdHocStageId] = useState<number | "">("");
+  const [adHocUserId, setAdHocUserId] = useState<number | "">("");
+  const [assignError, setAssignError] = useState("");
 
   const detailStage = ordered.find((s) => s.key === detailKey) || null;
   const detailActs = detailStage ? phaseActivities(detailStage.id, activities) : [];
@@ -151,6 +160,7 @@ export default function ActivitiesPanel({
     end: detailStage?.planned_end ?? null,
   };
   const months = useMemo(() => buildMonthWeeks(range.start, range.end), [range.start, range.end]);
+  const hasTeam = teamMembers.length > 0;
 
   const addActivity = async (stageId: number, parentId: number | null) => {
     const title = draft.trim();
@@ -168,6 +178,55 @@ export default function ActivitiesPanel({
   const patch = async (id: number, payload: Record<string, unknown>) => {
     if (!onUpdate) return;
     await onUpdate(id, payload);
+  };
+
+  const publishAssign = async () => {
+    setAssignError("");
+    if (!hasTeam) {
+      setAssignError("أضف فريق العمل أولاً من الوثيقة قبل الإسناد");
+      return;
+    }
+    if (assignActivityId === "" || assignUserId === "") {
+      setAssignError("اختر نشاطاً ومسنداً إليه من فريق العمل");
+      return;
+    }
+    setBusy(true);
+    try {
+      await patch(Number(assignActivityId), { responsible_user: Number(assignUserId) });
+      setAssignActivityId("");
+      setAssignUserId("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createAdHoc = async () => {
+    setAssignError("");
+    if (!hasTeam) {
+      setAssignError("أضف فريق العمل أولاً من الوثيقة قبل الإسناد");
+      return;
+    }
+    const title = adHocTitle.trim();
+    if (!title || adHocStageId === "") {
+      setAssignError("عنوان المهمة واختيار المرحلة مطلوبان");
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload: Record<string, unknown> = {
+        stage: Number(adHocStageId),
+        title,
+        source: "ad_hoc",
+      };
+      if (adHocUserId !== "") payload.responsible_user = Number(adHocUserId);
+      await onCreate(payload);
+      setAdHocTitle("");
+      setAdHocStageId("");
+      setAdHocUserId("");
+      setAdHocOpen(false);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const toggleWeek = (a: StageActivity, weekStart: string) => {
@@ -289,15 +348,22 @@ export default function ActivitiesPanel({
           </select>
         </td>
         <td className={cell}>
-          <input
+          <select
             className="input-field w-full text-sm"
-            disabled={!canEdit}
-            defaultValue={a.responsible || ""}
-            key={`${a.id}-r-${a.responsible}`}
-            onBlur={(e) => {
-              if (e.target.value !== (a.responsible || "")) void patch(a.id, { responsible: e.target.value });
+            disabled={!canEdit || !hasTeam}
+            value={a.responsible_user ?? ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              void patch(a.id, { responsible_user: v === "" ? null : Number(v) });
             }}
-          />
+          >
+            <option value="">{hasTeam ? "— اختر من الفريق —" : "أضف فريق العمل أولاً"}</option>
+            {teamMembers.map((m) => (
+              <option key={m.user_id} value={m.user_id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
         </td>
         <td className={cell}>
           <div className="flex flex-wrap items-center gap-2">
@@ -319,7 +385,114 @@ export default function ActivitiesPanel({
   };
 
   return (
-    <div dir="rtl">
+    <div dir="rtl" className="space-y-4">
+      {canEdit && (
+        <div className="rounded-lg border border-surface-border bg-surface-muted/30 p-4 space-y-3">
+          <h3 className="font-bold text-primary">نشر وإسناد المهام</h3>
+          {!hasTeam && (
+            <p className="text-sm text-amber-800">أضف فريق العمل من تبويب الوثيقة أولاً لتفعيل الإسناد.</p>
+          )}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="block text-sm">
+              <span className="label-field">نشاط من الخطة</span>
+              <select
+                className="input-field mt-1 w-full"
+                disabled={!hasTeam || busy}
+                value={assignActivityId}
+                onChange={(e) => setAssignActivityId(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">اختر نشاطاً…</option>
+                {activities.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.code} — {a.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="label-field">المسند إليه</span>
+              <select
+                className="input-field mt-1 w-full"
+                disabled={!hasTeam || busy}
+                value={assignUserId}
+                onChange={(e) => setAssignUserId(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">اختر من الفريق…</option>
+                {teamMembers.map((m) => (
+                  <option key={m.user_id} value={m.user_id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-end">
+              <Button type="button" disabled={!hasTeam || busy} onClick={() => void publishAssign()}>
+                إسناد
+              </Button>
+            </div>
+          </div>
+          <div className="border-t border-surface-border pt-3">
+            {!adHocOpen ? (
+              <Button type="button" variant="secondary" size="sm" onClick={() => setAdHocOpen(true)}>
+                مهمة خارج الأنشطة
+              </Button>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-4">
+                <label className="block text-sm sm:col-span-2">
+                  <span className="label-field">عنوان المهمة</span>
+                  <input
+                    className="input-field mt-1 w-full"
+                    value={adHocTitle}
+                    onChange={(e) => setAdHocTitle(e.target.value)}
+                    disabled={busy}
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="label-field">المرحلة</span>
+                  <select
+                    className="input-field mt-1 w-full"
+                    value={adHocStageId}
+                    onChange={(e) => setAdHocStageId(e.target.value ? Number(e.target.value) : "")}
+                    disabled={busy}
+                  >
+                    <option value="">اختر مرحلة…</option>
+                    {ordered.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {STAGE_KEY_AR[s.key] || s.key}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm">
+                  <span className="label-field">المسند إليه</span>
+                  <select
+                    className="input-field mt-1 w-full"
+                    value={adHocUserId}
+                    onChange={(e) => setAdHocUserId(e.target.value ? Number(e.target.value) : "")}
+                    disabled={!hasTeam || busy}
+                  >
+                    <option value="">اختياري…</option>
+                    {teamMembers.map((m) => (
+                      <option key={m.user_id} value={m.user_id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex flex-wrap items-end gap-2 sm:col-span-4">
+                  <Button type="button" disabled={busy} onClick={() => void createAdHoc()}>
+                    حفظ في الخطة
+                  </Button>
+                  <Button type="button" variant="secondary" disabled={busy} onClick={() => setAdHocOpen(false)}>
+                    إلغاء
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+          {assignError && <p className="text-sm text-red-700">{assignError}</p>}
+        </div>
+      )}
       <CollapsibleCard title="الخطة التنفيذية" defaultOpen={false} subtitle="خمسة صفوف للمراحل">
         <table className="w-full border-collapse text-sm">
           <thead>

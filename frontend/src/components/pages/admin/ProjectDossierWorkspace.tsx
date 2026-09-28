@@ -25,7 +25,7 @@ import {
 import { downloadDossierPdf, type ExportPayload } from "../../../utils/dossierPdf";
 import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
-type Tab = "card" | "document" | "plan" | "closure" | "board" | "info";
+  type Tab = "card" | "document" | "plan" | "closure" | "board" | "info";
 
 export default function ProjectDossierWorkspace() {
   const { slug } = useParams();
@@ -81,6 +81,27 @@ export default function ProjectDossierWorkspace() {
     approver_email: "",
   });
   const [users, setUsers] = useState<UserOption[]>([]);
+
+  const teamMembers = useMemo(() => {
+    const data =
+      sectionDrafts["document:team"] ||
+      dossier?.sections.find((s) => s.kind === "document" && s.key === "team")?.data ||
+      {};
+    const rows = Array.isArray((data as { rows?: unknown }).rows)
+      ? ((data as { rows: Array<Record<string, unknown>> }).rows)
+      : [];
+    const out: Array<{ user_id: number; name: string; email?: string }> = [];
+    for (const row of rows) {
+      const uid = Number(row.user_id);
+      if (!uid) continue;
+      out.push({
+        user_id: uid,
+        name: String(row.name || row.email || uid),
+        email: row.email ? String(row.email) : "",
+      });
+    }
+    return out;
+  }, [sectionDrafts, dossier]);
 
   const absorbDossier = useCallback((d: ProjectDossier) => {
     setDossier(d);
@@ -312,6 +333,9 @@ export default function ProjectDossierWorkspace() {
           for (const row of rows) next[`${row.kind}:${row.key}`] = { ...(row.data || {}) };
           return next;
         });
+      }
+      if (kind === "document" && key === "team") {
+        await authFetch(`/api/projectdocs/dossiers/${dossier.id}/sync-team-members/`, { method: "POST" });
       }
     } finally {
       setSavingKey("");
@@ -704,6 +728,7 @@ export default function ProjectDossierWorkspace() {
                 stages={dossier.stages}
                 activities={activities}
                 canEdit={canEditWorkspace("plan")}
+                teamMembers={teamMembers}
                 canApprove={!!dossier.can_approve}
                 phaseStatus={Object.fromEntries(
                   dossier.sections.filter((s) => s.kind === "plan").map((s) => [s.key, s.status]),

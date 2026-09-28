@@ -1081,7 +1081,9 @@ class DocumentTwelveCardsTests(APITestCase):
 
         dossier_id = self._create()
         dossier = ProjectDossier.objects.get(pk=dossier_id)
-        ProjectMember.objects.create(project=dossier.project, user=self.manager, role="project_editor")
+        ProjectMember.objects.get_or_create(
+            project=dossier.project, user=self.manager, defaults={"role": "project_editor"}
+        )
         self.client.force_authenticate(self.manager)
         res = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/team-candidates/")
         self.assertEqual(res.status_code, 200)
@@ -1320,3 +1322,133 @@ class PlanFromPhasesTests(APITestCase):
         )
         self.assertEqual(kept.status_code, 200, kept.content)
         self.assertEqual(kept.data["executed_weeks"], ["2026-10-01", "2026-11-01"])
+
+
+class TeamAssignNotifyTests(APITestCase):
+    """فريق العمل من المنصة، إسناد مهام، إشعار، ومهمة خارج الأنشطة."""
+
+    def setUp(self):
+        self.admin = make_user("ta_admin", role="admin")
+        self.employee = make_user("ta_emp", role="employee")
+        self.employee.profile.name = "موظف فريق"
+        self.employee.profile.save()
+        self.volunteer = make_user("ta_vol", role="user")
+        self.volunteer.profile.name = "متطوع فريق"
+        self.volunteer.profile.save()
+        self.supplier = make_user("ta_sup", role="supplier")
+
+    def _create(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/projectdocs/dossiers/",
+            {
+                "name": "إسناد",
+                "sponsor_id": self.employee.id,
+                "sponsor_name": "موظف فريق",
+                "sponsor_email": self.employee.email,
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        return res.data["id"]
+
+    def test_team_candidates_employees_and_volunteers_only(self):
+        dossier_id = self._create()
+        res = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/team-candidates/")
+        self.assertEqual(res.status_code, 200)
+        ids = {row["user_id"] for row in res.data["results"]}
+        self.assertIn(self.employee.id, ids)
+        self.assertIn(self.volunteer.id, ids)
+        self.assertNotIn(self.supplier.id, ids)
+        self.assertNotIn(self.admin.id, ids)
+
+    def test_sponsor_gets_project_membership(self):
+        from projects.models import ProjectMember
+
+        dossier_id = self._create()
+        dossier = ProjectDossier.objects.get(pk=dossier_id)
+        self.assertTrue(
+            ProjectMember.objects.filter(project=dossier.project, user=self.employee).exists()
+        )
+
+    def test_team_save_syncs_membership_and_assign_notifies(self):
+        from projects.models import ProjectMember
+        from notifications.models import Notification
+        from unittest.mock import patch
+
+        dossier_id = self._create()
+        dossier = ProjectDossier.objects.get(pk=dossier_id)
+        team_payload = {
+            "rows": [
+                {
+                    "name": "موظف فريق",
+                    "job_title": "موظف",
+                    "phone": "",
+                    "email": self.employee.email,
+                    "main_tasks": "",
+                    "user_id": str(self.employee.id),
+                },
+                {
+                    "name": "متطوع فريق",
+                    "job_title": "متطوع",
+                    "phone": "",
+                    "email": self.volunteer.email,
+                    "main_tasks": "",
+                    "user_id": str(self.volunteer.id),
+                },
+            ]
+        }
+        saved = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/team/",
+            {"data": team_payload},
+            format="json",
+        )
+        self.assertEqual(saved.status_code, 200, saved.content)
+        self.assertTrue(
+            ProjectMember.objects.filter(project=dossier.project, user=self.volunteer).exists()
+        )
+
+        stage = dossier.stages.filter(key="execute").first()
+        with patch("notifications.services._send_email") as mail:
+            created = self.client.post(
+                f"/api/projectdocs/dossiers/{dossier_id}/activities/",
+                {
+                    "stage": stage.id,
+                    "title": "مهمة خارجية",
+                    "source": "ad_hoc",
+                    "responsible_user": self.volunteer.id,
+                },
+                format="json",
+            )
+            self.assertEqual(created.status_code, 201, created.content)
+            self.assertEqual(created.data["source"], "ad_hoc")
+            self.assertEqual(created.data["responsible_user"], self.volunteer.id)
+            self.assertTrue(mail.called)
+
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.volunteer, message__contains="مهمة خارجية"
+            ).exists()
+        )
+
+        outsider = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/",
+            {
+                "stage": stage.id,
+                "title": "مرفوضة",
+                "source": "ad_hoc",
+                "responsible_user": self.supplier.id,
+            },
+            format="json",
+        )
+        self.assertEqual(outsider.status_code, 400, outsider.content)
+
+        dash = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/dashboard/")
+        self.assertEqual(dash.status_code, 200)
+        self.assertGreaterEqual(dash.data["activities_total"], 1)
+
+        self.client.force_authenticate(self.volunteer)
+        mine = self.client.get("/api/projectdocs/my-activities/")
+        self.assertEqual(mine.status_code, 200)
+        titles = {r["title"] for r in mine.data["results"]}
+        self.assertIn("مهمة خارجية", titles)

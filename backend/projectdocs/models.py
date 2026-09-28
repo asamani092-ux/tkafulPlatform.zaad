@@ -203,6 +203,13 @@ class StageActivity(models.Model):
     )
     title = models.CharField(max_length=300)
     responsible = models.CharField(max_length=200, blank=True)
+    responsible_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="assigned_stage_activities",
+    )
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     executed_weeks = models.JSONField(default=list, blank=True)
@@ -222,7 +229,10 @@ class StageActivity(models.Model):
 
     class Meta:
         ordering = ["sort_order", "code", "id"]
-        indexes = [models.Index(fields=["stage", "auto_status"])]
+        indexes = [
+            models.Index(fields=["stage", "auto_status"]),
+            models.Index(fields=["responsible_user", "auto_status"]),
+        ]
 
     def __str__(self):
         return f"{self.code} — {self.title}"

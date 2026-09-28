@@ -32,6 +32,7 @@ const ForgotPasswordPage = lazy(() => import("./components/pages/Auth/ForgotPass
 // Code-split heavy portals
 const UserMain = lazy(() => import("./components/pages/user/Main"));
 const UserTasks = lazy(() => import("./components/pages/user/Task"));
+const UserMyPlanTasks = lazy(() => import("./components/pages/user/MyPlanTasks"));
 const UserSettings = lazy(() => import("./components/pages/user/Setting"));
 
 const AdminMain = lazy(() => import("./components/pages/admin/main"));
@@ -134,6 +135,7 @@ function AppContent() {
 
           <Route path="/user/main" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserMain /></ProtectedRoute></Lazy>} />
           <Route path="/user/tasks" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserTasks /></ProtectedRoute></Lazy>} />
+          <Route path="/user/my-tasks" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserMyPlanTasks /></ProtectedRoute></Lazy>} />
           <Route path="/user/settings" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserSettings /></ProtectedRoute></Lazy>} />
           <Route path="/user/personal-info" element={<Navigate to="/user/settings" replace />} />
 

@@ -79,6 +79,151 @@ def _default_platform_admin(actor: User | None) -> User:
     return admin
 
 
+TEAM_CANDIDATE_ROLES = ("employee", "user")
+
+
+def ensure_project_membership(project, user: User | None, *, role: str = "project_viewer") -> None:
+    """إضافة عضوية مشروع إن لم تكن موجودة — دون تخفيض دور أعلى. O(1)."""
+    if not user or not getattr(user, "id", None):
+        return
+    from projects.models import ProjectMember
+
+    existing = ProjectMember.objects.filter(project=project, user=user).first()
+    if existing:
+        return
+    ProjectMember.objects.create(project=project, user=user, role=role)
+
+
+def sync_dossier_role_memberships(dossier: ProjectDossier) -> None:
+    """مزامنة عضوية الراعي/المدير/المعتمد. O(1)."""
+    project = dossier.project
+    if dossier.sponsor_id:
+        ensure_project_membership(project, dossier.sponsor, role="project_editor")
+    if dossier.manager_id:
+        ensure_project_membership(project, dossier.manager, role="project_editor")
+    if dossier.approver_id:
+        ensure_project_membership(project, dossier.approver, role="project_viewer")
+
+
+def team_section_user_ids(dossier: ProjectDossier) -> set[int]:
+    """معرّفات مستخدمي قسم فريق العمل. O(R)."""
+    sec = dossier.sections.filter(kind="document", key="team").first()
+    data = (sec.data if sec else {}) or {}
+    ids: set[int] = set()
+    for row in data.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        raw = row.get("user_id")
+        try:
+            uid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if uid:
+            ids.add(uid)
+    return ids
+
+
+def sync_team_memberships(dossier: ProjectDossier) -> int:
+    """إنشاء عضوية لكل عضو فريق عمل مسجّل. O(R)."""
+    from projects.models import ProjectMember
+
+    ids = team_section_user_ids(dossier)
+    if not ids:
+        return 0
+    users = {
+        u.id: u
+        for u in User.objects.filter(id__in=ids, is_active=True).select_related("profile")
+    }
+    created = 0
+    for uid in ids:
+        user = users.get(uid)
+        if not user:
+            continue
+        role = getattr(getattr(user, "profile", None), "role", "") or ""
+        if role not in TEAM_CANDIDATE_ROLES and role not in ("manager", "admin"):
+            continue
+        _, was_created = ProjectMember.objects.get_or_create(
+            project=dossier.project,
+            user=user,
+            defaults={"role": "project_viewer"},
+        )
+        if was_created:
+            created += 1
+    return created
+
+
+def team_candidates_queryset():
+    """موظفون ومتطوّعون نشطون لاختيار فريق العمل. O(U)."""
+    return (
+        User.objects.filter(is_active=True, profile__role__in=TEAM_CANDIDATE_ROLES)
+        .select_related("profile")
+        .order_by("id")
+    )
+
+
+def notify_activity_assigned(*, activity: StageActivity, assignee: User) -> None:
+    """إشعار منصة + بريد عند إسناد مهمة. O(1)."""
+    try:
+        from notifications.services import EVENT_PROJECT, notify
+
+        dossier = activity.stage.dossier
+        project = dossier.project
+        slug = project.slug
+        role = getattr(getattr(assignee, "profile", None), "role", "") or ""
+        if role in ("employee", "manager", "admin"):
+            link = f"/Admin/projects/{slug}/dossier"
+        else:
+            link = "/user/my-tasks"
+        message = f"أُسندت إليك مهمة «{activity.title}» في مشروع «{project.name}»."
+        notify(
+            message=message,
+            users=[assignee],
+            notification_type="info",
+            link=link,
+            event_type=EVENT_PROJECT,
+            email_subject="مهمة مسندة إليك",
+        )
+    except Exception:
+        pass
+
+
+def apply_activity_assignment(
+    activity: StageActivity,
+    *,
+    dossier: ProjectDossier,
+    responsible_user_id,
+) -> StageActivity:
+    """تعيين مسند إليه من فريق العمل فقط ومزامنة الاسم + إشعار. O(1)."""
+    prev_id = activity.responsible_user_id
+    if responsible_user_id in (None, ""):
+        activity.responsible_user = None
+        activity.responsible = ""
+        return activity
+    try:
+        uid = int(responsible_user_id)
+    except (TypeError, ValueError):
+        raise ValidationError({"responsible_user": "معرّف مسند إليه غير صالح"})
+    if uid not in team_section_user_ids(dossier):
+        raise ValidationError({"responsible_user": "المسند إليه يجب أن يكون من فريق العمل"})
+    user = User.objects.filter(pk=uid, is_active=True).select_related("profile").first()
+    if not user:
+        raise ValidationError({"responsible_user": "مستخدم غير موجود"})
+    activity.responsible_user = user
+    activity.responsible = _user_display_name(user)
+    if prev_id != user.id:
+        notify_activity_assigned(activity=activity, assignee=user)
+    return activity
+
+
+def assert_can_work_assigned_activity(user, dossier: ProjectDossier, activity: StageActivity) -> None:
+    """تحرير كامل أو مسند إليه للمهمة. O(1)."""
+    if is_super_admin(user) or can_edit_dossier(user, dossier):
+        return
+    if activity.responsible_user_id and activity.responsible_user_id == getattr(user, "id", None):
+        return
+    raise PermissionDenied("ليست لديك صلاحية على هذه المهمة")
+
+
 def next_dossier_code(year: int | None = None) -> str:
     """رمز داخلي فريد PRJ-YYYY-NNNN. O(1) تقريباً مع فهرس code."""
     y = year or timezone.now().year
@@ -96,6 +241,7 @@ def next_dossier_code(year: int | None = None) -> str:
         except ValueError:
             n = ProjectDossier.objects.filter(code__startswith=prefix).count() + 1
     return f"{prefix}{n:04d}"
+
 
 
 def compute_auto_status(activity: StageActivity, today: date | None = None) -> str:
@@ -234,6 +380,7 @@ def create_dossier_for_project(
     DossierWorkspace.objects.bulk_create(ws_rows)
 
     sync_document_from_card(dossier)
+    sync_dossier_role_memberships(dossier)
 
     log_activity(
         actor=actor,
@@ -696,6 +843,8 @@ def update_section(
         sync_document_from_card(dossier)
     if kind == "document" and key == "main_phases":
         sync_plan_from_document(dossier)
+    if kind == "document" and key == "team":
+        sync_team_memberships(dossier)
     return section
 
 
@@ -928,8 +1077,14 @@ def complete_activity(
     evidence_title: str = "",
 ) -> StageActivity:
     """إتمام نشاط مع شاهد إلزامي ودرس مستفاد. O(1)."""
-    assert_can_edit(user, dossier)
-    assert_workspace_open_for_work(user, dossier, "plan")
+    assert_can_work_assigned_activity(user, dossier, activity)
+    is_assignee_only = (
+        not is_super_admin(user)
+        and not can_edit_dossier(user, dossier)
+        and activity.responsible_user_id == getattr(user, "id", None)
+    )
+    if not is_assignee_only:
+        assert_workspace_open_for_work(user, dossier, "plan")
     has_file = bool(evidence_file)
     has_url = bool((evidence_url or "").strip())
     if not has_file and not has_url:
