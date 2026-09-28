@@ -205,6 +205,31 @@ class NotificationCenterTests(APITestCase):
         self.assertIn(self.admin.email, mail.outbox[0].to)
         self.assertIn('dir="rtl"', mail.outbox[0].alternatives[0][0])
 
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_test_email_to_explicit_recipient(self):
+        from django.core import mail
+
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/notifications/test-email/",
+            {"to_email": "recipient@example.com"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(mail.outbox[0].to, ["recipient@example.com"])
+        self.assertIn("recipient@example.com", res.data["detail"])
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_test_email_rejects_bad_to(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/notifications/test-email/",
+            {"to_email": "not-an-email"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("بريداً", res.data["detail"])
+
     @override_settings(
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
         EMAIL_HOST_USER="tkaful@alzaad.org.sa",

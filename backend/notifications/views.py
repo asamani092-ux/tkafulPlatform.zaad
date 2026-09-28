@@ -152,12 +152,18 @@ def broadcast(request):
 @api_view(["POST"])
 @permission_classes([IsAdmin])
 def test_email(request):
-    """POST /api/notifications/test-email/ — تجربة إرسال بريد RTL لمدير النظام."""
+    """POST /api/notifications/test-email/ — تجربة إرسال بريد RTL إلى عنوان يحدّده المشرف."""
     from core.email_rtl import MailFromMismatchError, send_rtl_email, smtp_error_to_ar
+    import re
 
-    to = (request.user.email or "").strip()
+    to = (request.data.get("to_email") or request.data.get("to") or "").strip()
     if not to:
-        return Response({"detail": "حسابك بلا بريد لإرسال التجربة"}, status=status.HTTP_400_BAD_REQUEST)
+        to = (request.user.email or "").strip()
+    if not to or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", to):
+        return Response(
+            {"detail": "أدخل بريداً صالحاً لإرسال التجربة إليه"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     from_email = (request.data.get("from_email") or "").strip() or None
     subject = "تجربة بريد — منصة تكافل وأثر"
     body = (

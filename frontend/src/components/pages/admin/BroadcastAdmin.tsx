@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
@@ -27,8 +28,8 @@ export default function BroadcastAdmin() {
   const [kind, setKind] = useState("info");
   const [link, setLink] = useState("");
   const [subject, setSubject] = useState("");
-  const [fromEmail, setFromEmail] = useState("");
-  const [fromOptions, setFromOptions] = useState<string[]>([]);
+  const [mailFrom, setMailFrom] = useState("");
+  const [testTo, setTestTo] = useState("");
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
 
@@ -37,15 +38,14 @@ export default function BroadcastAdmin() {
       .then(async (r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) return;
-        const opts = Array.from(
-          new Set(
-            [data.mail_from_email, data.smtp_host_user]
-              .map((e: string | undefined) => (e || "").trim())
-              .filter(Boolean),
-          ),
-        ) as string[];
-        setFromOptions(opts);
-        setFromEmail(opts[0] || "");
+        const from = (data.mail_from_email || data.smtp_host_user || "").trim();
+        setMailFrom(from);
+      })
+      .catch(() => {});
+    authFetch("/api/accounts/me/")
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((me) => {
+        if (me?.email) setTestTo(String(me.email));
       })
       .catch(() => {});
   }, []);
@@ -56,8 +56,11 @@ export default function BroadcastAdmin() {
       toast.error({ title: "الرسالة مطلوبة" });
       return;
     }
-    if (channel === "email" && !fromEmail.trim()) {
-      toast.error({ title: "اختر بريد المرسل" });
+    if (channel === "email" && !mailFrom.trim()) {
+      toast.error({
+        title: "بريد المرسل غير مضبوط",
+        description: "اضبط البريد الرسمي من إعدادات المنصّة أولاً",
+      });
       return;
     }
     setBusy(true);
@@ -70,7 +73,7 @@ export default function BroadcastAdmin() {
       };
       if (role) body.role = role;
       if (channel === "email" && subject.trim()) body.subject = subject.trim();
-      if (channel === "email") body.from_email = fromEmail.trim();
+      if (channel === "email") body.from_email = mailFrom.trim();
       const res = await authFetch("/api/notifications/broadcast/", {
         method: "POST",
         body: JSON.stringify(body),
@@ -96,15 +99,17 @@ export default function BroadcastAdmin() {
   };
 
   const sendTestEmail = async () => {
-    if (!fromEmail.trim()) {
-      toast.error({ title: "اختر بريد المرسل" });
+    if (!testTo.trim()) {
+      toast.error({ title: "أدخل بريد المستلم للتجربة" });
       return;
     }
     setTesting(true);
     try {
+      const payload: Record<string, string> = { to_email: testTo.trim() };
+      if (mailFrom.trim()) payload.from_email = mailFrom.trim();
       const res = await authFetch("/api/notifications/test-email/", {
         method: "POST",
-        body: JSON.stringify({ from_email: fromEmail.trim() }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -141,19 +146,17 @@ export default function BroadcastAdmin() {
           </Select>
           {channel === "email" && (
             <>
-              <Select
-                label="أرسل من"
-                value={fromEmail}
-                onChange={(e) => setFromEmail(e.target.value)}
-                required
-              >
-                {fromOptions.length === 0 && <option value="">لا يتوفر بريد مرسل — اضبطه من الإعدادات</option>}
-                {fromOptions.map((addr) => (
-                  <option key={addr} value={addr}>
-                    {addr}
-                  </option>
-                ))}
-              </Select>
+              <div className="rounded-lg border border-surface-border bg-surface-muted/40 px-3 py-2 text-sm">
+                <div className="font-semibold text-primary">يُرسل من (البريد الرسمي)</div>
+                <div dir="ltr" className="mt-1 text-brand-gray">
+                  {mailFrom || "غير مضبوط — "}
+                  {!mailFrom && (
+                    <Link to="/Admin/settings" className="text-primary underline">
+                      إعدادات المنصّة
+                    </Link>
+                  )}
+                </div>
+              </div>
               <Input
                 label="موضوع البريد (اختياري)"
                 value={subject}
@@ -194,30 +197,32 @@ export default function BroadcastAdmin() {
       </Card>
 
       <div className="mt-4 max-w-lg">
-      <Card>
-        <h2 className="mb-2 text-lg font-bold text-primary">تجربة البريد</h2>
-        <p className="mb-3 text-sm text-brand-gray">
-          يُرسل رسالة RTL قصيرة إلى بريدك للتحقق من إعدادات SMTP الرسمية.
-        </p>
-        <Select
-          label="أرسل من"
-          value={fromEmail}
-          onChange={(e) => setFromEmail(e.target.value)}
-          required
-        >
-          {fromOptions.length === 0 && <option value="">لا يتوفر بريد مرسل — اضبطه من الإعدادات</option>}
-          {fromOptions.map((addr) => (
-            <option key={addr} value={addr}>
-              {addr}
-            </option>
-          ))}
-        </Select>
-        <div className="mt-3">
-          <Button type="button" variant="secondary" disabled={testing} onClick={() => void sendTestEmail()}>
-            {testing ? "جاري الإرسال…" : "إرسال بريد تجريبي"}
-          </Button>
-        </div>
-      </Card>
+        <Card>
+          <h2 className="mb-1 text-lg font-bold text-primary">تجربة البريد</h2>
+          <p className="mb-3 text-sm text-brand-gray">
+            يُرسل من البريد الرسمي إلى العنوان الذي تحدّده أدناه للتحقق من SMTP.
+          </p>
+          <div className="mb-3 rounded-lg border border-surface-border bg-surface-muted/40 px-3 py-2 text-sm">
+            <div className="font-semibold text-primary">المرسل (From)</div>
+            <div dir="ltr" className="mt-1 text-brand-gray">
+              {mailFrom || "غير مضبوط في إعدادات المنصّة"}
+            </div>
+          </div>
+          <Input
+            label="أرسل التجربة إلى"
+            dir="ltr"
+            type="email"
+            value={testTo}
+            onChange={(e) => setTestTo(e.target.value)}
+            placeholder="you@example.com"
+            required
+          />
+          <div className="mt-3">
+            <Button type="button" variant="secondary" disabled={testing} onClick={() => void sendTestEmail()}>
+              {testing ? "جاري الإرسال…" : "إرسال بريد تجريبي"}
+            </Button>
+          </div>
+        </Card>
       </div>
     </AdminShell>
   );

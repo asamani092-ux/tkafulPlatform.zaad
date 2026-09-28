@@ -159,9 +159,12 @@ export default function PlatformSettingsPage() {
             </div>
           </Card>
           <Card>
-            <h2 className="mb-3 text-lg font-bold text-primary">التواصل</h2>
+            <h2 className="mb-1 text-lg font-bold text-primary">لوحة المعلومات (الواجهة العامة)</h2>
+            <p className="mb-3 text-sm text-brand-gray">
+              تظهر في التذييل وصفحة التواصل للزوّار — ليست بريد إرسال الإشعارات.
+            </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Input label="البريد" dir="ltr" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} />
+              <Input label="بريد التواصل المعروض" dir="ltr" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} />
               <Input label="الهاتف" dir="ltr" value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} />
               <Input label="العنوان" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
               <Input label="تويتر (https)" dir="ltr" value={twitter} onChange={(e) => setTwitter(e.target.value)} />
@@ -169,16 +172,19 @@ export default function PlatformSettingsPage() {
             </div>
           </Card>
           <Card>
-            <h2 className="mb-3 text-lg font-bold text-primary">البريد الرسمي</h2>
+            <h2 className="mb-1 text-lg font-bold text-primary">البريد الرسمي (إرسال الإشعارات)</h2>
+            <p className="mb-3 text-sm text-brand-gray">
+              عنوان المرسل (From) لكل رسائل المنصة: اعتمادات، دعوات، تعميم، تجربة SMTP.
+            </p>
             <Input
-              label="بريد المرسل"
+              label="بريد المرسل الرسمي"
               dir="ltr"
               value={(form as AdminSettingsForm).mail_from_email || ""}
               onChange={(e) => setForm({ ...form, mail_from_email: e.target.value } as AdminSettingsForm)}
               placeholder="tkaful@alzaad.org.sa"
             />
             <p className="mt-2 text-sm text-brand-gray">
-              يجب أن يساوي صندوق أوتلوك المستخدم في SMTP
+              يجب أن يساوي صندوق أوتلوك في SMTP
               {(form as AdminSettingsForm).smtp_host_user
                 ? ` (${(form as AdminSettingsForm).smtp_host_user})`
                 : ""}
