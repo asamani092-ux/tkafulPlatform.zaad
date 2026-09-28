@@ -131,8 +131,8 @@ export default function PhasesEditor({
             }
           >
             {primaryCol && (
-              <div className="mb-3 rounded-lg border-b border-primary/30 bg-primary/[0.07] p-3">
-                <div className="rounded-md border-2 border-primary/40 bg-surface/60 px-3 py-2">
+              <div className="mb-3 rounded-lg border border-primary/20 bg-primary/[0.12] p-3">
+                <div className="border-r-4 border-primary pe-3">
                   <FieldInput
                     col={primaryCol}
                     value={row[primaryCol.key] ?? ""}
@@ -158,8 +158,8 @@ export default function PhasesEditor({
               </div>
 
               {budgetCols.length > 0 && (
-                <div className="rounded-lg border-2 border-amber-300 bg-amber-50/60 p-3">
-                  <p className="mb-2 text-xs font-extrabold text-amber-950">المخصص المالي</p>
+                <div className="rounded-lg border border-amber-200/80 bg-amber-50/90 p-3">
+                  <p className="mb-2 text-xs font-extrabold text-amber-900/80">المخصص المالي</p>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     {budgetCols.map((col) => (
                       <FieldInput

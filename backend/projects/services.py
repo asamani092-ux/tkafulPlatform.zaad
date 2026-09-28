@@ -76,6 +76,58 @@ def public_home_projects_queryset(limit: int = 6):
     return base.order_by("-updated_at", "-id")[:limit]
 
 
+def platform_overview_stats() -> dict:
+    """مؤشرات نظرة /Admin من بيانات المنصة الحية. O(1) تجميعات مفهرسة."""
+    from django.contrib.auth.models import User
+
+    from projectdocs.models import ProjectDossier, StageActivity
+    from services.models import ServiceRequest, Suggestion
+    from sponsorships.models import Sponsorship
+
+    projects_active = Project.objects.filter(status="active").count()
+    projects_draft = Project.objects.filter(status="draft").count()
+    dossiers_in_progress = ProjectDossier.objects.filter(
+        status__in=("in_progress", "pending_approval")
+    ).count()
+    activities_delayed = StageActivity.objects.filter(auto_status="delayed").count()
+    tasks_assigned_open = (
+        StageActivity.objects.filter(responsible_user__isnull=False)
+        .exclude(auto_status="done")
+        .count()
+    )
+    volunteers_approved = User.objects.filter(
+        profile__role="user", profile__is_approved=True
+    ).count()
+    sponsorships_active = Sponsorship.objects.filter(
+        status__in=("sponsored", "approved", "prepared", "in_progress", "delivered")
+    ).count()
+
+    pending_service = ServiceRequest.objects.filter(status="PENDING").count()
+    suggestions = Suggestion.objects.count()
+    join_reqs = User.objects.filter(
+        profile__role="user", profile__is_approved=False, is_active=True
+    ).count()
+    try:
+        from volunteering.models import VolunteerApplication
+
+        project_apps = VolunteerApplication.objects.filter(status="قيد المراجعة").count()
+    except Exception:
+        project_apps = 0
+
+    pending_ops = pending_service + suggestions + join_reqs + project_apps
+
+    return {
+        "projects_active": projects_active,
+        "projects_draft": projects_draft,
+        "dossiers_in_progress": dossiers_in_progress,
+        "activities_delayed": activities_delayed,
+        "tasks_assigned_open": tasks_assigned_open,
+        "volunteers_approved": volunteers_approved,
+        "sponsorships_active": sponsorships_active,
+        "pending_ops": pending_ops,
+    }
+
+
 def project_delete_blockers(project: Project) -> list[str]:
     """أسباب منع الحذف إن وُجدت بيانات مهمة. O(1) استعلامات مجمّعة."""
     blockers: list[str] = []

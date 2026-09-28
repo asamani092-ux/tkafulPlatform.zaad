@@ -43,7 +43,7 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     to: "/Admin/projects",
     blurb: "قائمة المشاريع والأدوات وروابط التبرع والإنشاء",
     links: [
-      { to: "/Admin/projects", label: "كل المشاريع", staffVisible: true },
+      { to: "/Admin/projects", label: "مشاريعي", staffVisible: true },
     ],
   },
   {

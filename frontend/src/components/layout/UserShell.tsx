@@ -7,7 +7,8 @@ import { useEffect, useState } from "react";
 
 const links = [
   { to: "/user/main", label: "الرئيسية", icon: Home },
-  { to: "/user/tasks", label: "مهامي", icon: ListTodo },
+  { to: "/user/tasks", label: "مهام التطوع", icon: ListTodo },
+  { to: "/user/my-tasks", label: "مهام المشاريع", icon: ListTodo },
   { to: "/user/settings", label: "الإعدادات", icon: Settings },
 ];
 

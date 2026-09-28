@@ -96,6 +96,11 @@ class DossierWorkspaceSerializer(serializers.ModelSerializer):
 
 
 class StageActivitySerializer(serializers.ModelSerializer):
+    responsible_user_name = serializers.SerializerMethodField()
+    project_name = serializers.SerializerMethodField()
+    project_slug = serializers.SerializerMethodField()
+    stage_key = serializers.SerializerMethodField()
+
     class Meta:
         model = StageActivity
         fields = (
@@ -105,6 +110,11 @@ class StageActivitySerializer(serializers.ModelSerializer):
             "parent",
             "title",
             "responsible",
+            "responsible_user",
+            "responsible_user_name",
+            "project_name",
+            "project_slug",
+            "stage_key",
             "start_date",
             "end_date",
             "executed_weeks",
@@ -122,7 +132,39 @@ class StageActivitySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("auto_status", "source", "locked", "created_at", "updated_at")
+        read_only_fields = (
+            "auto_status",
+            "source",
+            "locked",
+            "created_at",
+            "updated_at",
+            "responsible_user_name",
+            "project_name",
+            "project_slug",
+            "stage_key",
+        )
+
+    def get_responsible_user_name(self, obj):
+        if obj.responsible_user_id:
+            from .services import _user_display_name
+
+            return _user_display_name(obj.responsible_user)
+        return obj.responsible or ""
+
+    def get_project_name(self, obj):
+        try:
+            return obj.stage.dossier.project.name
+        except Exception:
+            return ""
+
+    def get_project_slug(self, obj):
+        try:
+            return obj.stage.dossier.project.slug
+        except Exception:
+            return ""
+
+    def get_stage_key(self, obj):
+        return getattr(obj.stage, "key", "") or ""
 
     def create(self, validated):
         obj = StageActivity(**validated)
