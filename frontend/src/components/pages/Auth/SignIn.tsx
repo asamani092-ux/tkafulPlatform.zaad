@@ -55,10 +55,11 @@ export default function SignIn() {
       return;
     }
     if (role === "admin") navigate("/Admin");
-    else if (role === "manager" || role === "employee") navigate("/Admin/staff");
+    else if (role === "manager") navigate("/Admin/staff");
     else if (role === "donor" || role === "supplier" || role === "representative") navigate("/projects");
     else if (role === "beneficiary") navigate("/user/main");
     else {
+      // employee ومتطوّع: مشاريع إن وُجدت عضوية، وإلا واجهة المستخدم
       try {
         const membershipsRes = await fetch(`${API_BASE_URL}/api/platform/my-memberships/`, {
           headers: { Authorization: `Bearer ${tokenData.access}` },
@@ -84,11 +85,20 @@ export default function SignIn() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setErrors({
-          form:
-            (typeof data.detail === "string" && data.detail) ||
-            "البريد الإلكتروني أو كلمة المرور غير صحيحة",
-        });
+        const raw =
+          (typeof data.detail === "string" && data.detail) ||
+          (Array.isArray(data.detail) && typeof data.detail[0] === "string" && data.detail[0]) ||
+          "";
+        const lower = String(raw).toLowerCase();
+        const formMsg =
+          !raw ||
+          lower.includes("no active account") ||
+          lower.includes("credentials")
+            ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+            : /[\u0600-\u06FF]/.test(raw)
+              ? raw
+              : "البريد الإلكتروني أو كلمة المرور غير صحيحة";
+        setErrors({ form: formMsg });
         setIsSubmitting(false);
         return;
       }
@@ -127,6 +137,11 @@ export default function SignIn() {
               error={errors.password}
               required
             />
+            <div className="text-start text-sm">
+              <Link to="/forgot-password" className="font-semibold text-primary hover:underline">
+                نسيت كلمة المرور؟
+              </Link>
+            </div>
             {errors.form && (
               <div
                 className="rounded-lg px-4 py-3 text-sm"

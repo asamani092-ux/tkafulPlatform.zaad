@@ -1,38 +1,140 @@
-import { useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Button from "../ui/Button";
-import Input from "../ui/Input";
-import Select from "../ui/Select";
-import { AUTO_STATUS_AR, STAGE_KEY_AR, type DossierStageRow, type StageActivity } from "./types";
+import CollapsibleCard from "./CollapsibleCard";
+import { STAGE_KEY_AR, type DossierStageRow, type StageActivity, type TeamMemberOption } from "./types";
 
 type Props = {
   stages: DossierStageRow[];
   activities: StageActivity[];
   canEdit: boolean;
+  teamMembers?: TeamMemberOption[];
   onCreate: (payload: Record<string, unknown>) => Promise<void>;
   onComplete: (
     id: number,
     payload: { lessons: string; notes: string; evidence_url: string; evidence_title: string; file?: File | null },
   ) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
+  onUpdate?: (id: number, payload: Record<string, unknown>) => Promise<void>;
+  onUpdateStage?: (order: number, payload: Record<string, unknown>) => Promise<void>;
+  canApprove?: boolean;
+  phaseStatus?: Record<string, string>;
+  onDecidePhase?: (phaseKey: string, decision: "approved" | "revoke") => void;
 };
 
+type OpenAdd = { stageId: number; parentId: number | null };
+type WeekCell = { start: Date; end: Date; label: string };
+type MonthBlock = { label: string; weeks: WeekCell[] };
+
+const DATE_ORDER_MSG = "تاريخ البداية يجب أن يسبق تاريخ الإغلاق";
+const WEEK_DONE_MSG = "تم التنفيذ في هذا الأسبوع";
+const cell = "border border-surface-border px-2 py-2 align-middle";
+const weekCell = "border border-surface-border px-0.5 py-0.5 align-middle";
+
+function parseDay(iso: string): Date {
+  return new Date(`${iso}T00:00:00`);
+}
+
+function isoDay(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+function weekCaption(iso: string): string {
+  const [, m, d] = iso.split("-");
+  return `${Number(d)}/${Number(m)}`;
+}
+
+function datesOrdered(start: string | null, end: string | null): boolean {
+  return !start || !end || start < end;
+}
+
+/** أشهر تقويمية من البداية حتى الإغلاق، أربعة أسابيع لكل شهر. O(M). */
+function buildMonthWeeks(startIso: string | null, endIso: string | null): MonthBlock[] {
+  if (!startIso || !endIso || startIso >= endIso) return [];
+  const start = parseDay(startIso);
+  const end = parseDay(endIso);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+  const blocks: MonthBlock[] = [];
+  let y = start.getFullYear();
+  let m = start.getMonth();
+  const endY = end.getFullYear();
+  const endM = end.getMonth();
+  while (y < endY || (y === endY && m <= endM)) {
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const starts = [1, 8, 15, 22];
+    const weeks: WeekCell[] = starts.map((day, i) => {
+      const ws = new Date(y, m, day);
+      const we = i < 3 ? new Date(y, m, starts[i + 1] - 1) : new Date(y, m, lastDay);
+      return { start: ws, end: we, label: isoDay(ws) };
+    });
+    blocks.push({ label: `${m + 1}/${y}`, weeks });
+    m += 1;
+    if (m > 11) {
+      m = 0;
+      y += 1;
+    }
+  }
+  return blocks;
+}
+
+function phaseActivities(stageId: number, activities: StageActivity[]): StageActivity[] {
+  return activities.filter((a) => a.stage === stageId);
+}
+
+function execStatus(acts: StageActivity[]): string {
+  if (!acts.length) return "لم يحن";
+  if (acts.some((a) => a.auto_status === "delayed")) return "متعثر";
+  const done = (a: StageActivity) => a.auto_status === "done" || a.manual_status === "done";
+  if (acts.every(done)) return "منفذ";
+  const started = (a: StageActivity) =>
+    done(a) || a.auto_status === "in_progress" || a.manual_status === "in_progress";
+  if (acts.some(started)) return "جاري";
+  return "لم يحن";
+}
+
+function remainingDays(end: string | null): string {
+  if (!end) return "—";
+  const close = parseDay(end);
+  if (Number.isNaN(close.getTime())) return "—";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const left = Math.round((close.getTime() - today.getTime()) / 86400000);
+  if (left < 0) return `متأخر ${Math.abs(left)}`;
+  return String(left);
+}
+
+/** جدول الخطة: خمسة صفوف، ونافذة تفاصيل بأربعة أسابيع لكل شهر. */
 export default function ActivitiesPanel({
   stages,
   activities,
   canEdit,
+  teamMembers = [],
   onCreate,
   onComplete,
   onDelete,
+  onUpdate,
+  onUpdateStage,
+  canApprove,
+  phaseStatus,
+  onDecidePhase,
 }: Props) {
-  const openStages = stages.filter((s) => s.status === "active" || s.status === "returned");
-  const [form, setForm] = useState({
-    stage: openStages[0]?.id || 0,
-    code: "",
-    title: "",
-    responsible: "",
-    start_date: "",
-    end_date: "",
-  });
+  const ordered = [...stages].sort((a, b) => a.order - b.order);
+  const childrenOf = useMemo(() => {
+    const map = new Map<number, StageActivity[]>();
+    for (const a of activities) {
+      if (a.parent == null) continue;
+      const list = map.get(a.parent) || [];
+      list.push(a);
+      map.set(a.parent, list);
+    }
+    return map;
+  }, [activities]);
+  const [detailKey, setDetailKey] = useState<string | null>(null);
+  const [openAdd, setOpenAdd] = useState<OpenAdd | null>(null);
+  const [draft, setDraft] = useState("");
+  const [dateError, setDateError] = useState("");
+  const [completeError, setCompleteError] = useState("");
   const [completeId, setCompleteId] = useState<number | null>(null);
   const [completeForm, setCompleteForm] = useState({
     lessons: "",
@@ -42,160 +144,580 @@ export default function ActivitiesPanel({
     file: null as File | null,
   });
   const [busy, setBusy] = useState(false);
+  const [assignActivityId, setAssignActivityId] = useState<number | "">("");
+  const [assignUserId, setAssignUserId] = useState<number | "">("");
+  const [adHocOpen, setAdHocOpen] = useState(false);
+  const [adHocTitle, setAdHocTitle] = useState("");
+  const [adHocStageId, setAdHocStageId] = useState<number | "">("");
+  const [adHocUserId, setAdHocUserId] = useState<number | "">("");
+  const [assignError, setAssignError] = useState("");
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.stage || !form.title) return;
+  const detailStage = ordered.find((s) => s.key === detailKey) || null;
+  const detailActs = detailStage ? phaseActivities(detailStage.id, activities) : [];
+  const detailMains = detailActs.filter((a) => a.parent == null);
+  const range = {
+    start: detailStage?.planned_start ?? null,
+    end: detailStage?.planned_end ?? null,
+  };
+  const months = useMemo(() => buildMonthWeeks(range.start, range.end), [range.start, range.end]);
+  const hasTeam = teamMembers.length > 0;
+
+  const addActivity = async (stageId: number, parentId: number | null) => {
+    const title = draft.trim();
+    if (!title) return;
     setBusy(true);
     try {
-      await onCreate({
-        stage: form.stage,
-        code: form.code || `ACT-${activities.length + 1}`,
-        title: form.title,
-        responsible: form.responsible,
-        start_date: form.start_date || null,
-        end_date: form.end_date || null,
-      });
-      setForm((f) => ({ ...f, code: "", title: "", responsible: "" }));
+      await onCreate({ stage: stageId, parent: parentId, title });
+      setDraft("");
+      setOpenAdd(null);
     } finally {
       setBusy(false);
     }
+  };
+
+  const patch = async (id: number, payload: Record<string, unknown>) => {
+    if (!onUpdate) return;
+    await onUpdate(id, payload);
+  };
+
+  const publishAssign = async () => {
+    setAssignError("");
+    if (!hasTeam) {
+      setAssignError("أضف فريق العمل أولاً من الوثيقة قبل الإسناد");
+      return;
+    }
+    if (assignActivityId === "" || assignUserId === "") {
+      setAssignError("اختر نشاطاً ومسنداً إليه من فريق العمل");
+      return;
+    }
+    setBusy(true);
+    try {
+      await patch(Number(assignActivityId), { responsible_user: Number(assignUserId) });
+      setAssignActivityId("");
+      setAssignUserId("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createAdHoc = async () => {
+    setAssignError("");
+    if (!hasTeam) {
+      setAssignError("أضف فريق العمل أولاً من الوثيقة قبل الإسناد");
+      return;
+    }
+    const title = adHocTitle.trim();
+    if (!title || adHocStageId === "") {
+      setAssignError("عنوان المهمة واختيار المرحلة مطلوبان");
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload: Record<string, unknown> = {
+        stage: Number(adHocStageId),
+        title,
+        source: "ad_hoc",
+      };
+      if (adHocUserId !== "") payload.responsible_user = Number(adHocUserId);
+      await onCreate(payload);
+      setAdHocTitle("");
+      setAdHocStageId("");
+      setAdHocUserId("");
+      setAdHocOpen(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleWeek = (a: StageActivity, weekStart: string) => {
+    const visible = new Set(months.flatMap((block) => block.weeks.map((week) => week.label)));
+    const current = (a.executed_weeks || []).filter((week) => visible.has(week));
+    const next = current.includes(weekStart) ? current.filter((w) => w !== weekStart) : [...current, weekStart];
+    void patch(a.id, { executed_weeks: next });
+  };
+
+  const saveStageDates = (stage: DossierStageRow, nextStart: string | null, nextEnd: string | null) => {
+    if (!datesOrdered(nextStart, nextEnd)) {
+      setDateError(DATE_ORDER_MSG);
+      return;
+    }
+    setDateError("");
+    if (!onUpdateStage) return;
+    const payload: Record<string, unknown> = {};
+    if (nextStart !== stage.planned_start) payload.planned_start = nextStart;
+    if (nextEnd !== stage.planned_end) payload.planned_end = nextEnd;
+    if (Object.keys(payload).length) void onUpdateStage(stage.order, payload);
   };
 
   const submitComplete = async (e: React.FormEvent) => {
     e.preventDefault();
     if (completeId == null) return;
+    if (!completeForm.evidence_url.trim() && !completeForm.file) {
+      setCompleteError("الشاهد مطلوب عند الإتمام (ملف أو رابط)");
+      return;
+    }
+    setCompleteError("");
     setBusy(true);
     try {
       await onComplete(completeId, completeForm);
       setCompleteId(null);
+      setCompleteError("");
       setCompleteForm({ lessons: "", notes: "", evidence_url: "", evidence_title: "", file: null });
+    } catch {
+      /* رسالة الخادم تظهر في التنبيه وتبقى النافذة */
     } finally {
       setBusy(false);
     }
   };
 
-  return (
-    <div className="space-y-4" dir="rtl">
-      {canEdit && openStages.length > 0 && (
-        <form className="grid grid-cols-1 gap-2 sm:grid-cols-3" onSubmit={submit}>
-          <Select
-            label="المرحلة"
-            value={String(form.stage)}
-            onChange={(e) => setForm({ ...form, stage: Number(e.target.value) })}
+  const renderAdder = (stageId: number, parentId: number | null) => {
+    if (!canEdit) return null;
+    const open = openAdd?.stageId === stageId && openAdd.parentId === parentId;
+    return (
+      <div className="flex items-center gap-2">
+        {open && (
+          <input
+            autoFocus
+            className="input-field w-36 text-sm"
+            placeholder="نشاط جديد"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void addActivity(stageId, parentId);
+              }
+              if (e.key === "Escape") setOpenAdd(null);
+            }}
+          />
+        )}
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          aria-label={parentId == null ? "نشاط رئيسي" : "نشاط فرعي"}
+          disabled={busy}
+          onClick={() => {
+            if (open) {
+              void addActivity(stageId, parentId);
+              return;
+            }
+            setDraft("");
+            setOpenAdd({ stageId, parentId });
+          }}
+        >
+          {parentId == null ? "نشاط رئيسي" : "نشاط فرعي"}
+        </Button>
+      </div>
+    );
+  };
+
+  const renderActivity = (a: StageActivity, stage: DossierStageRow, level: "رئيسي" | "فرعي") => {
+    const locked = !!a.locked;
+    return (
+      <tr key={a.id} className={level === "فرعي" ? "bg-emerald-50/40" : undefined}>
+        <td className={cell}>{level}</td>
+        <td className={cell}>
+          <input
+            className="input-field w-full text-sm"
+            disabled={!canEdit || locked}
+            defaultValue={a.title}
+            key={`${a.id}-t-${a.title}`}
+            onBlur={(e) => {
+              if (e.target.value.trim() && e.target.value.trim() !== a.title) void patch(a.id, { title: e.target.value.trim() });
+            }}
+          />
+        </td>
+        <td className={cell}>
+          <select
+            className="input-field text-sm"
+            disabled={!canEdit}
+            value={a.manual_status || ""}
+            onChange={(e) => {
+              if (e.target.value === "done") {
+                setCompleteError("");
+                setCompleteId(a.id);
+                return;
+              }
+              void patch(a.id, { manual_status: e.target.value });
+            }}
           >
-            {openStages.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.order}. {STAGE_KEY_AR[s.key] || s.key}
+            <option value="">—</option>
+            <option value="in_progress">جاري التنفيذ</option>
+            <option value="done">تم التنفيذ</option>
+          </select>
+        </td>
+        <td className={cell}>
+          <select
+            className="input-field w-full text-sm"
+            disabled={!canEdit || !hasTeam}
+            value={a.responsible_user ?? ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              void patch(a.id, { responsible_user: v === "" ? null : Number(v) });
+            }}
+          >
+            <option value="">{hasTeam ? "— اختر من الفريق —" : "أضف فريق العمل أولاً"}</option>
+            {teamMembers.map((m) => (
+              <option key={m.user_id} value={m.user_id}>
+                {m.name}
               </option>
             ))}
-          </Select>
-          <Input label="الرمز" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
-          <Input
-            label="العنوان"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-            required
-          />
-          <Input
-            label="المسؤول"
-            value={form.responsible}
-            onChange={(e) => setForm({ ...form, responsible: e.target.value })}
-          />
-          <Input
-            label="البداية"
-            type="date"
-            value={form.start_date}
-            onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-          />
-          <Input
-            label="النهاية"
-            type="date"
-            value={form.end_date}
-            onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-          />
-          <div className="sm:col-span-3">
-            <Button type="submit" disabled={busy}>
-              إضافة نشاط
-            </Button>
-          </div>
-        </form>
-      )}
-
-      <div className="space-y-2">
-        {activities.map((a) => (
-          <div key={a.id} className="rounded-xl border border-surface-border bg-surface p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <div className="font-bold text-primary">
-                  {a.code} — {a.title}
-                </div>
-                <div className="text-xs text-brand-gray">
-                  {AUTO_STATUS_AR[a.auto_status] || a.auto_status} · {a.progress_pct}% · {a.responsible || "—"}
-                </div>
-              </div>
-              {canEdit && a.manual_status !== "done" && (
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="secondary" onClick={() => setCompleteId(a.id)}>
-                    إتمام مع شاهد
-                  </Button>
-                  <Button type="button" variant="secondary" onClick={() => void onDelete(a.id)}>
-                    حذف
-                  </Button>
-                </div>
-              )}
-            </div>
-            {(a.lessons || a.notes || a.risks) && (
-              <p className="mt-2 text-xs text-brand-gray whitespace-pre-wrap">
-                {[a.notes, a.risks, a.lessons && `درس مستفاد: ${a.lessons}`].filter(Boolean).join("\n")}
-              </p>
+          </select>
+        </td>
+        <td className={cell}>
+          <div className="flex flex-wrap items-center gap-2">
+            {level === "رئيسي" ? renderAdder(stage.id, a.id) : null}
+            {canEdit && a.manual_status !== "done" && (
+              <Button type="button" variant="secondary" size="sm" onClick={() => { setCompleteError(""); setCompleteId(a.id); }}>
+                إتمام
+              </Button>
             )}
-            {completeId === a.id && (
-              <form className="mt-3 space-y-2 border-t border-surface-border pt-3" onSubmit={submitComplete}>
-                <Input
-                  label="الدرس المستفاد *"
-                  value={completeForm.lessons}
-                  onChange={(e) => setCompleteForm({ ...completeForm, lessons: e.target.value })}
-                  required
-                />
-                <Input
-                  label="ملاحظات"
-                  value={completeForm.notes}
-                  onChange={(e) => setCompleteForm({ ...completeForm, notes: e.target.value })}
-                />
-                <Input
-                  label="عنوان الشاهد"
-                  value={completeForm.evidence_title}
-                  onChange={(e) => setCompleteForm({ ...completeForm, evidence_title: e.target.value })}
-                />
-                <Input
-                  label="رابط الشاهد"
-                  value={completeForm.evidence_url}
-                  onChange={(e) => setCompleteForm({ ...completeForm, evidence_url: e.target.value })}
-                />
-                <label className="block text-sm">
-                  <span className="mb-1 block font-bold text-primary">ملف الشاهد</span>
+            {canEdit && !locked && (
+              <Button type="button" variant="secondary" size="sm" onClick={() => void onDelete(a.id)}>
+                حذف
+              </Button>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  return (
+    <div dir="rtl" className="space-y-4">
+      {canEdit && (
+        <div className="rounded-lg border border-surface-border bg-surface-muted/30 p-4 space-y-3">
+          <h3 className="font-bold text-primary">نشر وإسناد المهام</h3>
+          {!hasTeam && (
+            <p className="text-sm text-amber-800">أضف فريق العمل من تبويب الوثيقة أولاً لتفعيل الإسناد.</p>
+          )}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="block text-sm">
+              <span className="label-field">نشاط من الخطة</span>
+              <select
+                className="input-field mt-1 w-full"
+                disabled={!hasTeam || busy}
+                value={assignActivityId}
+                onChange={(e) => setAssignActivityId(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">اختر نشاطاً…</option>
+                {activities.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.code} — {a.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="label-field">المسند إليه</span>
+              <select
+                className="input-field mt-1 w-full"
+                disabled={!hasTeam || busy}
+                value={assignUserId}
+                onChange={(e) => setAssignUserId(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">اختر من الفريق…</option>
+                {teamMembers.map((m) => (
+                  <option key={m.user_id} value={m.user_id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-end">
+              <Button type="button" disabled={!hasTeam || busy} onClick={() => void publishAssign()}>
+                إسناد
+              </Button>
+            </div>
+          </div>
+          <div className="border-t border-surface-border pt-3">
+            {!adHocOpen ? (
+              <Button type="button" variant="secondary" size="sm" onClick={() => setAdHocOpen(true)}>
+                مهمة خارج الأنشطة
+              </Button>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-4">
+                <label className="block text-sm sm:col-span-2">
+                  <span className="label-field">عنوان المهمة</span>
                   <input
-                    type="file"
-                    onChange={(e) =>
-                      setCompleteForm({ ...completeForm, file: e.target.files?.[0] || null })
-                    }
+                    className="input-field mt-1 w-full"
+                    value={adHocTitle}
+                    onChange={(e) => setAdHocTitle(e.target.value)}
+                    disabled={busy}
                   />
                 </label>
-                <div className="flex gap-2">
-                  <Button type="submit" disabled={busy}>
-                    تأكيد الإتمام
+                <label className="block text-sm">
+                  <span className="label-field">المرحلة</span>
+                  <select
+                    className="input-field mt-1 w-full"
+                    value={adHocStageId}
+                    onChange={(e) => setAdHocStageId(e.target.value ? Number(e.target.value) : "")}
+                    disabled={busy}
+                  >
+                    <option value="">اختر مرحلة…</option>
+                    {ordered.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {STAGE_KEY_AR[s.key] || s.key}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm">
+                  <span className="label-field">المسند إليه</span>
+                  <select
+                    className="input-field mt-1 w-full"
+                    value={adHocUserId}
+                    onChange={(e) => setAdHocUserId(e.target.value ? Number(e.target.value) : "")}
+                    disabled={!hasTeam || busy}
+                  >
+                    <option value="">اختياري…</option>
+                    {teamMembers.map((m) => (
+                      <option key={m.user_id} value={m.user_id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex flex-wrap items-end gap-2 sm:col-span-4">
+                  <Button type="button" disabled={busy} onClick={() => void createAdHoc()}>
+                    حفظ في الخطة
                   </Button>
-                  <Button type="button" variant="secondary" onClick={() => setCompleteId(null)}>
+                  <Button type="button" variant="secondary" disabled={busy} onClick={() => setAdHocOpen(false)}>
                     إلغاء
                   </Button>
                 </div>
-              </form>
+              </div>
             )}
           </div>
-        ))}
-        {activities.length === 0 && <p className="text-sm text-brand-gray">لا أنشطة بعد.</p>}
-      </div>
+          {assignError && <p className="text-sm text-red-700">{assignError}</p>}
+        </div>
+      )}
+      <CollapsibleCard title="الخطة التنفيذية" defaultOpen={false} subtitle="خمسة صفوف للمراحل">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="bg-surface-muted/40">
+              {["اسم المرحلة", "حالة التنفيذ", "تاريخ البداية", "تاريخ الإغلاق", "المدة المتبقية بالأيام", "التفاصيل"].map((h) => (
+                <th key={h} className={`${cell} text-right font-bold text-primary`}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {ordered.map((stage) => {
+              const acts = phaseActivities(stage.id, activities);
+              const status = phaseStatus?.[stage.key] || "empty";
+              return (
+                <tr key={stage.id}>
+                  <td className={`${cell} font-extrabold text-primary`}>
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      {STAGE_KEY_AR[stage.key] || stage.key}
+                      <span className="text-xs font-bold text-brand-gray">{status === "approved" ? "معتمدة" : "غير معتمدة"}</span>
+                      {canApprove &&
+                        (status === "approved" ? (
+                          <Button type="button" variant="secondary" size="sm" onClick={() => onDecidePhase?.(stage.key, "revoke")}>
+                            إزالة الاعتماد
+                          </Button>
+                        ) : (
+                          <Button type="button" size="sm" onClick={() => onDecidePhase?.(stage.key, "approved")}>
+                            اعتماد
+                          </Button>
+                        ))}
+                    </span>
+                  </td>
+                  <td className={cell}>{execStatus(acts)}</td>
+                  <td className={cell}>
+                    <input
+                      type="date"
+                      className="input-field text-sm"
+                      disabled={!canEdit}
+                      defaultValue={stage.planned_start || ""}
+                      key={`${stage.id}-ps-${stage.planned_start}`}
+                      onBlur={(e) => saveStageDates(stage, e.target.value || null, stage.planned_end)}
+                    />
+                  </td>
+                  <td className={cell}>
+                    <input
+                      type="date"
+                      className="input-field text-sm"
+                      disabled={!canEdit}
+                      defaultValue={stage.planned_end || ""}
+                      key={`${stage.id}-pe-${stage.planned_end}`}
+                      onBlur={(e) => saveStageDates(stage, stage.planned_start, e.target.value || null)}
+                    />
+                  </td>
+                  <td className={cell}>{remainingDays(stage.planned_end)}</td>
+                  <td className={cell}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setDateError("");
+                        setDetailKey(stage.key);
+                      }}
+                    >
+                      التفاصيل
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {dateError && !detailStage && <p className="mt-2 text-sm text-red-600">{dateError}</p>}
+      </CollapsibleCard>
+
+      {detailStage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDetailKey(null)}>
+          <div
+            className="max-h-[85vh] w-full max-w-6xl overflow-auto rounded-xl bg-surface p-4 shadow-lg"
+            dir="rtl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="font-extrabold text-primary">{STAGE_KEY_AR[detailStage.key] || detailStage.key}</h3>
+              <Button type="button" variant="secondary" onClick={() => setDetailKey(null)}>
+                إغلاق
+              </Button>
+            </div>
+            <div className="mb-3 flex flex-wrap items-end gap-3">{renderAdder(detailStage.id, null)}</div>
+            {dateError && <p className="mb-3 text-sm text-red-600">{dateError}</p>}
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="bg-surface-muted/40">
+                    {["المستوى", "النشاط", "الحالة", "المسؤول", ""].map((h) => (
+                      <th key={h || "add"} className={`${cell} text-right font-bold text-primary`}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailMains.map((main) => (
+                    <Fragment key={main.id}>
+                      {renderActivity(main, detailStage, "رئيسي")}
+                      {(childrenOf.get(main.id) || []).map((child) => renderActivity(child, detailStage, "فرعي"))}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <h4 className="mb-2 mt-4 font-bold text-primary">أسابيع التنفيذ</h4>
+            <p className="mb-2 text-sm text-brand-gray">اضغط مربع الأسبوع الذي وقع فيه التنفيذ داخل تاريخ الواجهة. اللون الأخضر يعني تم التنفيذ في هذا الأسبوع.</p>
+            {!range.start || !range.end ? (
+              <p className="text-sm text-brand-gray">حدد تاريخ البداية والإغلاق في الواجهة الرئيسية</p>
+            ) : !datesOrdered(range.start, range.end) ? (
+              <p className="text-sm text-red-600">{DATE_ORDER_MSG}</p>
+            ) : (
+              <>
+              <div className="max-w-full overflow-x-auto">
+                <table className="w-max border-collapse text-xs">
+                  <thead>
+                    <tr>
+                      <th className={`${weekCell} sticky right-0 z-10 bg-surface px-2 text-right`}>النشاط</th>
+                      {months.map((m) => (
+                        <th key={m.label} className={`${weekCell} text-center`} colSpan={4}>
+                          {m.label}
+                        </th>
+                      ))}
+                    </tr>
+                    <tr>
+                      <th className={`${weekCell} sticky right-0 z-10 bg-surface`} />
+                      {months.flatMap((m) =>
+                        m.weeks.map((w) => (
+                          <th key={`${m.label}-${w.label}`} className={`${weekCell} w-9 whitespace-nowrap text-center`}>
+                            {weekCaption(w.label)}
+                          </th>
+                        )),
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailActs.map((a) => (
+                      <tr key={`cal-${a.id}`}>
+                        <td className={`${weekCell} sticky right-0 z-10 bg-surface px-2 font-bold`}>{a.title}</td>
+                        {months.flatMap((m) =>
+                          m.weeks.map((w) => {
+                            const on = (a.executed_weeks || []).includes(w.label);
+                            return (
+                              <td key={`${a.id}-${m.label}-${w.label}`} className={`${weekCell} w-9`}>
+                                <button
+                                  type="button"
+                                  title={on ? WEEK_DONE_MSG : weekCaption(w.label)}
+                                  className={`block h-7 w-full min-w-8 rounded ${on ? "bg-emerald-500" : "bg-surface-muted/40"}`}
+                                  disabled={!canEdit}
+                                  aria-pressed={on}
+                                  aria-label={on ? WEEK_DONE_MSG : weekCaption(w.label)}
+                                  onClick={() => toggleWeek(a, w.label)}
+                                />
+                              </td>
+                            );
+                          }),
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {detailActs.some((a) => (a.executed_weeks || []).some((week) => months.some((m) => m.weeks.some((w) => w.label === week)))) && (
+                <p className="mt-2 text-sm text-brand-gray">{WEEK_DONE_MSG}</p>
+              )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {completeId != null && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setCompleteId(null)}>
+          <form
+            className="w-full max-w-md space-y-3 rounded-xl bg-surface p-4 shadow-lg"
+            dir="rtl"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={submitComplete}
+          >
+            <h3 className="font-extrabold text-primary">إتمام النشاط</h3>
+            {completeError && <p className="text-sm text-red-600">{completeError}</p>}
+            <label className="block text-sm">
+              الدرس المستفاد
+              <textarea
+                className="input-field mt-1 w-full text-sm"
+                required
+                rows={3}
+                value={completeForm.lessons}
+                onChange={(e) => setCompleteForm({ ...completeForm, lessons: e.target.value })}
+              />
+            </label>
+            <input
+              className="input-field w-full text-sm"
+              placeholder="ملاحظات"
+              value={completeForm.notes}
+              onChange={(e) => setCompleteForm({ ...completeForm, notes: e.target.value })}
+            />
+            <input
+              className="input-field w-full text-sm"
+              placeholder="رابط الشاهد"
+              value={completeForm.evidence_url}
+              onChange={(e) => setCompleteForm({ ...completeForm, evidence_url: e.target.value })}
+            />
+            <input
+              type="file"
+              onChange={(e) => setCompleteForm({ ...completeForm, file: e.target.files?.[0] || null })}
+            />
+            <div className="flex gap-2">
+              <Button type="submit" disabled={busy}>
+                تأكيد الإتمام
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setCompleteId(null)}>
+                إلغاء
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

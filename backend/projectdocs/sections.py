@@ -10,7 +10,7 @@ from rest_framework import serializers
 # تبويبات ملف المشروع — سلسلة الاعتماد (الإكسل: بطاقة/وثيقة/خطة/إغلاق + لوحة)
 # البطاقة بلا اعتماد؛ الباقي متسلسل لعمل الموظف.
 WORKSPACES = (
-    {"order": 1, "key": "card", "label": "البطاقة", "needs_approval": False},
+    {"order": 1, "key": "card", "label": "البطاقة", "needs_approval": True},
     {"order": 2, "key": "document", "label": "الوثيقة", "needs_approval": True},
     {"order": 3, "key": "plan", "label": "الخطة التنفيذية", "needs_approval": True},
     {"order": 4, "key": "closure", "label": "الإغلاق", "needs_approval": True},
@@ -162,6 +162,11 @@ DOCUMENT_FIXED_PHASES: list[dict] = [
     {"key": "close", "label": "إغلاق المشروع"},
 ]
 
+
+def plan_phase_keys() -> list[str]:
+    """مفاتيح المراحل الخمس لاعتماد الخطة. O(1)."""
+    return [p["key"] for p in DOCUMENT_FIXED_PHASES]
+
 LOGICAL_IMPACT_ROWS: list[dict] = [
     {"row_key": "impact", "label": "الأثر"},
     {"row_key": "returns", "label": "العوائد والغايات"},
@@ -184,6 +189,8 @@ DOCUMENT_SECTIONS: list[dict] = [
             _f("execution_end", "تاريخ انتهاء التنفيذ", "date"),
             _f("sponsor_name", "راعي المشروع"),
             _f("sponsor_email", "ايميل الراعي", "text"),
+            _f("approver_name", "صاحب الاعتماد"),
+            _f("approver_email", "ايميل صاحب الاعتماد", "text"),
             _f("strategic_goal", "الهدف الاستراتيجي", "textarea"),
         ],
     },
@@ -627,6 +634,10 @@ def _coerce_field(fdef: FieldDef, val):
             if not isinstance(row, dict):
                 raise serializers.ValidationError({fdef["key"]: f"صف {i + 1} غير صالح"})
             cleaned_row = {}
+            if row.get("_locked"):
+                cleaned_row["_locked"] = True
+            if row.get("_source"):
+                cleaned_row["_source"] = str(row.get("_source"))
             for col_key, col_def in col_defs.items():
                 if col_def.get("computed"):
                     continue

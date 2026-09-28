@@ -24,7 +24,7 @@ type Props = {
   teamCandidates: TeamCandidate[];
   onDraftChange: (sectionKey: string, data: Record<string, unknown>) => void;
   onSave: (sectionKey: string) => void;
-  onDecide: (sectionKey: string, decision: "approved" | "returned") => void;
+  onDecide: (sectionKey: string, decision: "approved" | "revoke") => void;
 };
 
 type Row = Record<string, string | number | boolean>;
@@ -140,6 +140,8 @@ function FixedPhasesActivities({
     activities: Array.isArray(byKey[p.key]?.activities) ? byKey[p.key].activities! : [],
   }));
   const [drafts, setDrafts] = useState(phases.map(() => ""));
+  const [openRow, setOpenRow] = useState<number | null>(null);
+  const [fresh, setFresh] = useState<{ key: string; index: number } | null>(null);
 
   const commit = (next: typeof phases) => onChange({ phases: next });
 
@@ -150,12 +152,22 @@ function FixedPhasesActivities({
       idx === i ? { ...p, activities: [...p.activities, text] } : p,
     );
     commit(next);
+    setFresh({ key: phases[i].key, index: phases[i].activities.length });
+    setOpenRow(null);
     setDrafts((d) => {
       const copy = [...d];
       while (copy.length < phases.length) copy.push("");
       copy[i] = "";
       return copy;
     });
+  };
+
+  const toggleAdder = (i: number) => {
+    if (openRow === i) {
+      addActivity(i);
+      return;
+    }
+    setOpenRow(i);
   };
 
   const removeActivity = (i: number, j: number) => {
@@ -166,67 +178,76 @@ function FixedPhasesActivities({
   };
 
   return (
-    <div className="space-y-3" dir="rtl">
-      {phases.map((phase, i) => (
-        <CollapsibleCard
-          key={phase.key}
-          title={phase.label}
-          defaultOpen={false}
-          subtitle={
-            phase.activities.length ? `${phase.activities.length} نشاط` : "لا أنشطة بعد"
-          }
-          badge={
-            phase.activities.length > 0 ? (
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
-                {phase.activities.length}
-              </span>
-            ) : null
-          }
-        >
-          <div className="mb-2 flex flex-wrap gap-2">
-            {phase.activities.map((act, j) => (
-              <span
-                key={`${phase.key}-${j}`}
-                className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-bold text-primary"
-              >
-                {act}
-                {!disabled && (
-                  <button type="button" className="text-red-700" onClick={() => removeActivity(i, j)} aria-label="حذف">
-                    ×
-                  </button>
-                )}
-              </span>
-            ))}
-            {!phase.activities.length && <span className="text-xs text-brand-gray">لا أنشطة بعد</span>}
-          </div>
-          {!disabled && (
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                className="input-field max-w-xs flex-1 text-sm"
-                placeholder="نشاط جديد"
-                value={drafts[i] || ""}
-                onChange={(e) =>
-                  setDrafts((d) => {
-                    const copy = [...d];
-                    while (copy.length < phases.length) copy.push("");
-                    copy[i] = e.target.value;
-                    return copy;
-                  })
-                }
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addActivity(i);
-                  }
-                }}
-              />
-              <Button type="button" variant="secondary" onClick={() => addActivity(i)}>
-                +
-              </Button>
-            </div>
-          )}
-        </CollapsibleCard>
-      ))}
+    <div className="overflow-x-auto rounded-xl border border-surface-border" dir="rtl">
+      <table className="w-full min-w-[640px] border-collapse text-sm">
+        <thead>
+          <tr className="bg-surface-muted/40">
+            <th className="w-56 border-b border-surface-border px-3 py-2 text-right font-bold text-primary">المرحلة</th>
+            <th className="border-b border-surface-border px-3 py-2 text-right font-bold text-primary">الأنشطة</th>
+          </tr>
+        </thead>
+        <tbody>
+          {phases.map((phase, i) => (
+            <tr key={phase.key}>
+              <td className="border-b border-surface-border bg-primary/[0.06] px-3 py-3 align-top font-extrabold text-primary">
+                {phase.label}
+              </td>
+              <td className="border-b border-surface-border px-3 py-3 align-middle">
+                <div className="flex items-center gap-6">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                    {phase.activities.map((act, j) => (
+                      <span
+                        key={`${phase.key}-${j}`}
+                        className={`inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100 px-4 py-2 text-sm font-bold text-emerald-900 ${
+                          fresh?.key === phase.key && fresh.index === j ? "activity-chip-pop" : ""
+                        }`}
+                      >
+                        {act}
+                        {!disabled && (
+                          <button type="button" className="text-base leading-none text-red-700" onClick={() => removeActivity(i, j)} aria-label="حذف">
+                            ×
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                    {!phase.activities.length && <span className="text-xs text-brand-gray">لا أنشطة بعد</span>}
+                  </div>
+                  {!disabled && (
+                    <div className="ms-auto flex shrink-0 items-center gap-2">
+                      {openRow === i && (
+                        <input
+                          autoFocus
+                          className="input-field w-44 text-sm"
+                          placeholder="نشاط جديد"
+                          value={drafts[i] || ""}
+                          onChange={(e) =>
+                            setDrafts((d) => {
+                              const copy = [...d];
+                              while (copy.length < phases.length) copy.push("");
+                              copy[i] = e.target.value;
+                              return copy;
+                            })
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addActivity(i);
+                            }
+                            if (e.key === "Escape") setOpenRow(null);
+                          }}
+                        />
+                      )}
+                      <Button type="button" variant="secondary" size="sm" iconOnly aria-label="إضافة نشاط" onClick={() => toggleAdder(i)}>
+                        +
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -624,6 +645,28 @@ export default function DocumentTab({
                 ) : null}
               </span>
             }
+            actions={
+              canApprove ? (
+                status === "approved" ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => onDecide(def.key, "revoke")}
+                    disabled={decidingKey === def.key}
+                  >
+                    إزالة الاعتماد
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={() => onDecide(def.key, "approved")}
+                    disabled={decidingKey === def.key || status === "empty"}
+                  >
+                    اعتماد
+                  </Button>
+                )
+              ) : null
+            }
           >
             {ui === "logical_matrix" && (
               <LogicalImpactMatrix data={data} disabled={!editable} onChange={(n) => onDraftChange(def.key, n)} />
@@ -700,25 +743,6 @@ export default function DocumentTab({
               {editable && (
                 <Button type="button" onClick={() => onSave(def.key)} disabled={savingKey === draftKey}>
                   حفظ {def.label}
-                </Button>
-              )}
-              {canApprove && status !== "approved" && (
-                <Button
-                  type="button"
-                  onClick={() => onDecide(def.key, "approved")}
-                  disabled={decidingKey === def.key || status === "empty"}
-                >
-                  اعتماد
-                </Button>
-              )}
-              {canApprove && status === "approved" && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => onDecide(def.key, "returned")}
-                  disabled={decidingKey === def.key}
-                >
-                  إعادة للتعديل
                 </Button>
               )}
             </div>

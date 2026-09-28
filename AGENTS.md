@@ -32,6 +32,13 @@ Always invoke backend management commands via `backend/venv/bin/python manage.py
 - **Frontend host**: Vite binds to `localhost` only. Use `http://localhost:3000` (not `127.0.0.1:3000`).
 - **Frontend → backend URL**: the SPA reads `VITE_API_BASE_URL` (defaults to `http://127.0.0.1:8000`).
 - Health check: `GET http://127.0.0.1:8000/api/ping/` returns `{"message":"Takaful backend is working"}`.
+- **Production mail links**: set `FRONTEND_BASE_URL=https://tkaful.alzaad.org.sa` in Coolify.
+  If missing/localhost while `DEBUG=False`, the backend derives it from `CSRF_TRUSTED_ORIGINS` /
+  `CORS_ALLOWED_ORIGINS` / `ALLOWED_HOSTS` (never emails `localhost` links in production).
+
+### Pull request base
+
+Always open pull requests against `main`. A merge into `refactor/project-first-architecture` does not publish. Do not stop after merging only into the refactor branch.
 
 ### Checks / build
 

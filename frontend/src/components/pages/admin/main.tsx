@@ -14,23 +14,18 @@ interface KpiItem {
   value: number | null;
 }
 
-async function countList(url: string): Promise<number | null> {
-  try {
-    const res = await authFetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (Array.isArray(data)) return data.length;
-    if (typeof data.count === "number") return data.count;
-    if (Array.isArray(data.results)) return data.results.length;
-    if (typeof data.total_volunteers === "number") return data.total_volunteers;
-    if (typeof data.active_projects === "number") return data.active_projects;
-    return null;
-  } catch {
-    return null;
-  }
-}
+type OverviewStats = {
+  projects_active?: number;
+  projects_draft?: number;
+  dossiers_in_progress?: number;
+  activities_delayed?: number;
+  tasks_assigned_open?: number;
+  volunteers_approved?: number;
+  sponsorships_active?: number;
+  pending_ops?: number;
+};
 
-/** نظرة عامة — مؤشرات تشغيلية قابلة للنقر (ليست دليل نطاقات). */
+/** نظرة عامة — مؤشرات تشغيلية فعلية للمنصّة قابلة للنقر. */
 export default function AdminMain() {
   const { access } = useAuth();
   const [kpis, setKpis] = useState<KpiItem[] | null>(null);
@@ -41,79 +36,66 @@ export default function AdminMain() {
     let cancelled = false;
     (async () => {
       try {
-        const [
-          activeProjects,
-          pendingService,
-          suggestions,
-          volunteers,
-          joinReqs,
-          projectApps,
-          maps,
-          users,
-        ] = await Promise.all([
-          countList("/api/stats/"),
-          countList("/api/service-requests/?status=PENDING"),
-          countList("/api/suggestions/"),
-          countList("/api/volunteer-stats/"),
-          countList("/api/volunteer-requests/"),
-          countList("/api/admin/applications/?status=" + encodeURIComponent("قيد المراجعة")),
-          countList("/api/maps/"),
-          countList("/api/accounts/users/"),
-        ]);
-
+        const res = await authFetch("/api/platform/overview-stats/");
+        if (!res.ok) throw new Error("overview");
+        const data: OverviewStats = await res.json();
         if (cancelled) return;
         setKpis([
           {
-            key: "projects",
+            key: "projects_active",
             label: "مشاريع نشطة",
-            hint: "مشاريع التطوع الفعّالة حالياً",
+            hint: "مشاريع المنصة بحالة نشط",
             to: "/Admin/projects",
-            value: activeProjects,
+            value: data.projects_active ?? null,
           },
           {
-            key: "pending_requests",
-            label: "طلبات معلّقة",
-            hint: "طلبات خدمة + اقتراحات بانتظار المراجعة",
-            to: "/Admin/requests/forms",
-            value:
-              pendingService != null || suggestions != null
-                ? (pendingService || 0) + (suggestions || 0)
-                : null,
+            key: "projects_draft",
+            label: "مشاريع مسودة",
+            hint: "مشاريع بانتظار التفعيل",
+            to: "/Admin/projects",
+            value: data.projects_draft ?? null,
           },
           {
-            key: "volunteers",
+            key: "dossiers_in_progress",
+            label: "ملفات قيد التنفيذ",
+            hint: "ملفات مشاريع نشطة أو بانتظار الاعتماد",
+            to: "/Admin/projects",
+            value: data.dossiers_in_progress ?? null,
+          },
+          {
+            key: "activities_delayed",
+            label: "أنشطة متعثرة",
+            hint: "أنشطة الخطة التنفيذية المتأخرة",
+            to: "/Admin/projects",
+            value: data.activities_delayed ?? null,
+          },
+          {
+            key: "tasks_assigned_open",
+            label: "مهام مسندة مفتوحة",
+            hint: "مهام مسندة لفريق العمل ولم تُنجز",
+            to: "/Admin/projects",
+            value: data.tasks_assigned_open ?? null,
+          },
+          {
+            key: "volunteers_approved",
             label: "متطوعون معتمدون",
             hint: "إجمالي المتطوعين المفعّلين",
             to: "/Admin/volunteers",
-            value: volunteers,
+            value: data.volunteers_approved ?? null,
           },
           {
-            key: "joins",
-            label: "طلبات انضمام",
-            hint: "طلبات الانضمام كمتطوع بانتظار القرار",
-            to: "/Admin/volunteers/join-requests",
-            value: joinReqs,
+            key: "sponsorships_active",
+            label: "كفالات نشطة",
+            hint: "كفالات قيد التنفيذ أو التجهيز",
+            to: "/Admin/projects",
+            value: data.sponsorships_active ?? null,
           },
           {
-            key: "apps",
-            label: "طلبات تطوع لمشاريع",
-            hint: "تقديمات على فرص المشاريع قيد المراجعة",
-            to: "/Admin/volunteers/applications",
-            value: projectApps,
-          },
-          {
-            key: "maps",
-            label: "الخرائط",
-            hint: "خرائط مُدارة في المنصّة",
-            to: "/Admin/maps",
-            value: maps,
-          },
-          {
-            key: "users",
-            label: "إدارة المستخدمين",
-            hint: "حسابات المنصّة المسجّلة",
-            to: "/Admin/users",
-            value: users,
+            key: "pending_ops",
+            label: "طلبات معلّقة",
+            hint: "خدمة + اقتراحات + انضمام + تقديمات بانتظار المراجعة",
+            to: "/Admin/requests/forms",
+            value: data.pending_ops ?? null,
           },
         ]);
       } catch {

@@ -24,14 +24,16 @@ import About from "./components/pages/About";
 import Suggest from "./components/pages/Suggest";
 import RequestService from "./components/pages/RequestService";
 import WaterSupplyRequestPage from "./components/pages/WaterSupplyRequestPage";
-import SignIn from "./components/pages/Auth/SignIn";
-import SignUp from "./components/pages/Auth/SignUp";
+const SignIn = lazy(() => import("./components/pages/Auth/SignIn"));
+const SignUp = lazy(() => import("./components/pages/Auth/SignUp"));
+const SetPasswordPage = lazy(() => import("./components/pages/Auth/SetPasswordPage"));
+const ForgotPasswordPage = lazy(() => import("./components/pages/Auth/ForgotPasswordPage"));
 
 // Code-split heavy portals
 const UserMain = lazy(() => import("./components/pages/user/Main"));
 const UserTasks = lazy(() => import("./components/pages/user/Task"));
+const UserMyPlanTasks = lazy(() => import("./components/pages/user/MyPlanTasks"));
 const UserSettings = lazy(() => import("./components/pages/user/Setting"));
-const PersonalInfo = lazy(() => import("./components/pages/user/PersonalInfo"));
 
 const AdminMain = lazy(() => import("./components/pages/admin/main"));
 const UsersAdmin = lazy(() => import("./components/pages/admin/UsersAdmin"));
@@ -54,6 +56,7 @@ const PlatformProjects = lazy(() => import("./components/pages/admin/PlatformPro
 const ProjectSponsorshipsAdmin = lazy(() => import("./components/pages/admin/ProjectSponsorshipsAdmin"));
 const MapsAdmin = lazy(() => import("./components/pages/admin/MapsAdmin"));
 const PlatformSettingsPage = lazy(() => import("./components/pages/admin/PlatformSettings"));
+const BroadcastAdmin = lazy(() => import("./components/pages/admin/BroadcastAdmin"));
 const RolesAdmin = lazy(() => import("./components/pages/admin/RolesAdmin"));
 const ActivityLogAdmin = lazy(() => import("./components/pages/admin/ActivityLogAdmin"));
 const ProjectTypesAdmin = lazy(() => import("./components/pages/admin/ProjectTypesAdmin"));
@@ -123,15 +126,18 @@ function AppContent() {
           <Route path="/suggest" element={<Suggest />} />
           <Route path="/request-service" element={<RequestService />} />
           <Route path="/services/water-supply" element={<WaterSupplyRequestPage />} />
-          <Route path="/signin" element={<SignIn />} />
-          <Route path="/signup" element={<SignUp />} />
+          <Route path="/signin" element={<Lazy><SignIn /></Lazy>} />
+          <Route path="/signup" element={<Lazy><SignUp /></Lazy>} />
+          <Route path="/forgot-password" element={<Lazy><ForgotPasswordPage /></Lazy>} />
+          <Route path="/set-password/:token" element={<Lazy><SetPasswordPage /></Lazy>} />
           <Route path="/403" element={<ForbiddenPage />} />
           <Route path="/404" element={<NotFoundPage />} />
 
           <Route path="/user/main" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserMain /></ProtectedRoute></Lazy>} />
           <Route path="/user/tasks" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserTasks /></ProtectedRoute></Lazy>} />
+          <Route path="/user/my-tasks" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserMyPlanTasks /></ProtectedRoute></Lazy>} />
           <Route path="/user/settings" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserSettings /></ProtectedRoute></Lazy>} />
-          <Route path="/user/personal-info" element={<Lazy><ProtectedRoute requiredRole="authenticated"><PersonalInfo /></ProtectedRoute></Lazy>} />
+          <Route path="/user/personal-info" element={<Navigate to="/user/settings" replace />} />
 
           {/* —— لوحة الإدارة بنطاقات العمل —— */}
           <Route path="/Admin" element={<Lazy><ProtectedRoute requiredRole="admin"><AdminMain /></ProtectedRoute></Lazy>} />
@@ -167,6 +173,7 @@ function AppContent() {
 
           {/* 9. إعدادات المنصّة */}
           <Route path="/Admin/settings" element={<Lazy><ProtectedRoute requiredRole="admin"><PlatformSettingsPage /></ProtectedRoute></Lazy>} />
+          <Route path="/Admin/settings/broadcast" element={<Lazy><ProtectedRoute requiredRole="admin"><BroadcastAdmin /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/settings/roles" element={<Lazy><ProtectedRoute requiredRole="admin"><RolesAdmin /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/settings/activity" element={<Lazy><ProtectedRoute requiredRole="admin"><ActivityLogAdmin /></ProtectedRoute></Lazy>} />
           <Route path="/Admin/settings/project-types" element={<Lazy><ProtectedRoute requiredRole="admin"><ProjectTypesAdmin /></ProtectedRoute></Lazy>} />

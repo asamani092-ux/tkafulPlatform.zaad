@@ -28,7 +28,9 @@ PUBLIC_SETTING_KEYS = (
     "sponsorship_collect_donor_data",
 )
 
-ADMIN_SETTING_KEYS = PUBLIC_SETTING_KEYS
+ADMIN_ONLY_SETTING_KEYS = ("mail_from_email",)
+
+ADMIN_SETTING_KEYS = PUBLIC_SETTING_KEYS + ADMIN_ONLY_SETTING_KEYS
 
 DONOR_DATA_VALUES = {
     PlatformSetting.DONOR_DATA_NONE,
@@ -37,8 +39,9 @@ DONOR_DATA_VALUES = {
 }
 
 
-def settings_to_dict(obj: PlatformSetting) -> dict:
-    data = {k: getattr(obj, k) for k in ADMIN_SETTING_KEYS}
+def settings_to_dict(obj: PlatformSetting, *, admin: bool = True) -> dict:
+    keys = ADMIN_SETTING_KEYS if admin else PUBLIC_SETTING_KEYS
+    data = {k: getattr(obj, k) for k in keys}
     roles = data.get("roles_can_login") or {}
     if not isinstance(roles, dict) or not roles:
         data["roles_can_login"] = default_roles_can_login()
@@ -48,13 +51,18 @@ def settings_to_dict(obj: PlatformSetting) -> dict:
             if key in merged:
                 merged[key] = bool(val)
         data["roles_can_login"] = merged
+    if admin:
+        from core.email_rtl import ensure_mail_from_email, smtp_host_user
+
+        data["mail_from_email"] = ensure_mail_from_email() or data.get("mail_from_email") or ""
+        data["smtp_host_user"] = smtp_host_user()
     return data
 
 
 def public_payload() -> dict:
     obj = PlatformSetting.load()
     pages = StaticPage.objects.filter(is_published=True).values("slug", "title", "body")
-    data = settings_to_dict(obj)
+    data = settings_to_dict(obj, admin=False)
     data["pages"] = list(pages)
     return data
 
@@ -127,6 +135,11 @@ def apply_settings_patch(data: dict) -> PlatformSetting:
                 {"sponsorship_collect_donor_data": "قيمة غير صالحة"}
             )
         obj.sponsorship_collect_donor_data = policy
+    if "mail_from_email" in data:
+        mail_from = str(data["mail_from_email"] or "").strip()
+        if mail_from:
+            EmailValidator(message="بريد المرسل غير صالح")(mail_from)
+        obj.mail_from_email = mail_from
     obj.full_clean()
     obj.save()
     from .runtime_config import clear_runtime_config_cache

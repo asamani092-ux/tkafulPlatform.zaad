@@ -21,6 +21,12 @@ import { extractErrorDetail } from "../../../admin/userManagement";
 
 type FlagKey = "show_map" | "show_services" | "show_volunteering";
 
+/** إعدادات المشرف — تتضمن بريد المرسل (غير عام). */
+type AdminSettingsForm = PublicPlatformSettings & {
+  mail_from_email?: string;
+  smtp_host_user?: string;
+};
+
 interface StaticPageRow {
   id: number;
   slug: string;
@@ -33,7 +39,7 @@ export default function PlatformSettingsPage() {
   const toast = useToast();
   const { applyPublicSettings } = usePlatformSettings();
   const [tab, setTab] = useState("general");
-  const [form, setForm] = useState<PublicPlatformSettings | null>(null);
+  const [form, setForm] = useState<AdminSettingsForm | null>(null);
   const [twitter, setTwitter] = useState("");
   const [instagram, setInstagram] = useState("");
   const [loading, setLoading] = useState(true);
@@ -81,6 +87,7 @@ export default function PlatformSettingsPage() {
           sponsorship_payments_enabled: form.sponsorship_payments_enabled,
           sponsorship_gps_documentation: form.sponsorship_gps_documentation,
           sponsorship_collect_donor_data: form.sponsorship_collect_donor_data,
+          mail_from_email: form.mail_from_email || "",
         }),
       });
       if (!res.ok) {
@@ -89,7 +96,21 @@ export default function PlatformSettingsPage() {
       }
       const data = await res.json();
       setForm({ ...form, ...data });
-      applyPublicSettings(data);
+      applyPublicSettings({
+        platform_name: data.platform_name,
+        logo_url: data.logo_url,
+        contact_email: data.contact_email,
+        contact_phone: data.contact_phone,
+        address: data.address,
+        social_links: data.social_links,
+        show_map: data.show_map,
+        show_services: data.show_services,
+        show_volunteering: data.show_volunteering,
+        sponsorship_payments_enabled: data.sponsorship_payments_enabled,
+        sponsorship_gps_documentation: data.sponsorship_gps_documentation,
+        sponsorship_collect_donor_data: data.sponsorship_collect_donor_data,
+        roles_can_login: data.roles_can_login,
+      });
       toast.success({ title: "تم حفظ إعدادات المنصّة" });
     } finally {
       setSaving(false);
@@ -138,14 +159,37 @@ export default function PlatformSettingsPage() {
             </div>
           </Card>
           <Card>
-            <h2 className="mb-3 text-lg font-bold text-primary">التواصل</h2>
+            <h2 className="mb-1 text-lg font-bold text-primary">لوحة المعلومات (الواجهة العامة)</h2>
+            <p className="mb-3 text-sm text-brand-gray">
+              تظهر في التذييل وصفحة التواصل للزوّار — ليست بريد إرسال الإشعارات.
+            </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Input label="البريد" dir="ltr" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} />
+              <Input label="بريد التواصل المعروض" dir="ltr" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} />
               <Input label="الهاتف" dir="ltr" value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} />
               <Input label="العنوان" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
               <Input label="تويتر (https)" dir="ltr" value={twitter} onChange={(e) => setTwitter(e.target.value)} />
               <Input label="إنستغرام (https)" dir="ltr" value={instagram} onChange={(e) => setInstagram(e.target.value)} />
             </div>
+          </Card>
+          <Card>
+            <h2 className="mb-1 text-lg font-bold text-primary">البريد الرسمي (إرسال الإشعارات)</h2>
+            <p className="mb-3 text-sm text-brand-gray">
+              عنوان المرسل (From) لكل رسائل المنصة: اعتمادات، دعوات، تعميم، تجربة SMTP.
+            </p>
+            <Input
+              label="بريد المرسل الرسمي"
+              dir="ltr"
+              value={(form as AdminSettingsForm).mail_from_email || ""}
+              onChange={(e) => setForm({ ...form, mail_from_email: e.target.value } as AdminSettingsForm)}
+              placeholder="tkaful@alzaad.org.sa"
+            />
+            <p className="mt-2 text-sm text-brand-gray">
+              يجب أن يساوي صندوق أوتلوك في SMTP
+              {(form as AdminSettingsForm).smtp_host_user
+                ? ` (${(form as AdminSettingsForm).smtp_host_user})`
+                : ""}
+              .
+            </p>
           </Card>
           <Card>
             <h2 className="mb-3 text-lg font-bold text-primary">أدوات عامة</h2>

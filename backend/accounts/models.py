@@ -93,3 +93,20 @@ class EmailOTP(models.Model):
 
     def __str__(self):
         return f"{self.email}:{self.purpose}"
+
+
+class PasswordInviteToken(models.Model):
+    """دعوة تعيين كلمة مرور لمرة واحدة — O(1) بالتوكن."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="password_invites")
+    token = models.CharField(max_length=64, unique=True, db_index=True)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["user", "-created_at"])]
+
+    def __str__(self):
+        return f"invite:{self.user_id}"

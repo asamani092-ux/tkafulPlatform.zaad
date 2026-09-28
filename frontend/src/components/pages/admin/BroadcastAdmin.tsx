@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
@@ -7,20 +8,47 @@ import Select from "../../ui/Select";
 import Button from "../../ui/Button";
 import { useToast } from "../../../contexts/ToastContext";
 import { authFetch } from "../../../lib/api";
-import { ROLE_OPTIONS } from "../../../i18n/labels";
 import { extractErrorDetail } from "../../../admin/userManagement";
 import { notificationTypeLabel } from "../../../admin/notifications";
 
 const TYPES = ["info", "success", "warning", "action"];
 
-/** بث إشعار داخل المنصّة لدور أو للجميع. */
+const AUDIENCE = [
+  { value: "", label: "جميع المستخدمين" },
+  { value: "employee", label: "الموظفون" },
+  { value: "user", label: "المتطوعون" },
+];
+
+/** تعميم داخلي — إشعار منصة أو بريد RTL مع فلترة المستلمين. */
 export default function BroadcastAdmin() {
   const toast = useToast();
   const [message, setMessage] = useState("");
   const [role, setRole] = useState("");
+  const [channel, setChannel] = useState<"in_app" | "email">("in_app");
   const [kind, setKind] = useState("info");
   const [link, setLink] = useState("");
+  const [subject, setSubject] = useState("");
+  const [mailFrom, setMailFrom] = useState("");
+  const [testTo, setTestTo] = useState("");
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
+
+  useEffect(() => {
+    authFetch("/api/settings/")
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const from = (data.mail_from_email || data.smtp_host_user || "").trim();
+        setMailFrom(from);
+      })
+      .catch(() => {});
+    authFetch("/api/accounts/me/")
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((me) => {
+        if (me?.email) setTestTo(String(me.email));
+      })
+      .catch(() => {});
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,25 +56,40 @@ export default function BroadcastAdmin() {
       toast.error({ title: "الرسالة مطلوبة" });
       return;
     }
+    if (channel === "email" && !mailFrom.trim()) {
+      toast.error({
+        title: "بريد المرسل غير مضبوط",
+        description: "اضبط البريد الرسمي من إعدادات المنصّة أولاً",
+      });
+      return;
+    }
     setBusy(true);
     try {
       const body: Record<string, string> = {
         message: message.trim(),
+        channel,
         notification_type: kind,
         link: link.trim(),
       };
       if (role) body.role = role;
+      if (channel === "email" && subject.trim()) body.subject = subject.trim();
+      if (channel === "email") body.from_email = mailFrom.trim();
       const res = await authFetch("/api/notifications/broadcast/", {
         method: "POST",
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error({ title: "تعذّر البث", description: extractErrorDetail(data) });
+        toast.error({ title: "تعذّر التعميم", description: extractErrorDetail(data) });
       } else {
-        toast.success({ title: "تم إرسال الإشعار", description: `أُرسل إلى ${data.sent ?? 0} مستلم` });
+        const via = channel === "email" ? "بريداً" : "إشعاراً داخل المنصة";
+        toast.success({
+          title: "تم إرسال التعميم",
+          description: `أُرسل ${via} إلى ${data.sent ?? 0} مستلم`,
+        });
         setMessage("");
         setLink("");
+        setSubject("");
       }
     } catch {
       toast.error({ title: "خطأ في الاتصال" });
@@ -55,11 +98,73 @@ export default function BroadcastAdmin() {
     }
   };
 
+  const sendTestEmail = async () => {
+    if (!testTo.trim()) {
+      toast.error({ title: "أدخل بريد المستلم للتجربة" });
+      return;
+    }
+    setTesting(true);
+    try {
+      const payload: Record<string, string> = { to_email: testTo.trim() };
+      if (mailFrom.trim()) payload.from_email = mailFrom.trim();
+      const res = await authFetch("/api/notifications/test-email/", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error({ title: "فشل البريد التجريبي", description: extractErrorDetail(data) || data.detail });
+      } else {
+        toast.success({ title: "أُرسل البريد التجريبي", description: data.detail });
+      }
+    } catch {
+      toast.error({ title: "خطأ في الاتصال" });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   return (
     <AdminShell>
-      <h1 className="mb-4 text-2xl font-bold text-primary">بث إشعار</h1>
+      <h1 className="mb-4 text-2xl font-bold text-primary">التعميم الداخلي</h1>
       <Card>
         <form onSubmit={(e) => void submit(e)} className="max-w-lg space-y-4">
+          <Select label="المستلمون" value={role} onChange={(e) => setRole(e.target.value)}>
+            {AUDIENCE.map((o) => (
+              <option key={o.value || "all"} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+          <Select
+            label="طريقة الإرسال"
+            value={channel}
+            onChange={(e) => setChannel(e.target.value as "in_app" | "email")}
+          >
+            <option value="in_app">إشعار في المنصة فقط</option>
+            <option value="email">عبر البريد</option>
+          </Select>
+          {channel === "email" && (
+            <>
+              <div className="rounded-lg border border-surface-border bg-surface-muted/40 px-3 py-2 text-sm">
+                <div className="font-semibold text-primary">يُرسل من (البريد الرسمي)</div>
+                <div dir="ltr" className="mt-1 text-brand-gray">
+                  {mailFrom || "غير مضبوط — "}
+                  {!mailFrom && (
+                    <Link to="/Admin/settings" className="text-primary underline">
+                      إعدادات المنصّة
+                    </Link>
+                  )}
+                </div>
+              </div>
+              <Input
+                label="موضوع البريد (اختياري)"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="تعميم من منصة تكافل وأثر"
+              />
+            </>
+          )}
           <Textarea
             label="الرسالة"
             rows={4}
@@ -67,21 +172,58 @@ export default function BroadcastAdmin() {
             onChange={(e) => setMessage(e.target.value)}
             required
           />
-          <Select label="المستلمون" value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="">الجميع</option>
-            {ROLE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </Select>
-          <Select label="النوع" value={kind} onChange={(e) => setKind(e.target.value)}>
-            {TYPES.map((t) => (
-              <option key={t} value={t}>{notificationTypeLabel(t)}</option>
-            ))}
-          </Select>
-          <Input label="رابط اختياري" dir="ltr" value={link} onChange={(e) => setLink(e.target.value)} placeholder="/Admin/requests" />
-          <Button type="submit" disabled={busy}>{busy ? "جاري الإرسال…" : "إرسال"}</Button>
+          {channel === "in_app" && (
+            <>
+              <Select label="النوع" value={kind} onChange={(e) => setKind(e.target.value)}>
+                {TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {notificationTypeLabel(t)}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                label="رابط اختياري"
+                dir="ltr"
+                value={link}
+                onChange={(e) => setLink(e.target.value)}
+                placeholder="/Admin/requests"
+              />
+            </>
+          )}
+          <Button type="submit" disabled={busy}>
+            {busy ? "جاري الإرسال…" : "إرسال التعميم"}
+          </Button>
         </form>
       </Card>
+
+      <div className="mt-4 max-w-lg">
+        <Card>
+          <h2 className="mb-1 text-lg font-bold text-primary">تجربة البريد</h2>
+          <p className="mb-3 text-sm text-brand-gray">
+            يُرسل من البريد الرسمي إلى العنوان الذي تحدّده أدناه للتحقق من SMTP.
+          </p>
+          <div className="mb-3 rounded-lg border border-surface-border bg-surface-muted/40 px-3 py-2 text-sm">
+            <div className="font-semibold text-primary">المرسل (From)</div>
+            <div dir="ltr" className="mt-1 text-brand-gray">
+              {mailFrom || "غير مضبوط في إعدادات المنصّة"}
+            </div>
+          </div>
+          <Input
+            label="أرسل التجربة إلى"
+            dir="ltr"
+            type="email"
+            value={testTo}
+            onChange={(e) => setTestTo(e.target.value)}
+            placeholder="you@example.com"
+            required
+          />
+          <div className="mt-3">
+            <Button type="button" variant="secondary" disabled={testing} onClick={() => void sendTestEmail()}>
+              {testing ? "جاري الإرسال…" : "إرسال بريد تجريبي"}
+            </Button>
+          </div>
+        </Card>
+      </div>
     </AdminShell>
   );
 }

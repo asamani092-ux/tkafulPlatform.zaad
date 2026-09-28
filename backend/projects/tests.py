@@ -66,9 +66,29 @@ class ProjectMemberPermissionTests(APITestCase):
 
     def test_only_super_admin_deletes_projects(self):
         self.client.force_authenticate(self.pa)
-        res = self.client.delete(f"/api/platform/projects/{self.project.id}/")
+        res = self.client.delete(f"/api/platform/projects/{self.project.id}/", {"reason": "تجربة"}, format="json")
         self.assertEqual(res.status_code, 403)
         self.assertTrue(Project.objects.filter(pk=self.project.pk).exists())
+
+    def test_delete_requires_reason_and_empty_project(self):
+        self.client.force_authenticate(self.super_admin)
+        no_reason = self.client.delete(f"/api/platform/projects/{self.project.id}/", {}, format="json")
+        self.assertEqual(no_reason.status_code, 400, no_reason.content)
+        blocked = self.client.delete(
+            f"/api/platform/projects/{self.project.id}/",
+            {"reason": "تنظيف"},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, 400, blocked.content)
+        self.assertTrue(blocked.data.get("blockers"))
+        ProjectMember.objects.filter(project=self.project).delete()
+        ok = self.client.delete(
+            f"/api/platform/projects/{self.project.id}/",
+            {"reason": "مشروع تجريبي فارغ"},
+            format="json",
+        )
+        self.assertEqual(ok.status_code, 204, getattr(ok, "content", b""))
+        self.assertFalse(Project.objects.filter(pk=self.project.pk).exists())
 
     def test_project_admin_can_add_member_viewer_cannot(self):
         newbie = make_user("newbie")
@@ -193,3 +213,35 @@ class HomeFeaturedProjectsTests(APITestCase):
         self.assertEqual(res.status_code, 200)
         slugs = [p["slug"] for p in res.json()]
         self.assertEqual(slugs, ["feat-a", "feat-b"])
+
+
+class OverviewStatsTests(APITestCase):
+    def setUp(self):
+        from accounts.models import Profile
+        self.admin = User.objects.create_user("ov_admin", email="ov_admin@t.local", password="pass12345")
+        self.admin.profile.role = "admin"
+        self.admin.profile.save()
+        self.member = User.objects.create_user("ov_emp", email="ov_emp@t.local", password="pass12345")
+        self.member.profile.role = "employee"
+        self.member.profile.save()
+
+    def test_overview_stats_admin_only_and_counts(self):
+        Project.objects.create(name="نشط", slug="ov-active", status="active", is_active=True)
+        Project.objects.create(name="مسودة", slug="ov-draft", status="draft", is_active=True)
+        self.client.force_authenticate(self.member)
+        denied = self.client.get("/api/platform/overview-stats/")
+        self.assertEqual(denied.status_code, 403)
+        self.client.force_authenticate(self.admin)
+        res = self.client.get("/api/platform/overview-stats/")
+        self.assertEqual(res.status_code, 200)
+        self.assertGreaterEqual(res.data["projects_active"], 1)
+        self.assertGreaterEqual(res.data["projects_draft"], 1)
+        for key in (
+            "dossiers_in_progress",
+            "activities_delayed",
+            "tasks_assigned_open",
+            "volunteers_approved",
+            "sponsorships_active",
+            "pending_ops",
+        ):
+            self.assertIn(key, res.data)

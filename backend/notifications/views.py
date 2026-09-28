@@ -74,30 +74,126 @@ def send_notification(request):
 @permission_classes([IsAdmin])
 @throttle_classes([BroadcastRateThrottle])
 def broadcast(request):
-    """POST /api/notifications/broadcast/ — إلى دور أو الجميع."""
+    """POST /api/notifications/broadcast/ — منصة أو بريد حسب channel."""
     message = (request.data.get("message") or "").strip()
     if not message:
         return Response({"detail": "الرسالة مطلوبة"}, status=status.HTTP_400_BAD_REQUEST)
-    role = request.data.get("role")
-    roles = [role] if role else None
-    users = None
-    if not role:
-        users = list(User.objects.filter(is_active=True))
-    n = notify(
-        message=message,
-        users=users,
-        roles=roles,
-        notification_type=request.data.get("notification_type", "info"),
-        link=request.data.get("link", ""),
-        event_type=EVENT_BROADCAST,
-    )
+    channel = (request.data.get("channel") or "in_app").strip().lower()
+    if channel not in ("in_app", "email"):
+        return Response(
+            {"detail": "طريقة الإرسال: إشعار في المنصة أو عبر البريد"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    role = (request.data.get("role") or "").strip() or None
+    if role and role not in ("employee", "user"):
+        return Response(
+            {"detail": "فلتر المستلمين: الجميع أو employee أو user"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if role:
+        recipients = list(
+            User.objects.filter(is_active=True, profile__role=role).select_related("profile")
+        )
+    else:
+        recipients = list(User.objects.filter(is_active=True).select_related("profile"))
+
+    if channel == "in_app":
+        n = notify(
+            message=message,
+            users=recipients,
+            notification_type=request.data.get("notification_type", "info"),
+            link=request.data.get("link", ""),
+            event_type=EVENT_BROADCAST,
+        )
+        log_activity(
+            actor=request.user,
+            action=ACTION_BROADCAST,
+            summary="تعميم داخلي (إشعار منصة)",
+            request=request,
+        )
+        return Response({"success": True, "sent": n, "channel": channel}, status=status.HTTP_201_CREATED)
+
+    # channel == email — بريد RTL فقط بدون إشعار داخل المنصة
+    from core.email_rtl import MailFromMismatchError, resolve_from_email, send_rtl_email
+
+    subject = (request.data.get("subject") or "").strip() or "تعميم من منصة تكافل وأثر"
+    from_email = (request.data.get("from_email") or "").strip() or None
+    try:
+        resolve_from_email(from_email)
+    except MailFromMismatchError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    sent = 0
+    for u in recipients:
+        email = (u.email or "").strip()
+        if not email:
+            continue
+        try:
+            if send_rtl_email(
+                subject=subject,
+                body=message,
+                to=email,
+                fail_silently=True,
+                from_email=from_email,
+            ):
+                sent += 1
+        except Exception:
+            continue
     log_activity(
         actor=request.user,
         action=ACTION_BROADCAST,
-        summary="بث إشعار داخل المنصّة",
+        summary=f"تعميم داخلي (بريد) إلى {sent} مستلم",
         request=request,
     )
-    return Response({"success": True, "sent": n}, status=status.HTTP_201_CREATED)
+    return Response({"success": True, "sent": sent, "channel": channel}, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([IsAdmin])
+def test_email(request):
+    """POST /api/notifications/test-email/ — تجربة إرسال بريد RTL إلى عنوان يحدّده المشرف."""
+    from core.email_rtl import MailFromMismatchError, send_rtl_email, smtp_error_to_ar
+    import re
+
+    to = (request.data.get("to_email") or request.data.get("to") or "").strip()
+    if not to:
+        to = (request.user.email or "").strip()
+    if not to or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", to):
+        return Response(
+            {"detail": "أدخل بريداً صالحاً لإرسال التجربة إليه"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    from_email = (request.data.get("from_email") or "").strip() or None
+    subject = "تجربة بريد — منصة تكافل وأثر"
+    body = (
+        "السلام عليكم,\n\n"
+        "هذه رسالة تجريبية للتأكد من عمل البريد الرسمي للمنصة.\n"
+        "إن وصلتك الرسالة فإعدادات SMTP تعمل بشكل صحيح.\n\n"
+        "مع تحيات منصة تكافل وأثر"
+    )
+    try:
+        ok = send_rtl_email(
+            subject=subject,
+            body=body,
+            to=to,
+            fail_silently=False,
+            from_email=from_email,
+        )
+    except MailFromMismatchError as exc:
+        return Response({"success": False, "detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as exc:
+        return Response(
+            {"success": False, "detail": smtp_error_to_ar(exc)},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+    if not ok:
+        return Response(
+            {"success": False, "detail": "تعذّر إرسال البريد"},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+    return Response({"success": True, "detail": f"أُرسلت رسالة تجريبية إلى {to}"})
+
 
 
 @api_view(["POST"])

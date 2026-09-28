@@ -163,9 +163,105 @@ class NotificationCenterTests(APITestCase):
         res = self.client.post("/api/notifications/broadcast/", {"message": "تنبيه"}, format="json")
         self.assertEqual(res.status_code, 403)
         self.client.force_authenticate(self.admin)
-        res = self.client.post("/api/notifications/broadcast/", {"message": "تنبيه", "role": "user"}, format="json")
+        res = self.client.post(
+            "/api/notifications/broadcast/",
+            {"message": "تنبيه", "role": "user", "channel": "in_app"},
+            format="json",
+        )
         self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data.get("channel"), "in_app")
         self.assertTrue(Notification.objects.filter(user=self.vol, event_type="broadcast").exists())
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_broadcast_email_channel_no_in_app(self):
+        from django.core import mail
+
+        staff = make_user("emp@x.com", "employee")
+        self.client.force_authenticate(self.admin)
+        before = Notification.objects.count()
+        res = self.client.post(
+            "/api/notifications/broadcast/",
+            {"message": "تعميم بريد", "role": "employee", "channel": "email", "subject": "عنوان"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertEqual(res.data["channel"], "email")
+        self.assertGreaterEqual(res.data["sent"], 1)
+        self.assertEqual(Notification.objects.count(), before)
+        self.assertTrue(any(staff.email in m.to for m in mail.outbox))
+        html = mail.outbox[-1].alternatives[0][0]
+        self.assertIn('dir="rtl"', html)
+        self.assertIn("تعميم بريد", html)
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_test_email_endpoint(self):
+        from django.core import mail
+
+        self.client.force_authenticate(self.admin)
+        res = self.client.post("/api/notifications/test-email/", {}, format="json")
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertTrue(res.data["success"])
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.admin.email, mail.outbox[0].to)
+        self.assertIn('dir="rtl"', mail.outbox[0].alternatives[0][0])
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_test_email_to_explicit_recipient(self):
+        from django.core import mail
+
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/notifications/test-email/",
+            {"to_email": "recipient@example.com"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(mail.outbox[0].to, ["recipient@example.com"])
+        self.assertIn("recipient@example.com", res.data["detail"])
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_test_email_rejects_bad_to(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/notifications/test-email/",
+            {"to_email": "not-an-email"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("بريداً", res.data["detail"])
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        EMAIL_HOST_USER="tkaful@alzaad.org.sa",
+        DEFAULT_FROM_EMAIL="td@alzaad.org.sa",
+    )
+    def test_test_email_rejects_from_mismatch_arabic(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/notifications/test-email/",
+            {"from_email": "td@alzaad.org.sa"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("SMTP", res.data["detail"])
+        self.assertNotIn("SendAsDenied", str(res.data))
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        EMAIL_HOST_USER="tkaful@alzaad.org.sa",
+        DEFAULT_FROM_EMAIL="tkaful@alzaad.org.sa",
+    )
+    def test_test_email_accepts_matching_from(self):
+        from django.core import mail
+
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/notifications/test-email/",
+            {"from_email": "tkaful@alzaad.org.sa"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(mail.outbox[0].from_email, "tkaful@alzaad.org.sa")
 
     def test_cannot_mark_another_users_notification(self):
         n = Notification.objects.create(user=self.admin, message="خاص")

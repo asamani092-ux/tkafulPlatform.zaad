@@ -52,7 +52,7 @@ export interface DossierSchema {
 
 export interface DossierSectionRow {
   id: number;
-  kind: "card" | "document" | "closure";
+  kind: "card" | "document" | "plan" | "closure";
   key: string;
   data: Record<string, unknown>;
   status: string;
@@ -88,6 +88,10 @@ export interface ProjectDossier {
   projects_committee_name: string;
   sponsor_name: string;
   sponsor_email: string;
+  sponsor?: number | null;
+  approver?: number | null;
+  approver_name?: string;
+  approver_email?: string;
   execution_start?: string | null;
   execution_end?: string | null;
   manager: number | null;
@@ -110,6 +114,7 @@ export interface ProjectDossier {
     needs_approval: boolean;
   }>;
   bypass_workspace_gates?: boolean;
+  can_approve?: boolean;
 }
 
 export interface StageActivity {
@@ -119,8 +124,14 @@ export interface StageActivity {
   parent: number | null;
   title: string;
   responsible: string;
+  responsible_user?: number | null;
+  responsible_user_name?: string;
+  project_name?: string;
+  project_slug?: string;
+  stage_key?: string;
   start_date: string | null;
   end_date: string | null;
+  executed_weeks?: string[];
   manual_status: string;
   auto_status: string;
   progress_pct: number;
@@ -130,7 +141,15 @@ export interface StageActivity {
   notes: string;
   risks: string;
   sort_order: number;
+  source?: string;
+  locked?: boolean;
 }
+
+export type TeamMemberOption = {
+  user_id: number;
+  name: string;
+  email?: string;
+};
 
 export const STAGE_STATUS_AR: Record<string, string> = {
   locked: "مقفلة",

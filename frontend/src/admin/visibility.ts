@@ -1,6 +1,7 @@
 import type { AdminDomain } from "./domains";
 
-const ORG_STAFF_ROLES = new Set(["admin", "manager", "employee"]);
+/** من يرى نطاق «الكادر» بدون أن يكون مشرفاً عاماً. */
+const STAFF_DOMAIN_ROLES = new Set(["manager"]);
 
 /** O(D) — D عدد نطاقات الإدارة. */
 export function visibleAdminDomains(
@@ -13,14 +14,13 @@ export function visibleAdminDomains(
   },
 ): AdminDomain[] {
   const { isGlobalAdmin, userRole, projectTools, hasMemberships } = ctx;
-  const isOrgStaff = ORG_STAFF_ROLES.has(userRole);
+  const canSeeStaffDomain = STAFF_DOMAIN_ROLES.has(userRole);
 
   return domains.filter((d) => {
     if (isGlobalAdmin) return true;
     if (d.superAdminOnly) return false;
-    // الكادر التشغيلي يرى نطاق الكادر (+ المشاريع/الخرائط إن وُجدت عضوية لاحقاً عبر الفلاتر أدناه)
-    if (d.id === "staff") return isOrgStaff;
-    if (isOrgStaff && !hasMemberships) return false;
+    // نطاق الكادر: المدير فقط حالياً (الموظف يرى مشاريعه فقط)
+    if (d.id === "staff") return canSeeStaffDomain;
     if (!hasMemberships) return false;
     if (d.id === "projects") return true;
     if (d.id === "maps") return projectTools.has("map");

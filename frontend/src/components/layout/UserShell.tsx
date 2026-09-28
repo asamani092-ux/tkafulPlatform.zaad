@@ -1,14 +1,14 @@
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Home, ListTodo, User, Settings, LogOut, Menu, X } from "lucide-react";
+import { Home, ListTodo, Settings, LogOut, Menu, X } from "lucide-react";
 import NotificationBell from "./NotificationBell";
 import { useAuth } from "../../contexts/AuthContext";
 import { useEffect, useState } from "react";
 
 const links = [
   { to: "/user/main", label: "الرئيسية", icon: Home },
-  { to: "/user/tasks", label: "مهامي", icon: ListTodo },
-  { to: "/user/personal-info", label: "معلوماتي", icon: User },
+  { to: "/user/tasks", label: "مهام التطوع", icon: ListTodo },
+  { to: "/user/my-tasks", label: "مهام المشاريع", icon: ListTodo },
   { to: "/user/settings", label: "الإعدادات", icon: Settings },
 ];
 

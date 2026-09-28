@@ -6,13 +6,14 @@ import Button from "../../ui/Button";
 import Input from "../../ui/Input";
 import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { useToast } from "../../../contexts/ToastContext";
+import { useMembershipsContext } from "../../../contexts/MembershipsContext";
 import { authFetch } from "../../../lib/api";
 import SectionRenderer from "../../dossier/SectionRenderer";
 import StageBar from "../../dossier/StageBar";
 import ActivitiesPanel from "../../dossier/ActivitiesPanel";
 import DossierDashboard from "../../dossier/DossierDashboard";
 import ClosureComparison from "../../dossier/ClosureComparison";
-import CardTab, { type CardScalars } from "../../dossier/CardTab";
+import CardTab, { UserPick, type CardScalars, type UserOption } from "../../dossier/CardTab";
 import DocumentTab from "../../dossier/DocumentTab";
 import DossierInfoPage, { type InfoPagePayload } from "../../dossier/DossierInfoPage";
 import {
@@ -23,12 +24,14 @@ import {
   type StageActivity,
 } from "../../dossier/types";
 import { downloadDossierPdf, type ExportPayload } from "../../../utils/dossierPdf";
+import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
 type Tab = "card" | "document" | "plan" | "closure" | "board" | "info";
 
 export default function ProjectDossierWorkspace() {
   const { slug } = useParams();
   const toast = useToast();
+  const { reloadMemberships } = useMembershipsContext();
   const [tab, setTab] = useState<Tab>("card");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -72,14 +75,66 @@ export default function ProjectDossierWorkspace() {
     execution_start: "",
     execution_end: "",
     location: "",
+    sponsor_id: null,
     sponsor_name: "",
     sponsor_email: "",
+    approver_id: null,
+    approver_name: "",
+    approver_email: "",
   });
+  const [users, setUsers] = useState<UserOption[]>([]);
 
-  const load = useCallback(async () => {
+  const teamMembers = useMemo(() => {
+    const data =
+      sectionDrafts["document:team"] ||
+      dossier?.sections.find((s) => s.kind === "document" && s.key === "team")?.data ||
+      {};
+    const rows = Array.isArray((data as { rows?: unknown }).rows)
+      ? ((data as { rows: Array<Record<string, unknown>> }).rows)
+      : [];
+    const out: Array<{ user_id: number; name: string; email?: string }> = [];
+    for (const row of rows) {
+      const uid = Number(row.user_id);
+      if (!uid) continue;
+      out.push({
+        user_id: uid,
+        name: String(row.name || row.email || uid),
+        email: row.email ? String(row.email) : "",
+      });
+    }
+    return out;
+  }, [sectionDrafts, dossier]);
+
+  const absorbDossier = useCallback((d: ProjectDossier) => {
+    setDossier(d);
+    setCard({
+      marketing_name: d.marketing_name || "",
+      department: d.department || "",
+      section: d.section || "",
+      strategic_goal: d.strategic_goal || "",
+      execution_start: d.execution_start || "",
+      execution_end: d.execution_end || "",
+      location: d.location || "",
+      sponsor_id: d.sponsor ?? null,
+      sponsor_name: d.sponsor_name || "",
+      sponsor_email: d.sponsor_email || "",
+      approver_id: d.approver ?? null,
+      approver_name: d.approver_name || "",
+      approver_email: d.approver_email || "",
+    });
+    const drafts: Record<string, Record<string, unknown>> = {};
+    d.sections.forEach((s) => {
+      drafts[`${s.kind}:${s.key}`] = { ...(s.data || {}) };
+    });
+    setSectionDrafts(drafts);
+  }, []);
+
+  const load = useCallback(async (mode: AdminLoadMode = "initial") => {
     if (!slug) return;
-    setLoading(true);
-    setError(false);
+    if (shouldFlipPageLoading(mode)) {
+      setLoading(true);
+      setError(false);
+    }
     try {
       const [schemaRes, byRes, projRes] = await Promise.all([
         authFetch("/api/projectdocs/schema/"),
@@ -103,23 +158,7 @@ export default function ProjectDossierWorkspace() {
       }
       if (!byRes.ok) throw new Error("fail");
       const d: ProjectDossier = await byRes.json();
-      setDossier(d);
-      setCard({
-        marketing_name: d.marketing_name || "",
-        department: d.department || "",
-        section: d.section || "",
-        strategic_goal: d.strategic_goal || "",
-        execution_start: d.execution_start || "",
-        execution_end: d.execution_end || "",
-        location: d.location || "",
-        sponsor_name: d.sponsor_name || "",
-        sponsor_email: d.sponsor_email || "",
-      });
-      const drafts: Record<string, Record<string, unknown>> = {};
-      d.sections.forEach((s) => {
-        drafts[`${s.kind}:${s.key}`] = { ...(s.data || {}) };
-      });
-      setSectionDrafts(drafts);
+      absorbDossier(d);
 
       const [actRes, dashRes, cmpRes, infoRes, teamRes] = await Promise.all([
         authFetch(`/api/projectdocs/dossiers/${d.id}/activities/`),
@@ -143,11 +182,50 @@ export default function ProjectDossierWorkspace() {
     } finally {
       setLoading(false);
     }
-  }, [slug]);
+  }, [slug, absorbDossier]);
 
   useEffect(() => {
-    void load();
+    void load("initial");
   }, [load]);
+
+  useEffect(() => {
+    void (async () => {
+      const res = await authFetch("/api/accounts/users/?page_size=200");
+      if (!res.ok) return;
+      const data = await res.json().catch(() => null);
+      const rows = data?.results || data || [];
+      setUsers(
+        rows.map((u: { id: number; name?: string; email: string }) => ({
+          id: u.id,
+          name: u.name || u.email,
+          email: u.email,
+        })),
+      );
+    })();
+  }, []);
+
+  const inviteUser = async (payload: { name: string; email: string }): Promise<UserOption | null> => {
+    const res = await authFetch("/api/accounts/auth/invite/", {
+      method: "POST",
+      body: JSON.stringify({ ...payload, role: "employee" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error({ title: data.detail || data.email || data.name || "تعذّرت الدعوة" });
+      return null;
+    }
+    const u = data.user || {};
+    const opt: UserOption = {
+      id: u.id,
+      name: u.name || payload.name,
+      email: u.email || payload.email,
+    };
+    setUsers((prev) => (prev.some((x) => x.id === opt.id) ? prev : [...prev, opt]));
+    toast.success({
+      title: data.created ? "أُنشئ الحساب وأُرسلت الدعوة" : "أُرسلت دعوة تعيين كلمة المرور",
+    });
+    return opt;
+  };
 
   const workspaces = dossier?.workspaces || [];
   const activeWorkspace = useMemo(
@@ -181,8 +259,8 @@ export default function ProjectDossierWorkspace() {
         return;
       }
       toast.success({ title: "تم إنشاء ملف المشروع" });
-      await load();
-      setTab("document");
+      await load("silent");
+      setTab("card");
     } finally {
       setCreating(false);
     }
@@ -195,17 +273,29 @@ export default function ProjectDossierWorkspace() {
       const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/`, {
         method: "PATCH",
         body: JSON.stringify({
-          ...card,
+          marketing_name: card.marketing_name,
+          department: card.department,
+          section: card.section,
+          strategic_goal: card.strategic_goal,
+          location: card.location,
           execution_start: card.execution_start || null,
           execution_end: card.execution_end || null,
+          sponsor_id: card.sponsor_id,
+          sponsor_name: card.sponsor_name,
+          sponsor_email: card.sponsor_email,
+          approver_id: card.approver_id,
+          approver_name: card.approver_name,
+          approver_email: card.approver_email,
         }),
       });
+      const data: ProjectDossier = await res.json();
       if (!res.ok) {
         toast.error({ title: "تعذّر حفظ البطاقة" });
         return;
       }
+      absorbDossier(data);
       toast.success({ title: "حُفظت البيانات المطلوبة" });
-      await load();
+      await reloadMemberships();
     } finally {
       setSavingKey("");
     }
@@ -226,62 +316,139 @@ export default function ProjectDossierWorkspace() {
         return;
       }
       toast.success({ title: "حُفظ القسم" });
-      await load();
+      const rows = [
+        ...(data.section ? [data.section] : data.kind && data.key ? [data] : []),
+        ...(Array.isArray(data.synced_document) ? data.synced_document : []),
+      ];
+      if (rows.length) {
+        setDossier((prev) => {
+          if (!prev) return prev;
+          const sections = [...prev.sections];
+          for (const row of rows) {
+            const i = sections.findIndex((s) => s.kind === row.kind && s.key === row.key);
+            if (i >= 0) sections[i] = { ...sections[i], ...row };
+            else sections.push(row);
+          }
+          return { ...prev, sections };
+        });
+        setSectionDrafts((prev) => {
+          const next = { ...prev };
+          for (const row of rows) next[`${row.kind}:${row.key}`] = { ...(row.data || {}) };
+          return next;
+        });
+      }
+      if (kind === "document" && key === "team") {
+        await authFetch(`/api/projectdocs/dossiers/${dossier.id}/sync-team-members/`, { method: "POST" });
+      }
     } finally {
       setSavingKey("");
     }
   };
 
   const submitActiveWorkspace = async () => {
-    if (!dossier || !currentWs || currentWs.key === "card" || !currentWs.needs_approval) return;
+    if (!dossier || !currentWs || !currentWs.needs_approval) return;
     const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/workspaces/${currentWs.key}/submit/`, {
       method: "POST",
       body: "{}",
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      toast.error({ title: data.detail || data.sponsor_email || data.status || data.workspace || "تعذّر الإرسال" });
+      toast.error({ title: data.detail || data.approver_email || data.sponsor_email || data.status || data.workspace || "تعذّر الإرسال" });
       return;
     }
-    toast.success({ title: "أُرسل التبويب للاعتماد" });
-    await load();
+    if (data.email_sent === false) {
+      toast.error({ title: "أُرسل للاعتماد داخل المنصة", description: "تعذّر إرسال بريد صاحب الاعتماد — تحقّق من إعدادات البريد." });
+    } else {
+      toast.success({ title: "أُرسل التبويب للاعتماد", description: data.email_sent ? "وأُرسل بريد لصاحب الاعتماد" : undefined });
+    }
+    await load("silent");
   };
 
-  const adminDecideWorkspace = async (decision: "approved" | "returned") => {
+  const applyWorkspaces = (rows: Array<{ key: string; status: string }>) => {
+    setDossier((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        workspaces: (prev.workspaces || []).map((w) => {
+          const hit = rows.find((x) => x.key === w.key);
+          return hit ? { ...w, status: hit.status } : w;
+        }),
+      };
+    });
+  };
+
+  const adminDecideWorkspace = async (decision: "approved" | "returned" | "revoke") => {
     if (!dossier || !currentWs) return;
     const note = decision === "returned" ? window.prompt("سبب الإعادة") || "" : "";
     const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/workspaces/${currentWs.key}/decide/`, {
       method: "POST",
       body: JSON.stringify({ decision, note }),
     });
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      toast.error({ title: data.detail || data.sections || "تعذّر القرار" });
+      toast.error({ title: data.detail || data.sections || data.status || "تعذّر القرار" });
       return;
     }
-    toast.success({ title: decision === "approved" ? "اعتُمد التبويب" : "أُعيد للتعديل" });
-    await load();
+    if (Array.isArray(data.workspaces)) applyWorkspaces(data.workspaces);
+    toast.success({
+      title: decision === "approved" ? "اعتُمد التبويب" : decision === "revoke" ? "أُزيل الاعتماد" : "أُعيد للتعديل",
+    });
   };
 
-  const decideDocumentSection = async (key: string, decision: "approved" | "returned") => {
+  const decideDocumentSection = async (key: string, decision: "approved" | "revoke") => {
     if (!dossier) return;
     setDecidingKey(key);
     try {
-      const note = decision === "returned" ? window.prompt("سبب الإعادة") || "" : "";
       const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/sections/document/${key}/decide/`, {
         method: "POST",
-        body: JSON.stringify({ decision, note }),
+        body: JSON.stringify({ decision, note: "" }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast.error({ title: data.detail || data.status || data.sections || "تعذّر اعتماد البطاقة" });
         return;
       }
-      toast.success({ title: decision === "approved" ? "اعتُمدت البطاقة" : "أُعيدت للتعديل" });
-      await load();
+      if (data.section) {
+        setDossier((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            sections: prev.sections.map((s) =>
+              s.kind === "document" && s.key === key ? { ...s, ...data.section } : s,
+            ),
+          };
+        });
+      }
+      if (Array.isArray(data.workspaces)) applyWorkspaces(data.workspaces);
+      toast.success({ title: decision === "approved" ? "اعتُمدت البطاقة" : "أُزيل الاعتماد" });
     } finally {
       setDecidingKey("");
     }
+  };
+
+  const decidePlanPhase = async (key: string, decision: "approved" | "revoke") => {
+    if (!dossier) return;
+    const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/sections/plan/${key}/decide/`, {
+      method: "POST",
+      body: JSON.stringify({ decision, note: "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error({ title: data.detail || data.status || data.sections || "تعذّر اعتماد المرحلة" });
+      return;
+    }
+    if (data.section) {
+      setDossier((prev) => {
+        if (!prev) return prev;
+        const exists = prev.sections.some((s) => s.kind === "plan" && s.key === key);
+        const sections = exists
+          ? prev.sections.map((s) => (s.kind === "plan" && s.key === key ? { ...s, ...data.section } : s))
+          : [...prev.sections, data.section];
+        return { ...prev, sections };
+      });
+    }
+    if (Array.isArray(data.workspaces)) applyWorkspaces(data.workspaces);
+    toast.success({ title: decision === "approved" ? "اعتُمدت المرحلة" : "أُزيل الاعتماد" });
   };
 
   const exportKind = async (kind: "document" | "closure") => {
@@ -318,7 +485,7 @@ export default function ProjectDossierWorkspace() {
 
   const canSubmitWorkspace = (key: Tab) => {
     const w = workspaces.find((x) => x.key === key);
-    if (!w || !w.needs_approval || w.key === "card") return false;
+    if (!w || !w.needs_approval) return false;
     return w.status === "active" || w.status === "returned";
   };
 
@@ -356,7 +523,7 @@ export default function ProjectDossierWorkspace() {
         <Card>
           <h2 className="mb-2 text-lg font-bold text-primary">لا يوجد ملف لهذا المشروع</h2>
           <p className="mb-4 text-sm text-brand-gray">
-            أنشئ ملف مشروع جديد من قائمة المشاريع عبر «إنشاء ملف مشروع» (اسم + راعي)، أو أنشئ ملفاً هنا إن كان المشروع موجوداً مسبقاً.
+            أنشئ ملف مشروع جديد من قائمة المشاريع عبر «إنشاء ملف مشروع»، أو أنشئ ملفاً هنا إن كان المشروع موجوداً مسبقاً.
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input
@@ -364,15 +531,39 @@ export default function ProjectDossierWorkspace() {
               value={card.marketing_name}
               onChange={(e) => setCard({ ...card, marketing_name: e.target.value })}
             />
-            <Input
-              label="ايميل الراعي"
-              value={card.sponsor_email}
-              onChange={(e) => setCard({ ...card, sponsor_email: e.target.value })}
-            />
-            <Input
+            <UserPick
               label="راعي المشروع"
-              value={card.sponsor_name}
-              onChange={(e) => setCard({ ...card, sponsor_name: e.target.value })}
+              users={users}
+              valueId={card.sponsor_id}
+              valueName={card.sponsor_name}
+              valueEmail={card.sponsor_email}
+              onInvite={inviteUser}
+              onPick={(u) =>
+                setCard({
+                  ...card,
+                  sponsor_id: u?.id ?? null,
+                  sponsor_name: u?.name || "",
+                  sponsor_email: u?.email || "",
+                })
+              }
+            />
+            <UserPick
+              label="صاحب الاعتماد"
+              users={users}
+              valueId={card.approver_id}
+              valueName={card.approver_name}
+              valueEmail={card.approver_email}
+              emptyLabel="— مدير النظام إن تُرك فارغاً —"
+              hint="إن تُرك فارغاً يُعيَّن مدير النظام"
+              onInvite={inviteUser}
+              onPick={(u) =>
+                setCard({
+                  ...card,
+                  approver_id: u?.id ?? null,
+                  approver_name: u?.name || "",
+                  approver_email: u?.email || "",
+                })
+              }
             />
           </div>
           <div className="mt-4">
@@ -397,6 +588,26 @@ export default function ProjectDossierWorkspace() {
                 سبب الإعادة: {currentWs.return_note}
               </p>
             )}
+            {(canSubmitWorkspace(tab) ||
+              (dossier.can_approve && currentWs && currentWs.key !== "info" && currentWs.status !== "locked")) && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {canSubmitWorkspace(tab) && (
+                  <Button type="button" onClick={() => void submitActiveWorkspace()}>
+                    إرسال التبويب للاعتماد
+                  </Button>
+                )}
+                {dossier.can_approve && currentWs && currentWs.status !== "locked" && currentWs.status !== "approved" && (
+                  <Button type="button" onClick={() => void adminDecideWorkspace("approved")}>
+                    اعتماد التبويب
+                  </Button>
+                )}
+                {dossier.can_approve && currentWs?.status === "approved" && (
+                  <Button type="button" variant="secondary" onClick={() => void adminDecideWorkspace("revoke")}>
+                    إزالة الاعتماد
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           {tab === "info" && infoPage && (
@@ -412,6 +623,8 @@ export default function ProjectDossierWorkspace() {
               drafts={sectionDrafts}
               canEdit={canEditWorkspace("card")}
               savingKey={savingKey}
+              users={users}
+              onInviteUser={inviteUser}
               phasesHintTotal={(() => {
                 const rows = (sectionDrafts["card:phases"]?.rows as Array<Record<string, number>>) || [];
                 return rows.reduce((acc, r) => acc + (Number(r.budget_total) || 0), 0);
@@ -430,7 +643,7 @@ export default function ProjectDossierWorkspace() {
             <div className="space-y-3">
               {!wsOpen(tab) && (
                 <Card>
-                  <p className="text-sm text-brand-gray">هذا التبويب مقفل حتى اعتماد التبويب السابق من مدير الإدارة.</p>
+                  <p className="text-sm text-brand-gray">هذا التبويب مقفل حتى اعتماد التبويب السابق من صاحب الاعتماد.</p>
                 </Card>
               )}
               {wsOpen(tab) && (
@@ -441,24 +654,7 @@ export default function ProjectDossierWorkspace() {
                   <ClosureComparison pairs={comparison.pairs} budgetLines={comparison.budget_lines} />
                 </Card>
               )}
-              <div className="flex flex-wrap justify-between gap-2">
-                <div className="flex flex-wrap gap-2">
-                  {canSubmitWorkspace(tab) && (
-                    <Button type="button" onClick={() => void submitActiveWorkspace()}>
-                      إرسال التبويب للاعتماد
-                    </Button>
-                  )}
-                  {currentWs?.status === "submitted" && (
-                    <>
-                      <Button type="button" onClick={() => void adminDecideWorkspace("approved")}>
-                        اعتماد التبويب (مدير/مشرف)
-                      </Button>
-                      <Button type="button" variant="secondary" onClick={() => void adminDecideWorkspace("returned")}>
-                        إعادة التبويب للتعديل
-                      </Button>
-                    </>
-                  )}
-                </div>
+              <div className="flex flex-wrap justify-end gap-2">
                 <Button type="button" variant="secondary" onClick={() => void exportKind(tab === "document" ? "document" : "closure")}>
                   تصدير PDF
                 </Button>
@@ -468,7 +664,7 @@ export default function ProjectDossierWorkspace() {
                   sections={sectionsFor("document")}
                   drafts={sectionDrafts}
                   canEdit={canEditWorkspace("document")}
-                  canApprove={!!dossier.bypass_workspace_gates}
+                  canApprove={!!dossier.can_approve}
                   savingKey={savingKey}
                   decidingKey={decidingKey}
                   fixedPhases={schema?.document_fixed_phases || []}
@@ -530,21 +726,45 @@ export default function ProjectDossierWorkspace() {
                     إرسال الخطة للاعتماد
                   </Button>
                 )}
-                {workspaces.find((w) => w.key === "plan")?.status === "submitted" && (
-                  <>
-                    <Button type="button" onClick={() => void adminDecideWorkspace("approved")}>
-                      اعتماد (مدير/مشرف)
-                    </Button>
-                    <Button type="button" variant="secondary" onClick={() => void adminDecideWorkspace("returned")}>
-                      إعادة للتعديل
-                    </Button>
-                  </>
-                )}
               </div>
               <ActivitiesPanel
                 stages={dossier.stages}
                 activities={activities}
                 canEdit={canEditWorkspace("plan")}
+                teamMembers={teamMembers}
+                canApprove={!!dossier.can_approve}
+                phaseStatus={Object.fromEntries(
+                  dossier.sections.filter((s) => s.kind === "plan").map((s) => [s.key, s.status]),
+                )}
+                onDecidePhase={(key, decision) => void decidePlanPhase(key, decision)}
+                onUpdateStage={async (order, payload) => {
+                  const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/stages/${order}/`, {
+                    method: "PATCH",
+                    body: JSON.stringify(payload),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) {
+                    toast.error({ title: data.detail || "تعذّر حفظ تاريخ المرحلة" });
+                    return;
+                  }
+                  setDossier((prev) =>
+                    prev
+                      ? { ...prev, stages: prev.stages.map((s) => (s.order === order ? { ...s, ...data } : s)) }
+                      : prev,
+                  );
+                }}
+                onUpdate={async (id, payload) => {
+                  const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/activities/${id}/`, {
+                    method: "PATCH",
+                    body: JSON.stringify(payload),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) {
+                    toast.error({ title: data.title || data.detail || "تعذّر الحفظ" });
+                    return;
+                  }
+                  setActivities((prev) => prev.map((a) => (a.id === id ? data : a)));
+                }}
                 onCreate={async (payload) => {
                   const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/activities/`, {
                     method: "POST",
@@ -555,7 +775,7 @@ export default function ProjectDossierWorkspace() {
                     return;
                   }
                   toast.success({ title: "أُضيف النشاط" });
-                  await load();
+                  await load("silent");
                 }}
                 onComplete={async (id, payload) => {
                   const fd = new FormData();
@@ -570,13 +790,14 @@ export default function ProjectDossierWorkspace() {
                   );
                   const data = await res.json().catch(() => ({}));
                   if (!res.ok) {
-                    toast.error({
-                      title: data.evidence || data.lessons || data.detail || "تعذّر الإتمام",
-                    });
-                    return;
+                    const raw = data.detail ?? data.evidence ?? data.lessons ?? data.evidence_url;
+                    const text = Array.isArray(raw) ? raw[0] : raw;
+                    const title = typeof text === "string" && text ? text : "تعذّر الإتمام";
+                    toast.error({ title });
+                    throw new Error(title);
                   }
                   toast.success({ title: "تم إتمام النشاط مع الشاهد" });
-                  await load();
+                  await load("silent");
                 }}
                 onDelete={async (id) => {
                   const res = await authFetch(`/api/projectdocs/dossiers/${dossier.id}/activities/${id}/`, {
@@ -586,7 +807,7 @@ export default function ProjectDossierWorkspace() {
                     toast.error({ title: "تعذّر الحذف" });
                     return;
                   }
-                  await load();
+                  await load("silent");
                 }}
               />
                 </>
@@ -619,7 +840,7 @@ export default function ProjectDossierWorkspace() {
               </div>
               <DossierDashboard
                 data={dash as never}
-                canAllocate={!!dossier.bypass_workspace_gates || canEditWorkspace("board")}
+                canAllocate={!!dossier.can_approve || canEditWorkspace("board")}
                 canSpend={canEditWorkspace("board")}
                 onAllocate={async (lineId, amount) => {
                   const res = await authFetch(
@@ -632,7 +853,7 @@ export default function ProjectDossierWorkspace() {
                     return;
                   }
                   toast.success({ title: "حُدّث المخصص" });
-                  await load();
+                  await load("silent");
                 }}
                 onSpend={async (lineId, amount) => {
                   const res = await authFetch(
@@ -645,7 +866,7 @@ export default function ProjectDossierWorkspace() {
                     return;
                   }
                   toast.success({ title: "تم الخصم من البند" });
-                  await load();
+                  await load("silent");
                 }}
               />
                 </>

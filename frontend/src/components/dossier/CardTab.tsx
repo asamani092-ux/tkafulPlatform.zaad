@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Button from "../ui/Button";
 import Input from "../ui/Input";
 import Badge from "../ui/Badge";
@@ -15,9 +15,15 @@ export type CardScalars = {
   execution_start: string;
   execution_end: string;
   location: string;
+  sponsor_id: number | null;
   sponsor_name: string;
   sponsor_email: string;
+  approver_id: number | null;
+  approver_name: string;
+  approver_email: string;
 };
+
+export type UserOption = { id: number; name: string; email: string };
 
 type Props = {
   code: string;
@@ -28,6 +34,8 @@ type Props = {
   canEdit: boolean;
   savingKey: string;
   phasesHintTotal?: number;
+  users?: UserOption[];
+  onInviteUser?: (payload: { name: string; email: string }) => Promise<UserOption | null>;
   onCardChange: (next: CardScalars) => void;
   onSaveCard: () => void;
   onSaveSection: (key: string) => void;
@@ -52,6 +60,117 @@ function fieldColumns(f: SchemaField): { columns: TableColumn[]; headerGroups: H
   return { columns, headerGroups };
 }
 
+export function UserPick({
+  label,
+  users,
+  valueId,
+  valueName,
+  valueEmail,
+  disabled,
+  onPick,
+  onInvite,
+  emptyLabel = "— اختر مستخدماً —",
+  hint,
+}: {
+  label: string;
+  users: UserOption[];
+  valueId: number | null;
+  valueName: string;
+  valueEmail: string;
+  disabled?: boolean;
+  onPick: (u: UserOption | null) => void;
+  onInvite?: (payload: { name: string; email: string }) => Promise<UserOption | null>;
+  emptyLabel?: string;
+  hint?: string;
+}) {
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <div className="space-y-2 sm:col-span-1">
+      <label className="block text-sm font-bold text-primary">{label}</label>
+      <select
+        className="input-field w-full"
+        disabled={disabled}
+        value={valueId ?? ""}
+        onChange={(e) => {
+          const id = e.target.value ? Number(e.target.value) : null;
+          const hit = users.find((u) => u.id === id) || null;
+          onPick(hit);
+        }}
+      >
+        <option value="">{emptyLabel}</option>
+        {users.map((u) => (
+          <option key={u.id} value={u.id}>
+            {(u.name || u.email) + (u.email ? ` (${u.email})` : "")}
+          </option>
+        ))}
+      </select>
+      {hint ? <p className="text-xs text-brand-gray">{hint}</p> : null}
+      {(valueName || valueEmail) && (
+        <p className="text-xs text-brand-gray">
+          {valueName || "—"} · {valueEmail || "—"}
+        </p>
+      )}
+      {onInvite && !disabled && (
+        <div>
+          {!inviteOpen ? (
+            <button
+              type="button"
+              className="text-xs font-bold text-primary hover:underline"
+              onClick={() => setInviteOpen(true)}
+            >
+              المستخدم غير موجود؟ أنشئ دعوة
+            </button>
+          ) : (
+            <div className="space-y-2 rounded-lg border border-surface-border p-2">
+              <Input label="الاسم" value={inviteName} onChange={(e) => setInviteName(e.target.value)} />
+              <Input
+                label="البريد"
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  disabled={busy || !inviteName.trim() || !inviteEmail.trim()}
+                  onClick={() => {
+                    void (async () => {
+                      setBusy(true);
+                      try {
+                        const created = await onInvite({
+                          name: inviteName.trim(),
+                          email: inviteEmail.trim(),
+                        });
+                        if (created) {
+                          onPick(created);
+                          setInviteOpen(false);
+                          setInviteName("");
+                          setInviteEmail("");
+                        }
+                      } finally {
+                        setBusy(false);
+                      }
+                    })();
+                  }}
+                >
+                  إرسال الدعوة
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => setInviteOpen(false)}>
+                  إلغاء
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** تبويب البطاقة: بيانات مطلوبة + جداول في بطاقات قابلة للطي. */
 export default function CardTab({
   code,
@@ -62,6 +181,8 @@ export default function CardTab({
   canEdit,
   savingKey,
   phasesHintTotal,
+  users = [],
+  onInviteUser,
   onCardChange,
   onSaveCard,
   onSaveSection,
@@ -94,7 +215,7 @@ export default function CardTab({
         )}
       </div>
 
-      <CollapsibleCard title="البيانات المطلوبة" defaultOpen={false} subtitle="الاسم والإدارة والتواريخ والراعي">
+      <CollapsibleCard title="البيانات المطلوبة" defaultOpen={false} subtitle="الاسم والإدارة والتواريخ والراعي وصاحب الاعتماد">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Input
             label="الاسم"
@@ -134,18 +255,41 @@ export default function CardTab({
             disabled={!canEdit}
             onChange={(e) => onCardChange({ ...card, execution_end: e.target.value })}
           />
-          <Input
+          <UserPick
             label="راعي المشروع"
-            value={card.sponsor_name}
+            users={users}
+            valueId={card.sponsor_id}
+            valueName={card.sponsor_name}
+            valueEmail={card.sponsor_email}
             disabled={!canEdit}
-            onChange={(e) => onCardChange({ ...card, sponsor_name: e.target.value })}
+            onInvite={onInviteUser}
+            onPick={(u) =>
+              onCardChange({
+                ...card,
+                sponsor_id: u?.id ?? null,
+                sponsor_name: u?.name || "",
+                sponsor_email: u?.email || "",
+              })
+            }
           />
-          <Input
-            label="ايميل الراعي"
-            type="email"
-            value={card.sponsor_email}
+          <UserPick
+            label="صاحب الاعتماد"
+            users={users}
+            valueId={card.approver_id}
+            valueName={card.approver_name}
+            valueEmail={card.approver_email}
             disabled={!canEdit}
-            onChange={(e) => onCardChange({ ...card, sponsor_email: e.target.value })}
+            emptyLabel="— مدير النظام إن تُرك فارغاً —"
+            hint="إن تُرك فارغاً يُعيَّن مدير النظام"
+            onInvite={onInviteUser}
+            onPick={(u) =>
+              onCardChange({
+                ...card,
+                approver_id: u?.id ?? null,
+                approver_name: u?.name || "",
+                approver_email: u?.email || "",
+              })
+            }
           />
           <label className="block text-sm sm:col-span-2">
             <span className="label-field">الهدف الاستراتيجي</span>
@@ -191,12 +335,29 @@ export default function CardTab({
             }
           >
             {sec.key === "phases" ? (
-              <PhasesEditor
-                columns={columns}
-                rows={rows}
-                disabled={!canEdit}
-                onChange={(next) => onDraftChange(sec.key, { [tableField.key]: next })}
-              />
+              <>
+                <div className="md:hidden">
+                  <PhasesEditor
+                    columns={columns}
+                    rows={rows}
+                    disabled={!canEdit}
+                    onChange={(next) => onDraftChange(sec.key, { [tableField.key]: next })}
+                  />
+                </div>
+                <div className="hidden md:block">
+                  <EditableDataTable
+                    label={sec.label}
+                    hideTitle
+                    columns={columns}
+                    headerGroups={headerGroups}
+                    rows={rows}
+                    disabled={!canEdit}
+                    primaryKey="activity_type"
+                    budgetGroup="budget"
+                    onChange={(next) => onDraftChange(sec.key, { [tableField.key]: next })}
+                  />
+                </div>
+              </>
             ) : (
               <EditableDataTable
                 label={sec.label}

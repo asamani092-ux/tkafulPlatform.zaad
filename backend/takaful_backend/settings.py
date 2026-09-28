@@ -180,6 +180,8 @@ EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() in ("1", "true",
 EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False").lower() in ("1", "true", "yes")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "tkaful@alzaad.org.sa")
 SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
+# رابط الواجهة لروابط الاعتماد والدعوات في البريد — يُعاد ضبطه أدناه إن لزم
+FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
 # طارئ فقط: تخطّي OTP عند الدخول إذا فشل البريد أو أثناء ضبط SMTP
 LOGIN_OTP_DISABLED = os.environ.get("LOGIN_OTP_DISABLED", "False").lower() in (
     "1",
@@ -287,10 +289,47 @@ SIMPLE_JWT = {
 # Example you will set on Render:
 # CSRF_TRUSTED_ORIGINS="https://takaful-backend.onrender.com"
 CSRF_TRUSTED_ORIGINS = [
-    origin
+    origin.strip()
     for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
-    if origin
+    if origin.strip()
 ]
+
+
+def _is_loopback_url(url: str) -> bool:
+    u = (url or "").lower()
+    return "localhost" in u or "127.0.0.1" in u
+
+
+def _derive_public_frontend_base() -> str:
+    """يستنتج رابط الواجهة العام من CSRF أو ALLOWED_HOSTS — O(n)."""
+    for origin in CSRF_TRUSTED_ORIGINS:
+        o = origin.rstrip("/")
+        if o.startswith("https://") and not _is_loopback_url(o):
+            return o
+    for origin in CORS_ALLOWED_ORIGINS:
+        o = origin.rstrip("/")
+        if o.startswith("https://") and not _is_loopback_url(o):
+            return o
+    for host in ALLOWED_HOSTS:
+        h = (host or "").strip().lower()
+        if not h or h in ("*", "localhost", "127.0.0.1") or h.startswith("."):
+            continue
+        if "." in h:
+            return f"https://{h}"
+    return ""
+
+
+# في الإنتاج: لا تُرسل روابط بريد إلى localhost — استخدم FRONTEND_BASE_URL أو استنتج من النطاق
+if not DEBUG:
+    if not FRONTEND_BASE_URL or _is_loopback_url(FRONTEND_BASE_URL):
+        derived = _derive_public_frontend_base()
+        if derived:
+            FRONTEND_BASE_URL = derived
+        else:
+            raise RuntimeError(
+                "FRONTEND_BASE_URL must be a public https URL in production "
+                "(e.g. https://tkaful.alzaad.org.sa). Set it in Coolify env."
+            )
 
 
 # ===========================

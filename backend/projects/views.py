@@ -95,6 +95,13 @@ def public_project_detail(request, slug):
 
 # ---- أدمن موحّد ----
 @api_view(["GET"])
+@permission_classes([IsAdmin])
+def overview_stats(request):
+    """مؤشرات نظرة /Admin من بيانات المنصة — مشرف عام فقط."""
+    return Response(services.platform_overview_stats())
+
+
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def my_memberships(request):
     """عضويات المستخدم الحالي + علم super-admin — للوحة الأدمن الموحّدة."""
@@ -166,14 +173,38 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
         instance = self.get_object()
+        reason = (request.data.get("reason") if hasattr(request, "data") else None) or ""
+        reason = str(reason).strip()
+        if not reason:
+            return Response(
+                {"reason": "سبب الحذف مطلوب"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        blockers = services.project_delete_blockers(instance)
+        if blockers:
+            return Response(
+                {
+                    "detail": "لا يمكن حذف المشروع لأنه يحتوي بيانات مهمة",
+                    "blockers": blockers,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         log_activity(
             actor=request.user,
             action=ACTION_PROJECT_DELETE,
             target=instance,
-            summary=f"حذف المشروع {instance.name}",
+            summary=f"حذف المشروع {instance.name} — السبب: {reason}",
             request=request,
         )
         return super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=["get"], url_path="delete-check")
+    def delete_check(self, request, pk=None):
+        if not is_super_admin(request.user):
+            return Response({"detail": "غير مصرّح"}, status=status.HTTP_403_FORBIDDEN)
+        project = self.get_object()
+        blockers = services.project_delete_blockers(project)
+        return Response({"can_delete": not blockers, "blockers": blockers})
 
     # ---- إدارة الأعضاء ----
     @action(detail=True, methods=["post"])

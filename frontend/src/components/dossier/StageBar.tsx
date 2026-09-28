@@ -21,7 +21,7 @@ export type WorkspaceRow = {
 type Props = {
   workspaces: WorkspaceRow[];
   currentKey?: string;
-  /** مشرف أو مدير الإدارة — يفتح كل التبويبات للتصفح/العمل */
+  /** مدير النظام — يفتح كل التبويبات للتصفح/العمل */
   bypassLocked?: boolean;
   onSelect?: (key: string) => void;
 };
@@ -58,13 +58,13 @@ export default function StageBar({ workspaces, currentKey, bypassLocked = false,
       {active && active.needs_approval !== false && active.key !== "card" && (
         <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900">
           {active.status === "submitted"
-            ? `بانتظار اعتماد مدير الإدارة لتبويب «${active.label}» — التبويب التالي يبقى مقفلاً.`
-            : `أرسل تبويب «${active.label}» لاعتماد مدير الإدارة — البطاقة بلا اعتماد.`}
+            ? `بانتظار اعتماد صاحب الاعتماد لتبويب «${active.label}» — التبويب التالي يبقى مقفلاً.`
+            : `أرسل تبويب «${active.label}» لاعتماد صاحب الاعتماد — البطاقة بلا اعتماد.`}
         </p>
       )}
       {bypassLocked && (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-          حسابك (مشرف أو مدير الإدارة) يفتح كل التبويبات — التسلسل يبقى ظاهراً للموظفين.
+          حسابك (مدير النظام) يفتح كل التبويبات — التسلسل يبقى ظاهراً للموظفين.
         </p>
       )}
     </div>

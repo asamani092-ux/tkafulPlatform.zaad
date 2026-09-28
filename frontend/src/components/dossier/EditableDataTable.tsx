@@ -19,6 +19,10 @@ type Props = {
   rows: Record<string, string | number>[];
   disabled?: boolean;
   onChange: (rows: Record<string, string | number>[]) => void;
+  /** عمود أساسي بلون مميَّز (مثل نوع النشاط). */
+  primaryKey?: string;
+  /** مجموعة أعمدة المخصص بلون موحّد يختلف عن الباقي. */
+  budgetGroup?: string;
 };
 
 function applyComputed(row: Record<string, string | number>, cols: TableColumn[]): Record<string, string | number> {
@@ -37,6 +41,23 @@ function applyComputed(row: Record<string, string | number>, cols: TableColumn[]
   return next;
 }
 
+function cellTone(c: TableColumn, primaryKey?: string, budgetGroup?: string): string {
+  if (primaryKey && c.key === primaryKey) {
+    return "border border-primary/40 bg-primary/[0.06]";
+  }
+  if (budgetGroup && c.group === budgetGroup) {
+    return "border border-amber-400 bg-amber-50/50";
+  }
+  return "";
+}
+
+function groupHeaderTone(groupKey: string | undefined, budgetGroup?: string): string {
+  if (budgetGroup && groupKey === budgetGroup) {
+    return "border border-amber-400 bg-amber-50/50";
+  }
+  return "";
+}
+
 /** جدول قابل للإضافة/التعديل/الحذف مع رؤوس مجموعات اختيارية. O(R·C). */
 export default function EditableDataTable({
   label,
@@ -46,6 +67,8 @@ export default function EditableDataTable({
   rows,
   disabled,
   onChange,
+  primaryKey,
+  budgetGroup,
 }: Props) {
   const groupMap = Object.fromEntries(headerGroups.map((g) => [g.key, g.label]));
   const grouped = columns.some((c) => c.group);
@@ -87,16 +110,22 @@ export default function EditableDataTable({
               <tr className="bg-surface-muted/40">
                 {columns.map((c) => {
                   if (!c.group) {
-                    return <th key={c.key} className="border-b border-surface-border px-2 py-1" />;
+                    return (
+                      <th
+                        key={c.key}
+                        className={`border-b border-surface-border px-2 py-1 ${cellTone(c, primaryKey, budgetGroup)}`}
+                      />
+                    );
                   }
                   const first = columns.find((x) => x.group === c.group);
                   if (first?.key !== c.key) return null;
                   const span = columns.filter((x) => x.group === c.group).length;
+                  const budgetTone = groupHeaderTone(c.group, budgetGroup);
                   return (
                     <th
                       key={`g-${c.group}`}
                       colSpan={span}
-                      className="border-b border-surface-border px-2 py-2 text-center text-sm font-extrabold text-primary"
+                      className={`border-b border-surface-border px-2 py-2 text-center text-sm font-extrabold text-primary ${budgetTone}`}
                     >
                       {groupMap[c.group] || c.group}
                     </th>
@@ -107,7 +136,10 @@ export default function EditableDataTable({
             )}
             <tr>
               {columns.map((c) => (
-                <th key={c.key} className="border-b border-surface-border px-2 py-2 text-right font-bold text-primary">
+                <th
+                  key={c.key}
+                  className={`border-b border-surface-border px-2 py-2 text-right font-bold text-primary ${cellTone(c, primaryKey, budgetGroup)}`}
+                >
                   {c.label}
                 </th>
               ))}
@@ -118,7 +150,10 @@ export default function EditableDataTable({
             {rows.map((row, i) => (
               <tr key={i} className="odd:bg-surface">
                 {columns.map((c) => (
-                  <td key={c.key} className="border-b border-surface-border px-1 py-1">
+                  <td
+                    key={c.key}
+                    className={`border-b border-surface-border px-1 py-1 ${cellTone(c, primaryKey, budgetGroup)}`}
+                  >
                     <input
                       className="input-field w-full !py-1 text-sm"
                       type={c.type === "number" ? "number" : c.type === "date" ? "date" : "text"}

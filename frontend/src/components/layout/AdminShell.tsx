@@ -120,7 +120,11 @@ export default function AdminShell({ children }: { children: ReactNode }) {
                   color: "var(--tmkeen-primary)",
                 }}
               >
-                {domain.label}
+                {domain.id === "projects"
+                  ? isGlobalAdmin
+                    ? "كل المشاريع"
+                    : "مشاريعي"
+                  : domain.label}
               </Link>
             );
           }

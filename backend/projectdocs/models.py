@@ -48,8 +48,24 @@ class ProjectDossier(models.Model):
     location = models.CharField(max_length=300, blank=True)
     projects_office_name = models.CharField(max_length=200, blank=True, help_text="عرض فقط")
     projects_committee_name = models.CharField(max_length=200, blank=True, help_text="عرض فقط")
+    sponsor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sponsored_dossiers",
+    )
     sponsor_name = models.CharField(max_length=200, blank=True)
     sponsor_email = models.EmailField(blank=True)
+    approver = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approver_dossiers",
+    )
+    approver_name = models.CharField(max_length=200, blank=True)
+    approver_email = models.EmailField(blank=True)
     execution_start = models.DateField(null=True, blank=True)
     execution_end = models.DateField(null=True, blank=True)
     manager = models.ForeignKey(
@@ -73,6 +89,7 @@ class ProjectDossier(models.Model):
         indexes = [
             models.Index(fields=["status", "current_stage"]),
             models.Index(fields=["sponsor_email"]),
+            models.Index(fields=["approver_email"]),
         ]
 
     def __str__(self):
@@ -86,6 +103,7 @@ class DossierSection(models.Model):
     KIND_CHOICES = [
         ("card", "بطاقة المشروع"),
         ("document", "وثيقة المشروع"),
+        ("plan", "الخطة التنفيذية"),
         ("closure", "وثيقة الإغلاق"),
     ]
     STATUS_CHOICES = [
@@ -185,8 +203,16 @@ class StageActivity(models.Model):
     )
     title = models.CharField(max_length=300)
     responsible = models.CharField(max_length=200, blank=True)
+    responsible_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="assigned_stage_activities",
+    )
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
+    executed_weeks = models.JSONField(default=list, blank=True)
     manual_status = models.CharField(max_length=20, choices=MANUAL_STATUS_CHOICES, blank=True, default="")
     auto_status = models.CharField(max_length=20, choices=AUTO_STATUS_CHOICES, default="not_due")
     progress_pct = models.PositiveSmallIntegerField(default=0)
@@ -196,12 +222,17 @@ class StageActivity(models.Model):
     notes = models.TextField(blank=True)
     risks = models.TextField(blank=True)
     sort_order = models.PositiveIntegerField(default=0)
+    source = models.CharField(max_length=20, default="plan")
+    locked = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["sort_order", "code", "id"]
-        indexes = [models.Index(fields=["stage", "auto_status"])]
+        indexes = [
+            models.Index(fields=["stage", "auto_status"]),
+            models.Index(fields=["responsible_user", "auto_status"]),
+        ]
 
     def __str__(self):
         return f"{self.code} — {self.title}"

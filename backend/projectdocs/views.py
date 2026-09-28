@@ -33,11 +33,71 @@ from .serializers import (
     StageActivitySerializer,
 )
 
+_DATE_ORDER_MSG = "تاريخ البداية يجب أن يسبق تاريخ الإغلاق"
+
+
+def _date_text(value):
+    if value in (None, ""):
+        return None
+    return str(value)[:10]
+
+
+def _dates_out_of_order(start, end) -> bool:
+    s = _date_text(start)
+    e = _date_text(end)
+    return bool(s and e and s >= e)
+
+
+def _phase_week_starts(start, end) -> set[str]:
+    """بدايات الأسابيع الأربعة لكل شهر داخل النطاق. O(M)."""
+    s = _date_text(start)
+    e = _date_text(end)
+    if not s or not e or s >= e:
+        return set()
+    y, m = int(s[:4]), int(s[5:7])
+    end_y, end_m = int(e[:4]), int(e[5:7])
+    found: set[str] = set()
+    while (y, m) <= (end_y, end_m):
+        for day in (1, 8, 15, 22):
+            found.add(f"{y:04d}-{m:02d}-{day:02d}")
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    return found
+
+
+def _clean_executed_weeks(activity, weeks):
+    if not isinstance(weeks, list):
+        return None, Response({"executed_weeks": "قائمة أسابيع غير صالحة"}, status=400)
+    allowed = _phase_week_starts(activity.stage.planned_start, activity.stage.planned_end)
+    previous = {_date_text(item) for item in (activity.executed_weeks or [])}
+    cleaned: list[str] = []
+    for item in weeks:
+        text = _date_text(item)
+        if not text:
+            return None, Response({"detail": "الأسبوع خارج نطاق تاريخ الواجهة الرئيسية"}, status=400)
+        if text not in allowed:
+            if text in previous:
+                continue
+            return None, Response({"detail": "الأسبوع خارج نطاق تاريخ الواجهة الرئيسية"}, status=400)
+        if text not in cleaned:
+            cleaned.append(text)
+    return cleaned, None
+
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def dossier_schema(request):
     return Response(schema_payload())
+
+
+def _drop_prefetched(dossier) -> None:
+    """إبطال كاش prefetch بعد مزامنة الأقسام حتى تُعاد البيانات الجديدة. O(1)."""
+    cache = getattr(dossier, "_prefetched_objects_cache", None)
+    if cache is not None:
+        cache.pop("sections", None)
+        cache.pop("workspaces", None)
 
 
 class ProjectDossierViewSet(viewsets.ModelViewSet):
@@ -46,9 +106,9 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        qs = ProjectDossier.objects.select_related("project", "manager").prefetch_related(
-            "sections", "stages", "workspaces"
-        )
+        qs = ProjectDossier.objects.select_related(
+            "project", "manager", "sponsor", "approver"
+        ).prefetch_related("sections", "stages", "workspaces")
         user = self.request.user
         if is_super_admin(user):
             return qs
@@ -56,8 +116,14 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
 
         email = (getattr(user, "email", "") or "").strip()
         if email:
-            return qs.filter(Q(manager=user) | Q(sponsor_email__iexact=email))
-        return qs.filter(manager=user)
+            return qs.filter(
+                Q(manager=user)
+                | Q(sponsor=user)
+                | Q(approver=user)
+                | Q(sponsor_email__iexact=email)
+                | Q(approver_email__iexact=email)
+            )
+        return qs.filter(Q(manager=user) | Q(sponsor=user) | Q(approver=user))
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -80,6 +146,10 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
                 name=data.get("name") or "",
                 sponsor_name=data.get("sponsor_name") or "",
                 sponsor_email=data.get("sponsor_email") or "",
+                sponsor_id=data.get("sponsor_id"),
+                approver_id=data.get("approver_id"),
+                approver_name=data.get("approver_name") or "",
+                approver_email=data.get("approver_email") or "",
                 description=data.get("description") or "",
                 manager_id=data.get("manager_id"),
                 actor=request.user,
@@ -121,6 +191,8 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             "projects_committee_name",
             "sponsor_name",
             "sponsor_email",
+            "approver_name",
+            "approver_email",
             "manager_email",
             "budget_association",
             "budget_donation",
@@ -138,8 +210,40 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
                 return Response({"detail": "تعيين المسؤول للمشرف فقط"}, status=403)
             mid = request.data.get("manager") or request.data.get("manager_id")
             dossier.manager_id = mid or None
+        if "sponsor_id" in request.data or "sponsor" in request.data:
+            sid = request.data.get("sponsor_id", request.data.get("sponsor"))
+            if sid in ("", None):
+                services.transfer_dossier_sponsor(
+                    dossier,
+                    clear=True,
+                    email=request.data.get("sponsor_email") or "",
+                    name=request.data.get("sponsor_name") or "",
+                )
+            else:
+                services.transfer_dossier_sponsor(dossier, user_id=sid)
+        if "approver_id" in request.data or "approver" in request.data:
+            aid = request.data.get("approver_id", request.data.get("approver"))
+            if aid in ("", None):
+                dossier.approver = None
+            else:
+                approver, a_name, a_email = services._resolve_user_ref(user_id=aid)
+                dossier.approver = approver
+                if a_name:
+                    dossier.approver_name = a_name
+                if a_email:
+                    dossier.approver_email = a_email
+        # حقول الراعي النصية مع بقاء نفس المستخدم — دون نقل
+        if "sponsor_id" not in request.data and "sponsor" not in request.data:
+            if "sponsor_name" in request.data or "sponsor_email" in request.data:
+                if "sponsor_name" in request.data:
+                    dossier.sponsor_name = request.data.get("sponsor_name") or ""
+                if "sponsor_email" in request.data:
+                    dossier.sponsor_email = request.data.get("sponsor_email") or ""
         dossier.recompute_budget_total()
         dossier.save()
+        services.sync_document_from_card(dossier)
+        services.sync_dossier_role_memberships(dossier)
+        _drop_prefetched(dossier)
         return Response(ProjectDossierSerializer(dossier, context={"request": request}).data)
 
     @action(detail=False, methods=["get"], url_path=r"by-project/(?P<slug>[^/.]+)")
@@ -148,14 +252,20 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         if not dossier:
             return Response({"detail": "لا يوجد ملف"}, status=404)
         self.check_object_permissions(request, dossier)
+        services.sync_dossier_role_memberships(dossier)
         services.sync_document_from_card(dossier)
+        services.sync_plan_from_document(dossier)
         dossier.refresh_from_db()
+        _drop_prefetched(dossier)
         return Response(ProjectDossierSerializer(dossier, context={"request": request}).data)
 
     def retrieve(self, request, *args, **kwargs):
         dossier = self.get_object()
+        services.sync_dossier_role_memberships(dossier)
         services.sync_document_from_card(dossier)
+        services.sync_plan_from_document(dossier)
         dossier.refresh_from_db()
+        _drop_prefetched(dossier)
         return Response(ProjectDossierSerializer(dossier, context={"request": request}).data)
 
     @action(detail=True, methods=["patch"], url_path=r"sections/(?P<kind>[^/.]+)/(?P<key>[^/.]+)")
@@ -170,7 +280,18 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             data=ser.validated_data["data"],
             user=request.user,
         )
-        return Response(DossierSectionSerializer(section).data)
+        body = DossierSectionSerializer(section).data
+        if kind == "card":
+            _drop_prefetched(dossier)
+            mirrored = dossier.sections.filter(
+                kind="document",
+                key__in=("basics", "indicators", "similar_experiences", "budget"),
+            )
+            body = {
+                **body,
+                "synced_document": DossierSectionSerializer(mirrored, many=True).data,
+            }
+        return Response(body)
 
     @action(
         detail=True,
@@ -203,37 +324,69 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             }
         )
 
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"sections/plan/(?P<key>[^/.]+)/decide",
+    )
+    def decide_plan_phase(self, request, pk=None, key=None):
+        dossier = self.get_object()
+        ser = DecideSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            section = services.decide_plan_phase(
+                dossier=dossier,
+                key=key,
+                decision=ser.validated_data["decision"],
+                note=ser.validated_data.get("note") or "",
+                user=request.user,
+                request=request,
+            )
+        except ValidationError as exc:
+            return Response(exc.detail, status=400)
+        _drop_prefetched(dossier)
+        return Response(
+            {
+                "section": DossierSectionSerializer(section).data,
+                "workspaces": [
+                    {"key": w.key, "status": w.status}
+                    for w in dossier.workspaces.order_by("order")
+                ],
+            }
+        )
+
     @action(detail=True, methods=["get"], url_path="team-candidates")
     def team_candidates(self, request, pk=None):
-        """أعضاء المشروع لاختيار فريق العمل في الوثيقة. O(M)."""
-        dossier = self.get_object()
-        from projects.models import ProjectMember
-
-        members = (
-            ProjectMember.objects.filter(project=dossier.project)
-            .select_related("user", "user__profile")
-            .order_by("user_id")
-        )
+        """موظفون ومتطوّعون مسجّلون لاختيار فريق العمل. O(U)."""
+        self.get_object()
         out = []
-        for m in members:
-            u = m.user
+        for u in services.team_candidates_queryset():
             profile = getattr(u, "profile", None)
             name = (getattr(profile, "name", None) or "").strip() or u.get_full_name() or u.username
             out.append(
                 {
                     "user_id": u.id,
                     "name": name,
-                    "job_title": (getattr(profile, "qualification", None) or m.role or ""),
+                    "job_title": (getattr(profile, "qualification", None) or getattr(profile, "role", None) or ""),
                     "phone": (getattr(profile, "phone", None) or ""),
                     "email": u.email or "",
+                    "role": getattr(profile, "role", None) or "",
                 }
             )
         return Response({"results": out})
 
+    @action(detail=True, methods=["post"], url_path="sync-team-members")
+    def sync_team_members(self, request, pk=None):
+        """مزامنة عضوية المشروع من قسم فريق العمل. O(R)."""
+        dossier = self.get_object()
+        services.assert_can_edit(request.user, dossier)
+        created = services.sync_team_memberships(dossier)
+        return Response({"created": created, "member_ids": sorted(services.team_section_user_ids(dossier))})
+
     @action(detail=True, methods=["post"], url_path=r"workspaces/(?P<key>[^/.]+)/submit")
     def submit_workspace(self, request, pk=None, key=None):
         dossier = self.get_object()
-        approval = services.submit_workspace(
+        approval, email_sent = services.submit_workspace(
             dossier=dossier,
             key=key,
             user=request.user,
@@ -245,6 +398,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
                 "approval_id": approval.id,
                 "expires_at": approval.expires_at,
                 "token_hint": approval.token[:8],
+                "email_sent": email_sent,
             },
             status=201,
         )
@@ -262,12 +416,22 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             user=request.user,
             request=request,
         )
-        return Response({"decision": approval.decision, "note": approval.note})
+        _drop_prefetched(dossier)
+        return Response(
+            {
+                "decision": approval.decision if approval else ser.validated_data["decision"],
+                "note": approval.note if approval else "",
+                "workspaces": [
+                    {"key": w.key, "status": w.status}
+                    for w in dossier.workspaces.order_by("order")
+                ],
+            }
+        )
 
     @action(detail=True, methods=["post"], url_path=r"stages/(?P<order>[0-9]+)/submit")
     def submit_stage(self, request, pk=None, order=None):
         dossier = self.get_object()
-        approval = services.submit_stage(
+        approval, email_sent = services.submit_stage(
             dossier=dossier,
             order=int(order),
             user=request.user,
@@ -279,6 +443,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
                 "approval_id": approval.id,
                 "expires_at": approval.expires_at,
                 "token_hint": approval.token[:8],
+                "email_sent": email_sent,
             },
             status=201,
         )
@@ -305,6 +470,10 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         stage = dossier.stages.filter(order=int(order)).first()
         if not stage:
             return Response({"detail": "مرحلة غير موجودة"}, status=404)
+        start = request.data["planned_start"] if "planned_start" in request.data else stage.planned_start
+        end = request.data["planned_end"] if "planned_end" in request.data else stage.planned_end
+        if _dates_out_of_order(start, end):
+            return Response({"detail": _DATE_ORDER_MSG}, status=400)
         for f in ("planned_start", "planned_end", "deliverable_title", "deliverable_date"):
             if f in request.data:
                 setattr(stage, f, request.data[f] or None)
@@ -315,10 +484,17 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
     def activities(self, request, pk=None):
         dossier = self.get_object()
         if request.method == "GET":
-            qs = StageActivity.objects.filter(stage__dossier=dossier).select_related("stage", "parent")
+            services.sync_plan_from_document(dossier)
+            qs = StageActivity.objects.filter(stage__dossier=dossier).select_related(
+                "stage", "parent", "responsible_user", "responsible_user__profile",
+                "stage__dossier__project",
+            )
             return Response(StageActivitySerializer(qs, many=True).data)
         services.assert_can_edit(request.user, dossier)
-        data = {**request.data}
+        data = {k: v for k, v in request.data.items() if k not in ("source", "locked")}
+        wanted_source = str(request.data.get("source") or "plan").strip()
+        if wanted_source not in ("plan", "ad_hoc", "document"):
+            wanted_source = "plan"
         stage_id = data.get("stage")
         stage = dossier.stages.filter(pk=stage_id).first() if stage_id else None
         if stage_id and not stage:
@@ -327,9 +503,37 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             services.assert_workspace_open_for_work(request.user, dossier, "plan")
         except ValidationError as exc:
             return Response(exc.detail, status=400)
+        parent_id = data.get("parent")
+        if parent_id:
+            parent = StageActivity.objects.filter(
+                pk=parent_id, stage__dossier=dossier, parent__isnull=True
+            ).first()
+            if not parent:
+                return Response({"parent": "النشاط الرئيسي غير موجود"}, status=400)
+            data["stage"] = parent.stage_id
+        if not data.get("code"):
+            data["code"] = services._next_activity_code(dossier)
+        if _dates_out_of_order(data.get("start_date"), data.get("end_date")):
+            return Response({"detail": _DATE_ORDER_MSG}, status=400)
+        assign_requested = "responsible_user" in request.data
+        assign_uid = data.pop("responsible_user", None)
+        if assign_requested:
+            data.pop("responsible", None)
         ser = StageActivitySerializer(data=data)
         ser.is_valid(raise_exception=True)
         obj = ser.save()
+        if wanted_source == "ad_hoc":
+            obj.source = "ad_hoc"
+            obj.save(update_fields=["source"])
+        if assign_requested:
+            try:
+                services.apply_activity_assignment(
+                    obj, dossier=dossier, responsible_user_id=assign_uid
+                )
+                obj.save()
+            except ValidationError as exc:
+                obj.delete()
+                return Response(exc.detail, status=400)
         return Response(StageActivitySerializer(obj).data, status=201)
 
     @action(
@@ -345,12 +549,44 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             services.assert_workspace_open_for_work(request.user, dossier, "plan")
         except ValidationError as exc:
             return Response(exc.detail, status=400)
+        if activity.locked and request.method == "DELETE":
+            return Response({"detail": "النشاط منسوخ من الوثيقة ولا يُحذف"}, status=400)
         if request.method == "DELETE":
             activity.delete()
             return Response(status=204)
-        ser = StageActivitySerializer(activity, data=request.data, partial=True)
+        if activity.locked and "title" in request.data and str(request.data.get("title") or "").strip() != activity.title:
+            return Response({"title": "عنوان النشاط المنسوخ من الوثيقة مقفل"}, status=400)
+        payload = {k: v for k, v in request.data.items() if k not in ("source", "locked", "code")}
+        start = payload["start_date"] if "start_date" in payload else activity.start_date
+        end = payload["end_date"] if "end_date" in payload else activity.end_date
+        if _dates_out_of_order(start, end):
+            return Response({"detail": _DATE_ORDER_MSG}, status=400)
+        if "executed_weeks" in payload:
+            cleaned, error = _clean_executed_weeks(activity, payload.get("executed_weeks"))
+            if error:
+                return error
+            payload["executed_weeks"] = cleaned
+        marks_done = payload.get("manual_status") == "done" or (
+            "progress_pct" in payload and str(payload.get("progress_pct") or "0").isdigit() and int(payload.get("progress_pct") or 0) >= 100
+        )
+        if marks_done and not activity.attachments.exists():
+            return Response({"detail": "الشاهد مطلوب عند الإتمام ولا يُغلق النشاط من الحالة وحدها"}, status=400)
+        assign_uid = None
+        assign_requested = "responsible_user" in payload
+        if assign_requested:
+            assign_uid = payload.pop("responsible_user")
+            payload.pop("responsible", None)
+        ser = StageActivitySerializer(activity, data=payload, partial=True)
         ser.is_valid(raise_exception=True)
         obj = ser.save()
+        if assign_requested:
+            try:
+                services.apply_activity_assignment(
+                    obj, dossier=dossier, responsible_user_id=assign_uid
+                )
+                obj.save()
+            except ValidationError as exc:
+                return Response(exc.detail, status=400)
         return Response(StageActivitySerializer(obj).data)
 
     @action(detail=True, methods=["get", "post"], url_path="attachments")
@@ -507,3 +743,82 @@ def public_approval_decide(request, token: str):
     except ValidationError as exc:
         return Response({"detail": exc.detail}, status=400)
     return Response({"decision": result.decision, "note": result.note})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def my_assigned_activities(request):
+    """مهام الخطة المسندة للمستخدم الحالي. O(A)."""
+    qs = (
+        StageActivity.objects.filter(responsible_user=request.user)
+        .select_related(
+            "stage",
+            "stage__dossier",
+            "stage__dossier__project",
+            "responsible_user",
+            "responsible_user__profile",
+        )
+        .order_by("-updated_at")
+    )
+    return Response({"results": StageActivitySerializer(qs, many=True).data})
+
+
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def my_assigned_activity_detail(request, activity_id: int):
+    """تحديث حالة مهمة مسندة للمسند إليه فقط (دون إتمام بدون شاهد). O(1)."""
+    activity = get_object_or_404(
+        StageActivity.objects.select_related("stage", "stage__dossier", "stage__dossier__project"),
+        pk=activity_id,
+        responsible_user=request.user,
+    )
+    dossier = activity.stage.dossier
+    services.assert_can_work_assigned_activity(request.user, dossier, activity)
+    allowed = {}
+    if "manual_status" in request.data:
+        status_val = request.data.get("manual_status") or ""
+        if status_val == "done":
+            return Response(
+                {"detail": "استخدم مسار الإتمام مع الشاهد لإغلاق المهمة"},
+                status=400,
+            )
+        if status_val not in ("", "in_progress"):
+            return Response({"manual_status": "حالة غير صالحة"}, status=400)
+        allowed["manual_status"] = status_val
+    if "notes" in request.data:
+        allowed["notes"] = request.data.get("notes") or ""
+    if not allowed:
+        return Response({"detail": "لا حقول قابلة للتحديث"}, status=400)
+    ser = StageActivitySerializer(activity, data=allowed, partial=True)
+    ser.is_valid(raise_exception=True)
+    obj = ser.save()
+    return Response(StageActivitySerializer(obj).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([AuthRateThrottle])
+def my_assigned_activity_complete(request, activity_id: int):
+    """إتمام مهمة مسندة مع شاهد من صفحة مهامي. O(1)."""
+    activity = get_object_or_404(
+        StageActivity.objects.select_related("stage", "stage__dossier"),
+        pk=activity_id,
+        responsible_user=request.user,
+    )
+    dossier = activity.stage.dossier
+    ser = CompleteActivitySerializer(data=request.data)
+    ser.is_valid(raise_exception=True)
+    try:
+        obj = services.complete_activity(
+            dossier=dossier,
+            activity=activity,
+            user=request.user,
+            lessons=ser.validated_data.get("lessons") or "",
+            notes=ser.validated_data.get("notes") or "",
+            evidence_url=ser.validated_data.get("evidence_url") or "",
+            evidence_file=request.FILES.get("file"),
+            evidence_title=ser.validated_data.get("evidence_title") or "",
+        )
+    except ValidationError as exc:
+        return Response(exc.detail, status=400)
+    return Response(StageActivitySerializer(obj).data)

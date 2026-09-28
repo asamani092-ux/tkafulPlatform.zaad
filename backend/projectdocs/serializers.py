@@ -96,6 +96,11 @@ class DossierWorkspaceSerializer(serializers.ModelSerializer):
 
 
 class StageActivitySerializer(serializers.ModelSerializer):
+    responsible_user_name = serializers.SerializerMethodField()
+    project_name = serializers.SerializerMethodField()
+    project_slug = serializers.SerializerMethodField()
+    stage_key = serializers.SerializerMethodField()
+
     class Meta:
         model = StageActivity
         fields = (
@@ -105,8 +110,14 @@ class StageActivitySerializer(serializers.ModelSerializer):
             "parent",
             "title",
             "responsible",
+            "responsible_user",
+            "responsible_user_name",
+            "project_name",
+            "project_slug",
+            "stage_key",
             "start_date",
             "end_date",
+            "executed_weeks",
             "manual_status",
             "auto_status",
             "progress_pct",
@@ -116,10 +127,44 @@ class StageActivitySerializer(serializers.ModelSerializer):
             "notes",
             "risks",
             "sort_order",
+            "source",
+            "locked",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("auto_status", "created_at", "updated_at")
+        read_only_fields = (
+            "auto_status",
+            "source",
+            "locked",
+            "created_at",
+            "updated_at",
+            "responsible_user_name",
+            "project_name",
+            "project_slug",
+            "stage_key",
+        )
+
+    def get_responsible_user_name(self, obj):
+        if obj.responsible_user_id:
+            from .services import _user_display_name
+
+            return _user_display_name(obj.responsible_user)
+        return obj.responsible or ""
+
+    def get_project_name(self, obj):
+        try:
+            return obj.stage.dossier.project.name
+        except Exception:
+            return ""
+
+    def get_project_slug(self, obj):
+        try:
+            return obj.stage.dossier.project.slug
+        except Exception:
+            return ""
+
+    def get_stage_key(self, obj):
+        return getattr(obj.stage, "key", "") or ""
 
     def create(self, validated):
         obj = StageActivity(**validated)
@@ -160,6 +205,7 @@ class ProjectDossierSerializer(serializers.ModelSerializer):
     project_name = serializers.CharField(source="project.name", read_only=True)
     manager_username = serializers.CharField(source="manager.username", read_only=True, default="")
     bypass_workspace_gates = serializers.SerializerMethodField()
+    can_approve = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectDossier
@@ -177,8 +223,12 @@ class ProjectDossierSerializer(serializers.ModelSerializer):
             "location",
             "projects_office_name",
             "projects_committee_name",
+            "sponsor",
             "sponsor_name",
             "sponsor_email",
+            "approver",
+            "approver_name",
+            "approver_email",
             "execution_start",
             "execution_end",
             "manager",
@@ -194,6 +244,7 @@ class ProjectDossierSerializer(serializers.ModelSerializer):
             "stages",
             "workspaces",
             "bypass_workspace_gates",
+            "can_approve",
             "created_at",
             "updated_at",
         )
@@ -213,6 +264,13 @@ class ProjectDossierSerializer(serializers.ModelSerializer):
 
         return can_bypass_workspace_gates(user, obj) if user else False
 
+    def get_can_approve(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        from .services import can_approve_dossier
+
+        return can_approve_dossier(user, obj) if user else False
+
 
 class ProjectDossierListSerializer(serializers.ModelSerializer):
     project_slug = serializers.CharField(source="project.slug", read_only=True)
@@ -230,6 +288,7 @@ class ProjectDossierListSerializer(serializers.ModelSerializer):
             "current_stage",
             "status",
             "sponsor_email",
+            "approver_email",
             "manager",
             "updated_at",
         )
@@ -266,6 +325,10 @@ class CreateDossierSerializer(serializers.Serializer):
     projects_committee_name = serializers.CharField(required=False, allow_blank=True)
     sponsor_name = serializers.CharField(required=False, allow_blank=True)
     sponsor_email = serializers.EmailField(required=False, allow_blank=True)
+    sponsor_id = serializers.IntegerField(required=False, allow_null=True)
+    approver_name = serializers.CharField(required=False, allow_blank=True)
+    approver_email = serializers.EmailField(required=False, allow_blank=True)
+    approver_id = serializers.IntegerField(required=False, allow_null=True)
     manager_id = serializers.IntegerField(required=False, allow_null=True)
     manager_email = serializers.EmailField(required=False, allow_blank=True)
     budget_association = serializers.DecimalField(max_digits=14, decimal_places=2, required=False)
@@ -277,7 +340,7 @@ class SectionPatchSerializer(serializers.Serializer):
 
 
 class DecideSerializer(serializers.Serializer):
-    decision = serializers.ChoiceField(choices=["approved", "returned"])
+    decision = serializers.ChoiceField(choices=["approved", "returned", "revoke"])
     note = serializers.CharField(required=False, allow_blank=True, default="")
 
 
@@ -295,5 +358,12 @@ class AllocateSerializer(serializers.Serializer):
 class CompleteActivitySerializer(serializers.Serializer):
     lessons = serializers.CharField(required=False, allow_blank=True, default="")
     notes = serializers.CharField(required=False, allow_blank=True, default="")
-    evidence_url = serializers.URLField(required=False, allow_blank=True, default="")
+    evidence_url = serializers.CharField(required=False, allow_blank=True, default="")
     evidence_title = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_evidence_url(self, value):
+        text = (value or "").strip()
+        if not text:
+            return ""
+        serializers.URLField().run_validation(text)
+        return text

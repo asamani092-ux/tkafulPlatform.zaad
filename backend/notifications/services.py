@@ -8,9 +8,9 @@ from __future__ import annotations
 import logging
 import re
 
-from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.mail import send_mail
+
+from core.email_rtl import send_rtl_email
 
 from .models import Notification, NotificationPreference
 
@@ -45,13 +45,7 @@ def _send_email(to_email: str, subject: str, body: str) -> None:
     if not to_email or not _EMAIL_RE.match(to_email):
         return
     try:
-        send_mail(
-            subject,
-            body,
-            getattr(settings, "DEFAULT_FROM_EMAIL", None) or "noreply@takaful.local",
-            [to_email],
-            fail_silently=True,
-        )
+        send_rtl_email(subject=subject, body=body, to=to_email, fail_silently=True)
     except Exception as exc:  # pragma: no cover
         logger.warning("email notify failed: %s", exc)
 
