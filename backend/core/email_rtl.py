@@ -29,7 +29,17 @@ class MailFromMismatchError(ValueError):
 
 
 def frontend_base_url() -> str:
-    return (getattr(settings, "FRONTEND_BASE_URL", None) or "http://localhost:3000").rstrip("/")
+    """رابط الواجهة لروابط البريد — يرفض localhost في الإنتاج. O(1)."""
+    url = (getattr(settings, "FRONTEND_BASE_URL", None) or "").rstrip("/")
+    debug = bool(getattr(settings, "DEBUG", True))
+    if url and ("localhost" in url.lower() or "127.0.0.1" in url) and not debug:
+        # احتياط إن تُجاوز الإعداد يدوياً
+        for key in ("CSRF_TRUSTED_ORIGINS", "CORS_ALLOWED_ORIGINS"):
+            for origin in getattr(settings, key, []) or []:
+                o = str(origin).rstrip("/")
+                if o.startswith("https://") and "localhost" not in o and "127.0.0.1" not in o:
+                    return o
+    return url or "http://localhost:3000"
 
 
 def smtp_host_user() -> str:

@@ -5,6 +5,7 @@ from core.email_rtl import (
     MSG_FROM_MISMATCH,
     MSG_SEND_AS_DENIED,
     MailFromMismatchError,
+    frontend_base_url,
     render_rtl_html,
     resolve_from_email,
     send_rtl_email,
@@ -53,6 +54,22 @@ class EmailRtlTests(SimpleTestCase):
         self.assertEqual(smtp_error_to_ar(exc), MSG_SEND_AS_DENIED)
         self.assertNotIn("SendAsDenied", smtp_error_to_ar(exc))
         self.assertEqual(smtp_error_to_ar(MailFromMismatchError(MSG_FROM_MISMATCH)), MSG_FROM_MISMATCH)
+
+    @override_settings(
+        DEBUG=False,
+        FRONTEND_BASE_URL="http://localhost:3000",
+        CSRF_TRUSTED_ORIGINS=["https://tkaful.alzaad.org.sa"],
+        CORS_ALLOWED_ORIGINS=["https://tkaful.alzaad.org.sa"],
+    )
+    def test_frontend_base_url_avoids_localhost_in_prod(self):
+        self.assertEqual(frontend_base_url(), "https://tkaful.alzaad.org.sa")
+
+    @override_settings(
+        DEBUG=True,
+        FRONTEND_BASE_URL="http://localhost:3000",
+    )
+    def test_frontend_base_url_allows_localhost_in_debug(self):
+        self.assertEqual(frontend_base_url(), "http://localhost:3000")
 
 
 class EmailRtlDbTests(TestCase):
