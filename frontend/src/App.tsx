@@ -33,7 +33,6 @@ const ForgotPasswordPage = lazy(() => import("./components/pages/Auth/ForgotPass
 const UserMain = lazy(() => import("./components/pages/user/Main"));
 const UserTasks = lazy(() => import("./components/pages/user/Task"));
 const UserSettings = lazy(() => import("./components/pages/user/Setting"));
-const PersonalInfo = lazy(() => import("./components/pages/user/PersonalInfo"));
 
 const AdminMain = lazy(() => import("./components/pages/admin/main"));
 const UsersAdmin = lazy(() => import("./components/pages/admin/UsersAdmin"));
@@ -136,7 +135,7 @@ function AppContent() {
           <Route path="/user/main" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserMain /></ProtectedRoute></Lazy>} />
           <Route path="/user/tasks" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserTasks /></ProtectedRoute></Lazy>} />
           <Route path="/user/settings" element={<Lazy><ProtectedRoute requiredRole="authenticated"><UserSettings /></ProtectedRoute></Lazy>} />
-          <Route path="/user/personal-info" element={<Lazy><ProtectedRoute requiredRole="authenticated"><PersonalInfo /></ProtectedRoute></Lazy>} />
+          <Route path="/user/personal-info" element={<Navigate to="/user/settings" replace />} />
 
           {/* —— لوحة الإدارة بنطاقات العمل —— */}
           <Route path="/Admin" element={<Lazy><ProtectedRoute requiredRole="admin"><AdminMain /></ProtectedRoute></Lazy>} />
