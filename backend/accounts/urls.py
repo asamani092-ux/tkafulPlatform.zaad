@@ -6,7 +6,7 @@ from rest_framework_simplejwt.views import (
 )
 from .views import register, me, update_profile, change_password, logout
 from .views_admin import AdminUserViewSet
-from .invite_views import invite_user, invite_status, accept_invite
+from .invite_views import invite_user, invite_status, accept_invite, forgot_password
 from .serializers import EmailTokenObtainPairSerializer
 from .otp_views import login_request_otp, login_verify_otp
 from core.throttles import AuthRateThrottle
@@ -36,6 +36,7 @@ urlpatterns = [
     path("auth/invite/", invite_user, name="invite-user"),
     path("auth/invite/<str:token>/", invite_status, name="invite-status"),
     path("auth/invite/<str:token>/accept/", accept_invite, name="invite-accept"),
+    path("auth/forgot-password/", forgot_password, name="forgot-password"),
     
     # User profile endpoints
     path("me/", me, name="me"),

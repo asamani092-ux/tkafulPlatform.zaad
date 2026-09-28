@@ -55,10 +55,11 @@ export default function SignIn() {
       return;
     }
     if (role === "admin") navigate("/Admin");
-    else if (role === "manager" || role === "employee") navigate("/Admin/staff");
+    else if (role === "manager") navigate("/Admin/staff");
     else if (role === "donor" || role === "supplier" || role === "representative") navigate("/projects");
     else if (role === "beneficiary") navigate("/user/main");
     else {
+      // employee ومتطوّع: مشاريع إن وُجدت عضوية، وإلا واجهة المستخدم
       try {
         const membershipsRes = await fetch(`${API_BASE_URL}/api/platform/my-memberships/`, {
           headers: { Authorization: `Bearer ${tokenData.access}` },
@@ -136,6 +137,11 @@ export default function SignIn() {
               error={errors.password}
               required
             />
+            <div className="text-start text-sm">
+              <Link to="/forgot-password" className="font-semibold text-primary hover:underline">
+                نسيت كلمة المرور؟
+              </Link>
+            </div>
             {errors.form && (
               <div
                 className="rounded-lg px-4 py-3 text-sm"

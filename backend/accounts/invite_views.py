@@ -46,22 +46,33 @@ def create_password_invite(user: User) -> PasswordInviteToken:
     )
 
 
-def send_invite_email(invite: PasswordInviteToken) -> bool:
+def send_invite_email(invite: PasswordInviteToken, *, reset: bool = False) -> bool:
     link = f"{_frontend_base()}/set-password/{invite.token}"
     name = ""
     profile = getattr(invite.user, "profile", None)
     if profile:
         name = (profile.name or "").strip()
-    body = (
-        f"السلام عليكم {name},\n\n"
-        f"تم إنشاء حساب لك في منصة تكافل وأثر.\n"
-        f"عيّن كلمة المرور من الرابط التالي (صالح لمدة {INVITE_DAYS} أيام):\n{link}\n\n"
-        f"البريد: {invite.user.email}\n\n"
-        f"مع تحيات منصة تكافل وأثر"
-    )
+    if reset:
+        subject = "إعادة تعيين كلمة المرور — تكافل وأثر"
+        body = (
+            f"السلام عليكم {name},\n\n"
+            f"طلبت إعادة تعيين كلمة المرور لمنصة تكافل وأثر.\n"
+            f"اضغط الرابط التالي (صالح لمدة {INVITE_DAYS} أيام):\n{link}\n\n"
+            f"إن لم تطلب ذلك فتجاهل هذه الرسالة.\n\n"
+            f"مع تحيات منصة تكافل وأثر"
+        )
+    else:
+        subject = "دعوة لتعيين كلمة المرور — تكافل وأثر"
+        body = (
+            f"السلام عليكم {name},\n\n"
+            f"تم إنشاء حساب لك في منصة تكافل وأثر.\n"
+            f"عيّن كلمة المرور من الرابط التالي (صالح لمدة {INVITE_DAYS} أيام):\n{link}\n\n"
+            f"البريد: {invite.user.email}\n\n"
+            f"مع تحيات منصة تكافل وأثر"
+        )
     try:
         return send_rtl_email(
-            subject="دعوة لتعيين كلمة المرور — تكافل وأثر",
+            subject=subject,
             body=body,
             to=invite.user.email,
             fail_silently=False,
@@ -69,6 +80,31 @@ def send_invite_email(invite: PasswordInviteToken) -> bool:
     except Exception:
         logger.exception("فشل إرسال دعوة كلمة المرور لـ %s", invite.user.email)
         return False
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@throttle_classes([AuthRateThrottle])
+def forgot_password(request):
+    """
+    طلب إعادة تعيين كلمة المرور عبر البريد.
+    دائماً رسالة نجاح عامة (لا يكشف وجود الحساب). O(1).
+    """
+    email = (request.data.get("email") or "").strip().lower()
+    generic = {
+        "detail": "إن وُجد حساب بهذا البريد فستصلك رسالة لإعادة تعيين كلمة المرور",
+    }
+    if not email or "@" not in email:
+        return Response({"email": "أدخل بريداً إلكترونياً صالحاً"}, status=400)
+    user = User.objects.filter(email__iexact=email, is_active=True).first()
+    if user and user.has_usable_password():
+        invite = create_password_invite(user)
+        send_invite_email(invite, reset=True)
+    elif user:
+        # حساب بلا كلمة مرور قابلة للاستخدام — أرسل دعوة تعيين
+        invite = create_password_invite(user)
+        send_invite_email(invite, reset=True)
+    return Response(generic, status=status.HTTP_200_OK)
 
 
 @api_view(["POST"])

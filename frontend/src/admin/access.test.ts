@@ -46,13 +46,21 @@ describe("admin access", () => {
     expect(canAccessAdminPath("/Admin/executive", admin)).toBe(true);
   });
 
-  it("orgStaff (manager/employee) reaches staff domain but not admin-only domains", () => {
+  it("orgStaff manager reaches staff; employee does not (مشاريع فقط)", () => {
     const manager = buildAdminAccess("manager", false, []);
     expect(canAccessAdminPath("/Admin/staff", manager)).toBe(true);
     expect(canAccessAdminPath("/Admin/staff/manage", manager)).toBe(true);
     expect(canAccessAdminPath("/Admin/users", manager)).toBe(false);
     expect(canAccessAdminPath("/Admin/settings", manager)).toBe(false);
     const employee = buildAdminAccess("employee", false, []);
-    expect(canAccessAdminPath("/Admin/staff", employee)).toBe(true);
+    expect(canAccessAdminPath("/Admin/staff", employee)).toBe(false);
+    expect(canAccessAdminPath("/Admin/projects", employee)).toBe(false);
+    expect(defaultAdminHome(employee)).toBe("/user/main");
+    const empWithProject = buildAdminAccess("employee", false, [
+      { project: 1, project_slug: "p1", project_name: "مشروع", role: "member", project_tools: [] },
+    ]);
+    expect(canAccessAdminPath("/Admin/projects", empWithProject)).toBe(true);
+    expect(canAccessAdminPath("/Admin/staff", empWithProject)).toBe(false);
+    expect(defaultAdminHome(empWithProject)).toBe("/Admin/projects");
   });
 });

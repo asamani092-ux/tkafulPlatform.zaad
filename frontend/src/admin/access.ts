@@ -23,26 +23,25 @@ export function buildAdminAccess(
   };
 }
 
-/** أدوار الكادر التشغيلي (orgStaff) — نطاق «الكادر» أوسع من عضوية المشروع. */
+/** أدوار يمكنها دخول لوحة الإدارة عبر عضوية مشروع أو نطاق الكادر. */
 export const ORG_STAFF_ROLES = ["admin", "manager", "employee"] as const;
 
-/** O(1) — يحدد إن كان دور الكادر التشغيلي (مدير/موظف/مشرف). */
+/** O(1) — يحدد إن كان دور كادر/موظف إداري. */
 export function isOrgStaff(userRole: string): boolean {
   return (ORG_STAFF_ROLES as readonly string[]).includes(userRole);
 }
 
 /**
  * O(1) — بوابة موحّدة لكل مسارات الإدارة (RC-C).
- * الهرمية: admin ⊇ orgStaff (الكادر) ⊇ staff (عضوية مشروع).
- * تُستخدم من ProtectedRoute لكل النطاقات دون تشعّب staff/orgStaff.
+ * الهرمية: admin ⊇ manager(كادر) ⊇ employee/عضو مشروع (مشاريع فقط).
  */
 export function canAccessAdminPath(pathname: string, ctx: AdminAccessContext): boolean {
   if (ctx.isGlobalAdmin) return true;
   const p = pathname.toLowerCase();
 
-  // نطاق الكادر: للكادر التشغيلي (مدير/موظف)؛ المشرف مشمول عبر البوابة أعلاه.
+  // نطاق الكادر: المدير فقط حالياً (الموظف لا يرى تبويب الكادر)
   if (p.startsWith("/admin/staff") || p.startsWith("/admin/executive")) {
-    return ctx.userRole === "manager" || ctx.userRole === "employee";
+    return ctx.userRole === "manager";
   }
 
   if (p === "/admin" || p === "/admin/") return false;
@@ -71,6 +70,6 @@ export function visibleDomainsForUser(
 export function defaultAdminHome(ctx: AdminAccessContext): string {
   if (ctx.isGlobalAdmin) return "/Admin";
   if (ctx.hasMemberships) return "/Admin/projects";
-  if (ctx.userRole === "manager" || ctx.userRole === "employee") return "/Admin/staff";
+  if (ctx.userRole === "manager") return "/Admin/staff";
   return "/user/main";
 }
