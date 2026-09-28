@@ -605,9 +605,9 @@ def sync_document_from_card(dossier: ProjectDossier) -> None:
     ensure_document_sections(dossier)
     by_key = {s.key: s for s in dossier.sections.filter(kind="document")}
 
-    # 1) البيانات — تُنسخ دائماً حتى لو اعتُمدت البطاقة (مصدرها البطاقة)
+    # 1) البيانات — تُنسخ دائماً حتى لو اعتُمدت البطاقة (مصدرها البطاقة)، ما لم تُعتمد الوثيقة
     basics = by_key.get("basics")
-    if basics:
+    if basics and basics.status != "approved":
         basics.data = {
             "marketing_name": dossier.marketing_name or dossier.project.name,
             "department": dossier.department or "",
@@ -626,7 +626,7 @@ def sync_document_from_card(dossier: ProjectDossier) -> None:
 
     # 2) المؤشرات
     indicators = by_key.get("indicators")
-    if indicators:
+    if indicators and indicators.status != "approved":
         prev = (indicators.data or {}).get("rows") or []
         merged = _merge_table_from_card(prev, _card_section_rows(dossier, "indicators"))
         indicators.data = {"rows": merged}
@@ -635,7 +635,7 @@ def sync_document_from_card(dossier: ProjectDossier) -> None:
 
     # 3) التجارب + فئة مستهدفة
     similar = by_key.get("similar_experiences")
-    if similar:
+    if similar and similar.status != "approved":
         prev_data = similar.data or {}
         prev_rows = prev_data.get("rows") or []
         merged = _merge_table_from_card(prev_rows, _card_section_rows(dossier, "similar_experiences"))
@@ -667,7 +667,7 @@ def sync_document_from_card(dossier: ProjectDossier) -> None:
 
     # 6) المخصص من البطاقة (عرض فقط) داخل قسم الميزانية
     budget = by_key.get("budget")
-    if budget:
+    if budget and budget.status != "approved":
         prev = budget.data or {}
         card_alloc = _lock_rows(_card_section_rows(dossier, "project_budget"))
         lines = prev.get("lines") or []

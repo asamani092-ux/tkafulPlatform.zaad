@@ -154,11 +154,6 @@ CARD_SECTIONS: list[dict] = [
 
 
 # المراحل الرئيسية الثابتة في وثيقة المشروع (مرجع المنصة)
-def plan_phase_keys() -> list[str]:
-    """مفاتيح المراحل الخمس لاعتماد الخطة. O(1)."""
-    return [p["key"] for p in DOCUMENT_FIXED_PHASES]
-
-
 DOCUMENT_FIXED_PHASES: list[dict] = [
     {"key": "define", "label": "تحديد وتعريف المشروع"},
     {"key": "prepare", "label": "إعداد المشروع"},
@@ -166,6 +161,11 @@ DOCUMENT_FIXED_PHASES: list[dict] = [
     {"key": "execute", "label": "تنفيذ المشروع"},
     {"key": "close", "label": "إغلاق المشروع"},
 ]
+
+
+def plan_phase_keys() -> list[str]:
+    """مفاتيح المراحل الخمس لاعتماد الخطة. O(1)."""
+    return [p["key"] for p in DOCUMENT_FIXED_PHASES]
 
 LOGICAL_IMPACT_ROWS: list[dict] = [
     {"row_key": "impact", "label": "الأثر"},
