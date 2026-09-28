@@ -138,7 +138,7 @@ export const UAT_SECTIONS: UatSection[] = [
       },
       {
         id: "8.2",
-        title: "فتح /user/tasks و /user/personal-info و /user/settings",
+        title: "فتح /user/tasks و /user/settings",
         expected: "الصفحات تعمل داخل UserShell؛ القائمة الجانبية أو الـ drawer على الجوال",
       },
       {
