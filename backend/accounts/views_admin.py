@@ -203,7 +203,7 @@ class AdminUserViewSet(viewsets.GenericViewSet):
             elif is_active in ("false", "0", 0, "False"):
                 is_active = False
             else:
-                return Response({"detail": "is_active مطلوب"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"detail": "حالة النشاط مطلوبة"}, status=status.HTTP_400_BAD_REQUEST)
         if user.is_active and not is_active and would_remove_last_admin(user):
             return Response({"detail": MSG_LAST_ADMIN_DISABLE}, status=status.HTTP_400_BAD_REQUEST)
         user.is_active = is_active

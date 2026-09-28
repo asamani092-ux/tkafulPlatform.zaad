@@ -15,13 +15,84 @@ logger = logging.getLogger(__name__)
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+MSG_FROM_MISMATCH = (
+    "بريد المرسل يجب أن يطابق حساب SMTP أو يملك صلاحية الإرسال باسمه"
+)
+MSG_SEND_AS_DENIED = (
+    "غير مسموح الإرسال بهذا البريد؛ اختر بريد المرسل المطابق لحساب SMTP"
+)
+MSG_SMTP_GENERIC = "تعذّر إرسال البريد — تحقق من إعدادات SMTP وحاول مرة أخرى"
+
+
+class MailFromMismatchError(ValueError):
+    """رفض From قبل SMTP عند عدم التطابق مع EMAIL_HOST_USER."""
+
 
 def frontend_base_url() -> str:
     return (getattr(settings, "FRONTEND_BASE_URL", None) or "http://localhost:3000").rstrip("/")
 
 
+def smtp_host_user() -> str:
+    return (getattr(settings, "EMAIL_HOST_USER", None) or "").strip()
+
+
 def default_from_email() -> str:
-    return getattr(settings, "DEFAULT_FROM_EMAIL", None) or "noreply@takaful.local"
+    """قيمة From الافتراضية — تفضّل حساب SMTP ثم إعداد المنصّة ثم DEFAULT_FROM_EMAIL."""
+    return resolve_from_email(None)
+
+
+def ensure_mail_from_email() -> str:
+    """يملأ mail_from_email من البيئة إن كان فارغاً. O(1)."""
+    from core.models import PlatformSetting
+
+    obj = PlatformSetting.load()
+    current = (obj.mail_from_email or "").strip()
+    if current:
+        return current
+    host = smtp_host_user()
+    fallback = (getattr(settings, "DEFAULT_FROM_EMAIL", None) or "").strip()
+    fill = host or fallback
+    if fill:
+        obj.mail_from_email = fill
+        obj.save(update_fields=["mail_from_email"])
+    return fill
+
+
+def resolve_from_email(explicit: str | None = None) -> str:
+    """
+    أولوية From: صريح → إعداد المنصّة → EMAIL_HOST_USER → DEFAULT_FROM_EMAIL.
+    إن وُجد EMAIL_HOST_USER واختلف عن From → رفض عربي قبل SMTP.
+    """
+    candidate = (explicit or "").strip()
+    if not candidate:
+        try:
+            candidate = ensure_mail_from_email()
+        except Exception:
+            candidate = ""
+    if not candidate:
+        candidate = smtp_host_user()
+    if not candidate:
+        candidate = (getattr(settings, "DEFAULT_FROM_EMAIL", None) or "").strip()
+    if not candidate:
+        candidate = "noreply@takaful.local"
+
+    host = smtp_host_user()
+    if host and candidate.lower() != host.lower():
+        raise MailFromMismatchError(MSG_FROM_MISMATCH)
+    return candidate
+
+
+def smtp_error_to_ar(exc: BaseException) -> str:
+    """ترجمة أخطاء SMTP الشائعة إلى جملة عربية قصيرة — بلا سلسلة MAPI."""
+    text = str(exc or "")
+    lower = text.lower()
+    if "sendasdenied" in lower or "not allowed to send as" in lower or " 554 " in f" {text} ":
+        return MSG_SEND_AS_DENIED
+    if "authentication" in lower or "535" in text or "login" in lower:
+        return "فشل التحقق من حساب SMTP — راجع بريد المرسل وكلمة المرور"
+    if isinstance(exc, MailFromMismatchError):
+        return str(exc) or MSG_FROM_MISMATCH
+    return MSG_SMTP_GENERIC
 
 
 def _plain_to_html_body(plain: str) -> str:
@@ -66,6 +137,7 @@ def send_rtl_email(
     body: str,
     to: list[str] | str,
     fail_silently: bool = False,
+    from_email: str | None = None,
 ) -> bool:
     """يرسل بريداً بنسخة نصية وHTML باتجاه RTL. O(1)."""
     recipients = [to] if isinstance(to, str) else list(to or [])
@@ -74,17 +146,24 @@ def send_rtl_email(
     if not recipients:
         return False
     try:
+        sender = resolve_from_email(from_email)
         msg = EmailMultiAlternatives(
             subject=subject,
             body=body,
-            from_email=default_from_email(),
+            from_email=sender,
             to=recipients,
         )
         msg.attach_alternative(render_rtl_html(title=subject, plain_body=body), "text/html")
         msg.send(fail_silently=False)
         return True
+    except MailFromMismatchError:
+        logger.warning("رفض From غير المطابق لـ SMTP")
+        if not fail_silently:
+            raise
+        return False
     except Exception:
         logger.exception("فشل إرسال بريد RTL إلى %s", recipients)
         if not fail_silently:
+            # أعد رفع الاستثناء الأصلي؛ المستدعي يستخدم smtp_error_to_ar
             raise
         return False

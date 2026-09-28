@@ -205,6 +205,39 @@ class NotificationCenterTests(APITestCase):
         self.assertIn(self.admin.email, mail.outbox[0].to)
         self.assertIn('dir="rtl"', mail.outbox[0].alternatives[0][0])
 
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        EMAIL_HOST_USER="tkaful@alzaad.org.sa",
+        DEFAULT_FROM_EMAIL="td@alzaad.org.sa",
+    )
+    def test_test_email_rejects_from_mismatch_arabic(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/notifications/test-email/",
+            {"from_email": "td@alzaad.org.sa"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("SMTP", res.data["detail"])
+        self.assertNotIn("SendAsDenied", str(res.data))
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        EMAIL_HOST_USER="tkaful@alzaad.org.sa",
+        DEFAULT_FROM_EMAIL="tkaful@alzaad.org.sa",
+    )
+    def test_test_email_accepts_matching_from(self):
+        from django.core import mail
+
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/notifications/test-email/",
+            {"from_email": "tkaful@alzaad.org.sa"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(mail.outbox[0].from_email, "tkaful@alzaad.org.sa")
+
     def test_cannot_mark_another_users_notification(self):
         n = Notification.objects.create(user=self.admin, message="خاص")
         self.client.force_authenticate(self.vol)

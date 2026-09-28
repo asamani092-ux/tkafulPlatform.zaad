@@ -4,6 +4,8 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { isValidEmail, validatePassword, isValidSaudiPhone, isValidSaudiNationalId } from "../../../utils/validation";
 import { API_BASE_URL } from "../../../config";
+import { extractErrorDetail } from "../../../admin/userManagement";
+import { passwordErrorsToAr } from "../../../utils/passwordErrors";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
 import Select from "../../ui/Select";
@@ -107,7 +109,11 @@ export default function SignUp() {
       });
       const data = await res.json();
       if (!res.ok) {
-        error({ title: "تعذّر إنشاء الحساب", description: typeof data === "object" ? Object.values(data).flat().join(" • ") : "حاول مرة أخرى" });
+        const desc =
+          data && typeof data === "object" && data.password
+            ? passwordErrorsToAr(data.password)
+            : extractErrorDetail(data);
+        error({ title: "تعذّر إنشاء الحساب", description: desc || "حاول مرة أخرى" });
         setIsSubmitting(false);
         return;
       }

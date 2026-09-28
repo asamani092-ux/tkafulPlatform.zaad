@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
@@ -27,13 +27,37 @@ export default function BroadcastAdmin() {
   const [kind, setKind] = useState("info");
   const [link, setLink] = useState("");
   const [subject, setSubject] = useState("");
+  const [fromEmail, setFromEmail] = useState("");
+  const [fromOptions, setFromOptions] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
+
+  useEffect(() => {
+    authFetch("/api/settings/")
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const opts = Array.from(
+          new Set(
+            [data.mail_from_email, data.smtp_host_user]
+              .map((e: string | undefined) => (e || "").trim())
+              .filter(Boolean),
+          ),
+        ) as string[];
+        setFromOptions(opts);
+        setFromEmail(opts[0] || "");
+      })
+      .catch(() => {});
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) {
       toast.error({ title: "الرسالة مطلوبة" });
+      return;
+    }
+    if (channel === "email" && !fromEmail.trim()) {
+      toast.error({ title: "اختر بريد المرسل" });
       return;
     }
     setBusy(true);
@@ -46,6 +70,7 @@ export default function BroadcastAdmin() {
       };
       if (role) body.role = role;
       if (channel === "email" && subject.trim()) body.subject = subject.trim();
+      if (channel === "email") body.from_email = fromEmail.trim();
       const res = await authFetch("/api/notifications/broadcast/", {
         method: "POST",
         body: JSON.stringify(body),
@@ -71,9 +96,16 @@ export default function BroadcastAdmin() {
   };
 
   const sendTestEmail = async () => {
+    if (!fromEmail.trim()) {
+      toast.error({ title: "اختر بريد المرسل" });
+      return;
+    }
     setTesting(true);
     try {
-      const res = await authFetch("/api/notifications/test-email/", { method: "POST", body: "{}" });
+      const res = await authFetch("/api/notifications/test-email/", {
+        method: "POST",
+        body: JSON.stringify({ from_email: fromEmail.trim() }),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast.error({ title: "فشل البريد التجريبي", description: extractErrorDetail(data) || data.detail });
@@ -108,12 +140,27 @@ export default function BroadcastAdmin() {
             <option value="email">عبر البريد</option>
           </Select>
           {channel === "email" && (
-            <Input
-              label="موضوع البريد (اختياري)"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="تعميم من منصة تكافل وأثر"
-            />
+            <>
+              <Select
+                label="أرسل من"
+                value={fromEmail}
+                onChange={(e) => setFromEmail(e.target.value)}
+                required
+              >
+                {fromOptions.length === 0 && <option value="">لا يتوفر بريد مرسل — اضبطه من الإعدادات</option>}
+                {fromOptions.map((addr) => (
+                  <option key={addr} value={addr}>
+                    {addr}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                label="موضوع البريد (اختياري)"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="تعميم من منصة تكافل وأثر"
+              />
+            </>
           )}
           <Textarea
             label="الرسالة"
@@ -152,9 +199,24 @@ export default function BroadcastAdmin() {
         <p className="mb-3 text-sm text-brand-gray">
           يُرسل رسالة RTL قصيرة إلى بريدك للتحقق من إعدادات SMTP الرسمية.
         </p>
-        <Button type="button" variant="secondary" disabled={testing} onClick={() => void sendTestEmail()}>
-          {testing ? "جاري الإرسال…" : "إرسال بريد تجريبي"}
-        </Button>
+        <Select
+          label="أرسل من"
+          value={fromEmail}
+          onChange={(e) => setFromEmail(e.target.value)}
+          required
+        >
+          {fromOptions.length === 0 && <option value="">لا يتوفر بريد مرسل — اضبطه من الإعدادات</option>}
+          {fromOptions.map((addr) => (
+            <option key={addr} value={addr}>
+              {addr}
+            </option>
+          ))}
+        </Select>
+        <div className="mt-3">
+          <Button type="button" variant="secondary" disabled={testing} onClick={() => void sendTestEmail()}>
+            {testing ? "جاري الإرسال…" : "إرسال بريد تجريبي"}
+          </Button>
+        </div>
       </Card>
       </div>
     </AdminShell>

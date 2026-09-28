@@ -5,6 +5,19 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import Profile
 from .admin_users import ROLE_VALUES, MSG_INVALID_ROLE
+from .password_ar import password_errors_to_ar
+
+
+_AR_EMAIL = {
+    "invalid": "أدخل بريداً إلكترونياً صالحاً",
+    "blank": "البريد الإلكتروني مطلوب",
+    "required": "البريد الإلكتروني مطلوب",
+}
+_AR_REQUIRED = {
+    "blank": "هذا الحقل مطلوب",
+    "required": "هذا الحقل مطلوب",
+    "null": "هذا الحقل مطلوب",
+}
 
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -39,21 +52,35 @@ class RegisterSerializer(serializers.Serializer):
     Serializer for user registration - matches frontend payload exactly
     """
     # User fields
-    email = serializers.EmailField(required=True)
+    email = serializers.EmailField(required=True, error_messages=_AR_EMAIL)
     password = serializers.CharField(
         write_only=True,
         required=True,
-        validators=[validate_password],
-        style={'input_type': 'password'}
+        style={'input_type': 'password'},
+        error_messages=_AR_REQUIRED,
     )
     
     # Profile fields - matching frontend exactly
-    name = serializers.CharField(required=True, max_length=150)
-    gender = serializers.ChoiceField(choices=["ذكر", "أنثى"], required=True)
-    age = serializers.IntegerField(required=True, min_value=18, max_value=65)
-    city = serializers.CharField(required=True, max_length=100)
-    phone = serializers.CharField(required=True, max_length=30)
-    qualification = serializers.CharField(required=True, max_length=100)
+    name = serializers.CharField(required=True, max_length=150, error_messages=_AR_REQUIRED)
+    gender = serializers.ChoiceField(
+        choices=["ذكر", "أنثى"],
+        required=True,
+        error_messages={**_AR_REQUIRED, "invalid_choice": "الجنس غير صالح"},
+    )
+    age = serializers.IntegerField(
+        required=True,
+        min_value=18,
+        max_value=65,
+        error_messages={
+            **_AR_REQUIRED,
+            "invalid": "العمر غير صالح",
+            "min_value": "العمر يجب أن يكون 18 على الأقل",
+            "max_value": "العمر يجب ألا يتجاوز 65",
+        },
+    )
+    city = serializers.CharField(required=True, max_length=100, error_messages=_AR_REQUIRED)
+    phone = serializers.CharField(required=True, max_length=30, error_messages=_AR_REQUIRED)
+    qualification = serializers.CharField(required=True, max_length=100, error_messages=_AR_REQUIRED)
     national_id = serializers.CharField(required=False, allow_blank=True, max_length=20)
     region = serializers.CharField(required=False, allow_blank=True, max_length=100)
     available_days = serializers.ListField(
@@ -72,6 +99,13 @@ class RegisterSerializer(serializers.Serializer):
         if User.objects.filter(email=value.lower()).exists():
             raise serializers.ValidationError("البريد الإلكتروني مسجل مسبقاً")
         return value.lower()
+
+    def validate_password(self, value):
+        try:
+            validate_password(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(password_errors_to_ar(list(exc.messages)))
+        return value
 
     def validate_phone(self, value):
         """Validate Saudi phone number format"""
@@ -176,10 +210,15 @@ class AdminUserSerializer(serializers.ModelSerializer):
 
 
 class AdminUserCreateSerializer(serializers.Serializer):
-    email = serializers.EmailField(required=True)
-    name = serializers.CharField(required=True, max_length=150)
-    role = serializers.CharField(required=True)
-    password = serializers.CharField(write_only=True, required=True, style={"input_type": "password"})
+    email = serializers.EmailField(required=True, error_messages=_AR_EMAIL)
+    name = serializers.CharField(required=True, max_length=150, error_messages=_AR_REQUIRED)
+    role = serializers.CharField(required=True, error_messages=_AR_REQUIRED)
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        style={"input_type": "password"},
+        error_messages=_AR_REQUIRED,
+    )
     city = serializers.CharField(required=False, allow_blank=True, max_length=100)
     phone = serializers.CharField(required=False, allow_blank=True, max_length=30)
     national_id = serializers.CharField(required=False, allow_blank=True, max_length=20)
@@ -199,7 +238,7 @@ class AdminUserCreateSerializer(serializers.Serializer):
         try:
             validate_password(value)
         except DjangoValidationError as exc:
-            raise serializers.ValidationError(list(exc.messages))
+            raise serializers.ValidationError(password_errors_to_ar(list(exc.messages)))
         return value
 
     def create(self, validated_data):

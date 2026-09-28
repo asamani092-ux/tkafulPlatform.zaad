@@ -84,11 +84,20 @@ export default function SignIn() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setErrors({
-          form:
-            (typeof data.detail === "string" && data.detail) ||
-            "البريد الإلكتروني أو كلمة المرور غير صحيحة",
-        });
+        const raw =
+          (typeof data.detail === "string" && data.detail) ||
+          (Array.isArray(data.detail) && typeof data.detail[0] === "string" && data.detail[0]) ||
+          "";
+        const lower = String(raw).toLowerCase();
+        const formMsg =
+          !raw ||
+          lower.includes("no active account") ||
+          lower.includes("credentials")
+            ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+            : /[\u0600-\u06FF]/.test(raw)
+              ? raw
+              : "البريد الإلكتروني أو كلمة المرور غير صحيحة";
+        setErrors({ form: formMsg });
         setIsSubmitting(false);
         return;
       }
