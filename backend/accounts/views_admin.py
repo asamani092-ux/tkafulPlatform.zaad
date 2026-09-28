@@ -3,6 +3,8 @@
 التعقيد: list O(N) للفلترة في قاعدة البيانات وصفحة حجمها P → O(P) تسلسلاً؛ الإجراءات O(1).
 """
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q, ProtectedError
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -27,6 +29,7 @@ from .admin_users import (
     would_remove_last_admin,
 )
 from .pagination import AdminUserPagination
+from .password_ar import password_errors_to_ar
 from .serializers import AdminUserCreateSerializer, AdminUserSerializer, AdminUserUpdateSerializer
 
 
@@ -141,6 +144,35 @@ class AdminUserViewSet(viewsets.GenericViewSet):
             request=request,
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"], url_path="set_password")
+    def set_password(self, request, pk=None):
+        """تعيين كلمة مرور مباشرة من المشرف. O(1)."""
+        user = self.get_object()
+        password = request.data.get("password") or ""
+        if not password:
+            return Response({"detail": "كلمة المرور الجديدة مطلوبة"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            validate_password(password, user=user)
+        except DjangoValidationError as exc:
+            return Response(
+                {"detail": password_errors_to_ar(list(exc.messages))},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user.set_password(password)
+        user.save(update_fields=["password"])
+        profile = getattr(user, "profile", None)
+        if profile and profile.must_reset_password:
+            profile.must_reset_password = False
+            profile.save(update_fields=["must_reset_password"])
+        log_activity(
+            actor=request.user,
+            action=ACTION_USER_UPDATE,
+            target=user,
+            summary=f"تعيين كلمة مرور للمستخدم {user.email}",
+            request=request,
+        )
+        return Response({"success": True, "detail": "تم تحديث كلمة المرور"})
 
     @action(detail=True, methods=["post"], url_path="set_role")
     def set_role(self, request, pk=None):

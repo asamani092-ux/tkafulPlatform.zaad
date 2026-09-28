@@ -113,6 +113,7 @@ export const ADMIN_DOMAINS: AdminDomain[] = [
     superAdminOnly: true,
     links: [
       { to: "/Admin/settings", label: "إعدادات المنصّة" },
+      { to: "/Admin/settings/broadcast", label: "التعميم الداخلي" },
       { to: "/Admin/settings/roles", label: "الأدوار" },
       { to: "/Admin/settings/activity", label: "سجل النشاط" },
       { to: "/Admin/settings/project-types", label: "أنواع المشاريع" },
@@ -143,7 +144,6 @@ export const LEGACY_ADMIN_REDIRECTS: Array<{ from: string; to: string }> = [
   { from: "/executive/manage", to: "/Admin/staff/manage" },
   { from: "/admin/signin", to: "/signin" },
   { from: "/saqya", to: "/projects/saqya" },
-  { from: "/Admin/settings/broadcast", to: "/Admin/settings" },
 ];
 
 /** مسارات التحويل المسجّلة في الراوتر */

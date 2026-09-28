@@ -180,6 +180,8 @@ EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() in ("1", "true",
 EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False").lower() in ("1", "true", "yes")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "tkaful@alzaad.org.sa")
 SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
+# رابط الواجهة لروابط الاعتماد والدعوات في البريد
+FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
 # طارئ فقط: تخطّي OTP عند الدخول إذا فشل البريد أو أثناء ضبط SMTP
 LOGIN_OTP_DISABLED = os.environ.get("LOGIN_OTP_DISABLED", "False").lower() in (
     "1",

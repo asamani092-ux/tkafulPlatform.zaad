@@ -164,3 +164,25 @@ class AdminUserManagementTests(APITestCase):
         res = self.client.get("/api/accounts/users/", {"is_active": "false"})
         self.assertTrue(all(r["is_active"] is False for r in res.data["results"]))
         self.assertGreaterEqual(res.data["count"], 1)
+
+    def test_admin_set_password(self):
+        res = self.client.post(
+            f"/api/accounts/users/{self.vol.id}/set_password/",
+            {"password": "NewPass12345!"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertTrue(res.data.get("success"))
+        self.vol.refresh_from_db()
+        self.assertTrue(self.vol.check_password("NewPass12345!"))
+        self.assertNotIn("password", res.data)
+        self.assertNotIn("NewPass", str(res.data))
+
+    def test_non_admin_cannot_set_password(self):
+        self.client.force_authenticate(self.vol)
+        res = self.client.post(
+            f"/api/accounts/users/{self.admin.id}/set_password/",
+            {"password": "NewPass12345!"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 403)

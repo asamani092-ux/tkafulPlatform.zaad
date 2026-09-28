@@ -329,7 +329,11 @@ export default function ProjectDossierWorkspace() {
       toast.error({ title: data.detail || data.approver_email || data.sponsor_email || data.status || data.workspace || "تعذّر الإرسال" });
       return;
     }
-    toast.success({ title: "أُرسل التبويب للاعتماد" });
+    if (data.email_sent === false) {
+      toast.error({ title: "أُرسل للاعتماد داخل المنصة", description: "تعذّر إرسال بريد صاحب الاعتماد — تحقّق من إعدادات البريد." });
+    } else {
+      toast.success({ title: "أُرسل التبويب للاعتماد", description: data.email_sent ? "وأُرسل بريد لصاحب الاعتماد" : undefined });
+    }
     await load("silent");
   };
 

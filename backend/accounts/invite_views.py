@@ -8,11 +8,9 @@ import logging
 import secrets
 from datetime import timedelta
 
-from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import status
@@ -20,6 +18,7 @@ from rest_framework.decorators import api_view, permission_classes, throttle_cla
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from core.email_rtl import frontend_base_url, send_rtl_email
 from core.permissions import IsAdmin
 from core.throttles import AuthRateThrottle
 
@@ -33,7 +32,7 @@ INVITE_DAYS = 7
 
 
 def _frontend_base() -> str:
-    return (getattr(settings, "FRONTEND_BASE_URL", None) or "http://localhost:3000").rstrip("/")
+    return frontend_base_url()
 
 
 def create_password_invite(user: User) -> PasswordInviteToken:
@@ -61,14 +60,12 @@ def send_invite_email(invite: PasswordInviteToken) -> bool:
         f"مع تحيات منصة تكافل وأثر"
     )
     try:
-        send_mail(
-            "دعوة لتعيين كلمة المرور — تكافل وأثر",
-            body,
-            settings.DEFAULT_FROM_EMAIL,
-            [invite.user.email],
+        return send_rtl_email(
+            subject="دعوة لتعيين كلمة المرور — تكافل وأثر",
+            body=body,
+            to=invite.user.email,
             fail_silently=False,
         )
-        return True
     except Exception:
         logger.exception("فشل إرسال دعوة كلمة المرور لـ %s", invite.user.email)
         return False
