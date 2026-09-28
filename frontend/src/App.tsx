@@ -27,6 +27,7 @@ import WaterSupplyRequestPage from "./components/pages/WaterSupplyRequestPage";
 const SignIn = lazy(() => import("./components/pages/Auth/SignIn"));
 const SignUp = lazy(() => import("./components/pages/Auth/SignUp"));
 const SetPasswordPage = lazy(() => import("./components/pages/Auth/SetPasswordPage"));
+const ForgotPasswordPage = lazy(() => import("./components/pages/Auth/ForgotPasswordPage"));
 
 // Code-split heavy portals
 const UserMain = lazy(() => import("./components/pages/user/Main"));
@@ -127,6 +128,7 @@ function AppContent() {
           <Route path="/services/water-supply" element={<WaterSupplyRequestPage />} />
           <Route path="/signin" element={<Lazy><SignIn /></Lazy>} />
           <Route path="/signup" element={<Lazy><SignUp /></Lazy>} />
+          <Route path="/forgot-password" element={<Lazy><ForgotPasswordPage /></Lazy>} />
           <Route path="/set-password/:token" element={<Lazy><SetPasswordPage /></Lazy>} />
           <Route path="/403" element={<ForbiddenPage />} />
           <Route path="/404" element={<NotFoundPage />} />

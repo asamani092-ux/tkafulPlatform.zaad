@@ -93,7 +93,7 @@ export default function SetPasswordPage() {
   return (
     <div className="mx-auto max-w-md px-4 py-16" dir="rtl">
       <Card>
-        <h1 className="mb-1 text-xl font-extrabold text-primary">تعيين كلمة المرور</h1>
+        <h1 className="mb-1 text-xl font-extrabold text-primary">تعيين / إعادة كلمة المرور</h1>
         <p className="mb-4 text-sm text-brand-gray">
           {name || "مرحباً"} · {email}
         </p>

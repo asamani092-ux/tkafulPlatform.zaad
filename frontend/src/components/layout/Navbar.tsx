@@ -23,7 +23,9 @@ export default function Navbar() {
   const dashboardPath = loading ? "/user/main" : defaultAdminHome(access);
   const showAdminLink = loading
     ? false
-    : access.isGlobalAdmin || access.hasMemberships || ["manager", "employee"].includes(access.userRole);
+    : access.isGlobalAdmin ||
+      access.hasMemberships ||
+      access.userRole === "manager";
 
   useEffect(() => {
     setOpen(false);

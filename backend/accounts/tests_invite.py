@@ -1,5 +1,6 @@
 """اختبارات دعوة تعيين كلمة المرور."""
 from django.contrib.auth.models import User
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
@@ -45,3 +46,31 @@ class PasswordInviteTests(APITestCase):
         self.assertTrue(user.check_password("Hello12345!"))
         invite = PasswordInviteToken.objects.get(token=token)
         self.assertIsNotNone(invite.consumed_at)
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_forgot_password_sends_for_existing_user(self):
+        from django.core import mail
+
+        user = make_user("reset@invite.test", "employee")
+        before = PasswordInviteToken.objects.count()
+        res = self.client.post(
+            "/api/accounts/auth/forgot-password/",
+            {"email": "reset@invite.test"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("بريد", res.data["detail"])
+        self.assertEqual(PasswordInviteToken.objects.count(), before + 1)
+        self.assertTrue(len(mail.outbox) >= 1)
+        self.assertIn("إعادة تعيين", mail.outbox[-1].subject)
+        self.assertIn(user.email, mail.outbox[-1].to)
+
+    def test_forgot_password_unknown_email_generic_ok(self):
+        res = self.client.post(
+            "/api/accounts/auth/forgot-password/",
+            {"email": "nobody@missing.test"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("بريد", res.data["detail"])
+        self.assertFalse(PasswordInviteToken.objects.filter(user__email="nobody@missing.test").exists())
