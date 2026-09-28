@@ -60,6 +60,22 @@ class AdminUserManagementTests(APITestCase):
         created = User.objects.get(email="new@x.com")
         self.assertTrue(created.check_password("Hello12345!"))
 
+    def test_create_user_weak_password_arabic(self):
+        res = self.client.post(
+            "/api/accounts/users/",
+            {
+                "email": "weak@x.com",
+                "name": "ضعيف",
+                "role": "user",
+                "password": "123",
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 400)
+        blob = str(res.data)
+        self.assertNotIn("too short", blob.lower())
+        self.assertTrue("قصيرة" in blob or "كلمة المرور" in blob)
+
     def test_partial_update_name_role_active(self):
         res = self.client.patch(
             f"/api/accounts/users/{self.vol.id}/",

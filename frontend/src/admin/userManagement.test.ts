@@ -31,4 +31,14 @@ describe("extractErrorDetail", () => {
       "البريد الإلكتروني مسجّل مسبقاً",
     );
   });
+
+  it("translates English DRF and password errors", () => {
+    expect(extractErrorDetail({ email: ["Enter a valid email address."] })).toContain("بريداً");
+    expect(extractErrorDetail({ password: ["This password is too short. It must contain at least 8 characters."] })).toContain(
+      "قصيرة",
+    );
+    expect(extractErrorDetail({ detail: "No active account found with the given credentials" })).toContain(
+      "كلمة المرور",
+    );
+  });
 });

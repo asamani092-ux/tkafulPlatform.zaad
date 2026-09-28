@@ -2,6 +2,7 @@
  * مساعدات إدارة المستخدمين — دوال نقية قابلة للاختبار.
  * التعقيد: applyUserFilters O(N)، extractErrorDetail O(1).
  */
+import { passwordErrorsToAr } from "../utils/passwordErrors";
 
 export interface AdminUserRow {
   id: number;
@@ -31,12 +32,47 @@ export function applyUserFilters(
   });
 }
 
+const DRF_EN_TO_AR: Array<[RegExp, string]> = [
+  [/this field is required\.?/i, "هذا الحقل مطلوب"],
+  [/this field may not be blank\.?/i, "هذا الحقل مطلوب"],
+  [/enter a valid email address\.?/i, "أدخل بريداً إلكترونياً صالحاً"],
+  [/a valid integer is required\.?/i, "أدخل رقماً صحيحاً"],
+  [/ensure this field has no more than/i, "تجاوز الحقل الحد الأقصى للطول"],
+  [/no active account found with the given credentials/i, "البريد الإلكتروني أو كلمة المرور غير صحيحة"],
+  [/\bin_app\b/i, "إشعار في المنصة"],
+  [/\bemail\b/i, "البريد"],
+];
+
+function translateDrfEn(msg: string): string {
+  if (/[\u0600-\u06FF]/.test(msg)) return msg;
+  for (const [re, ar] of DRF_EN_TO_AR) {
+    if (re.test(msg)) return ar;
+  }
+  if (/password|too short|too common|numeric|similar/i.test(msg)) {
+    return passwordErrorsToAr([msg]);
+  }
+  return msg;
+}
+
 export function extractErrorDetail(body: unknown): string {
   if (!body || typeof body !== "object") return "تعذّر تنفيذ العملية";
   const rec = body as Record<string, unknown>;
-  if (typeof rec.detail === "string") return rec.detail;
-  if (Array.isArray(rec.detail) && typeof rec.detail[0] === "string") return rec.detail[0];
-  const first = Object.values(rec).find((v) => Array.isArray(v) && typeof v[0] === "string");
-  if (Array.isArray(first) && typeof first[0] === "string") return first[0];
+  if (typeof rec.detail === "string") return translateDrfEn(rec.detail);
+  if (Array.isArray(rec.detail) && typeof rec.detail[0] === "string") {
+    return translateDrfEn(rec.detail[0]);
+  }
+  if (rec.password != null) {
+    return passwordErrorsToAr(rec.password);
+  }
+  const firstKey = Object.keys(rec).find(
+    (k) => Array.isArray(rec[k]) && typeof (rec[k] as unknown[])[0] === "string",
+  );
+  if (firstKey) {
+    const arr = rec[firstKey] as string[];
+    if (firstKey === "password" || /password/i.test(firstKey)) {
+      return passwordErrorsToAr(arr);
+    }
+    return translateDrfEn(arr[0]);
+  }
   return "تعذّر تنفيذ العملية";
 }

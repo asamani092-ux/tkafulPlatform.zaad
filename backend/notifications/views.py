@@ -81,7 +81,7 @@ def broadcast(request):
     channel = (request.data.get("channel") or "in_app").strip().lower()
     if channel not in ("in_app", "email"):
         return Response(
-            {"detail": "channel يجب أن يكون in_app أو email"},
+            {"detail": "طريقة الإرسال: إشعار في المنصة أو عبر البريد"},
             status=status.HTTP_400_BAD_REQUEST,
         )
     role = (request.data.get("role") or "").strip() or None
@@ -115,16 +115,28 @@ def broadcast(request):
         return Response({"success": True, "sent": n, "channel": channel}, status=status.HTTP_201_CREATED)
 
     # channel == email — بريد RTL فقط بدون إشعار داخل المنصة
-    from core.email_rtl import send_rtl_email
+    from core.email_rtl import MailFromMismatchError, resolve_from_email, send_rtl_email
 
     subject = (request.data.get("subject") or "").strip() or "تعميم من منصة تكافل وأثر"
+    from_email = (request.data.get("from_email") or "").strip() or None
+    try:
+        resolve_from_email(from_email)
+    except MailFromMismatchError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
     sent = 0
     for u in recipients:
         email = (u.email or "").strip()
         if not email:
             continue
         try:
-            if send_rtl_email(subject=subject, body=message, to=email, fail_silently=True):
+            if send_rtl_email(
+                subject=subject,
+                body=message,
+                to=email,
+                fail_silently=True,
+                from_email=from_email,
+            ):
                 sent += 1
         except Exception:
             continue
@@ -140,12 +152,19 @@ def broadcast(request):
 @api_view(["POST"])
 @permission_classes([IsAdmin])
 def test_email(request):
-    """POST /api/notifications/test-email/ — تجربة إرسال بريد RTL لمدير النظام."""
-    from core.email_rtl import send_rtl_email
+    """POST /api/notifications/test-email/ — تجربة إرسال بريد RTL إلى عنوان يحدّده المشرف."""
+    from core.email_rtl import MailFromMismatchError, send_rtl_email, smtp_error_to_ar
+    import re
 
-    to = (request.user.email or "").strip()
+    to = (request.data.get("to_email") or request.data.get("to") or "").strip()
     if not to:
-        return Response({"detail": "حسابك بلا بريد لإرسال التجربة"}, status=status.HTTP_400_BAD_REQUEST)
+        to = (request.user.email or "").strip()
+    if not to or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", to):
+        return Response(
+            {"detail": "أدخل بريداً صالحاً لإرسال التجربة إليه"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    from_email = (request.data.get("from_email") or "").strip() or None
     subject = "تجربة بريد — منصة تكافل وأثر"
     body = (
         "السلام عليكم,\n\n"
@@ -154,10 +173,18 @@ def test_email(request):
         "مع تحيات منصة تكافل وأثر"
     )
     try:
-        ok = send_rtl_email(subject=subject, body=body, to=to, fail_silently=False)
+        ok = send_rtl_email(
+            subject=subject,
+            body=body,
+            to=to,
+            fail_silently=False,
+            from_email=from_email,
+        )
+    except MailFromMismatchError as exc:
+        return Response({"success": False, "detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as exc:
         return Response(
-            {"success": False, "detail": f"فشل الإرسال: {exc}"},
+            {"success": False, "detail": smtp_error_to_ar(exc)},
             status=status.HTTP_502_BAD_GATEWAY,
         )
     if not ok:

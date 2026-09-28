@@ -30,6 +30,11 @@ class PlatformSetting(models.Model):
     contact_phone = models.CharField(max_length=40, blank=True, default="+966 50 123 4567")
     address = models.CharField(max_length=255, blank=True, default="القصيم، المملكة العربية السعودية")
     social_links = models.JSONField(default=dict, blank=True)
+    mail_from_email = models.EmailField(
+        blank=True,
+        default="",
+        help_text="بريد المرسل (From) — يجب أن يطابق حساب SMTP أو يملك صلاحية الإرسال باسمه",
+    )
     show_map = models.BooleanField(default=True)
     show_services = models.BooleanField(default=True)
     show_volunteering = models.BooleanField(default=True)

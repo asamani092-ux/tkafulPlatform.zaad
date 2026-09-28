@@ -74,6 +74,20 @@ class PlatformSettingsTests(APITestCase):
         res = self.client.get("/api/settings/")
         self.assertEqual(res.status_code, 403)
 
+    def test_admin_patch_mail_from_email(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.patch(
+            "/api/settings/",
+            {"mail_from_email": "tkaful@alzaad.org.sa"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["mail_from_email"], "tkaful@alzaad.org.sa")
+        self.assertIn("smtp_host_user", res.data)
+        public = self.client.get("/api/public-settings/")
+        self.assertNotIn("mail_from_email", public.data)
+        self.assertNotIn("smtp_host_user", public.data)
+
     def test_rejects_http_logo_and_bad_email(self):
         self.client.force_authenticate(self.admin)
         res = self.client.patch("/api/settings/", {"logo_url": "http://evil.example/x.png"}, format="json")

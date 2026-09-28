@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import AdminShell from "../../layout/AdminShell";
 import Card from "../../ui/Card";
 import Input from "../../ui/Input";
@@ -27,13 +28,39 @@ export default function BroadcastAdmin() {
   const [kind, setKind] = useState("info");
   const [link, setLink] = useState("");
   const [subject, setSubject] = useState("");
+  const [mailFrom, setMailFrom] = useState("");
+  const [testTo, setTestTo] = useState("");
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
+
+  useEffect(() => {
+    authFetch("/api/settings/")
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const from = (data.mail_from_email || data.smtp_host_user || "").trim();
+        setMailFrom(from);
+      })
+      .catch(() => {});
+    authFetch("/api/accounts/me/")
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((me) => {
+        if (me?.email) setTestTo(String(me.email));
+      })
+      .catch(() => {});
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) {
       toast.error({ title: "الرسالة مطلوبة" });
+      return;
+    }
+    if (channel === "email" && !mailFrom.trim()) {
+      toast.error({
+        title: "بريد المرسل غير مضبوط",
+        description: "اضبط البريد الرسمي من إعدادات المنصّة أولاً",
+      });
       return;
     }
     setBusy(true);
@@ -46,6 +73,7 @@ export default function BroadcastAdmin() {
       };
       if (role) body.role = role;
       if (channel === "email" && subject.trim()) body.subject = subject.trim();
+      if (channel === "email") body.from_email = mailFrom.trim();
       const res = await authFetch("/api/notifications/broadcast/", {
         method: "POST",
         body: JSON.stringify(body),
@@ -71,9 +99,18 @@ export default function BroadcastAdmin() {
   };
 
   const sendTestEmail = async () => {
+    if (!testTo.trim()) {
+      toast.error({ title: "أدخل بريد المستلم للتجربة" });
+      return;
+    }
     setTesting(true);
     try {
-      const res = await authFetch("/api/notifications/test-email/", { method: "POST", body: "{}" });
+      const payload: Record<string, string> = { to_email: testTo.trim() };
+      if (mailFrom.trim()) payload.from_email = mailFrom.trim();
+      const res = await authFetch("/api/notifications/test-email/", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast.error({ title: "فشل البريد التجريبي", description: extractErrorDetail(data) || data.detail });
@@ -108,12 +145,25 @@ export default function BroadcastAdmin() {
             <option value="email">عبر البريد</option>
           </Select>
           {channel === "email" && (
-            <Input
-              label="موضوع البريد (اختياري)"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="تعميم من منصة تكافل وأثر"
-            />
+            <>
+              <div className="rounded-lg border border-surface-border bg-surface-muted/40 px-3 py-2 text-sm">
+                <div className="font-semibold text-primary">يُرسل من (البريد الرسمي)</div>
+                <div dir="ltr" className="mt-1 text-brand-gray">
+                  {mailFrom || "غير مضبوط — "}
+                  {!mailFrom && (
+                    <Link to="/Admin/settings" className="text-primary underline">
+                      إعدادات المنصّة
+                    </Link>
+                  )}
+                </div>
+              </div>
+              <Input
+                label="موضوع البريد (اختياري)"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="تعميم من منصة تكافل وأثر"
+              />
+            </>
           )}
           <Textarea
             label="الرسالة"
@@ -147,15 +197,32 @@ export default function BroadcastAdmin() {
       </Card>
 
       <div className="mt-4 max-w-lg">
-      <Card>
-        <h2 className="mb-2 text-lg font-bold text-primary">تجربة البريد</h2>
-        <p className="mb-3 text-sm text-brand-gray">
-          يُرسل رسالة RTL قصيرة إلى بريدك للتحقق من إعدادات SMTP الرسمية.
-        </p>
-        <Button type="button" variant="secondary" disabled={testing} onClick={() => void sendTestEmail()}>
-          {testing ? "جاري الإرسال…" : "إرسال بريد تجريبي"}
-        </Button>
-      </Card>
+        <Card>
+          <h2 className="mb-1 text-lg font-bold text-primary">تجربة البريد</h2>
+          <p className="mb-3 text-sm text-brand-gray">
+            يُرسل من البريد الرسمي إلى العنوان الذي تحدّده أدناه للتحقق من SMTP.
+          </p>
+          <div className="mb-3 rounded-lg border border-surface-border bg-surface-muted/40 px-3 py-2 text-sm">
+            <div className="font-semibold text-primary">المرسل (From)</div>
+            <div dir="ltr" className="mt-1 text-brand-gray">
+              {mailFrom || "غير مضبوط في إعدادات المنصّة"}
+            </div>
+          </div>
+          <Input
+            label="أرسل التجربة إلى"
+            dir="ltr"
+            type="email"
+            value={testTo}
+            onChange={(e) => setTestTo(e.target.value)}
+            placeholder="you@example.com"
+            required
+          />
+          <div className="mt-3">
+            <Button type="button" variant="secondary" disabled={testing} onClick={() => void sendTestEmail()}>
+              {testing ? "جاري الإرسال…" : "إرسال بريد تجريبي"}
+            </Button>
+          </div>
+        </Card>
       </div>
     </AdminShell>
   );
