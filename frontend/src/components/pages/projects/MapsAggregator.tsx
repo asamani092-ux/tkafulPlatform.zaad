@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Card from "../../ui/Card";
-import { LoadingState, EmptyState, ErrorState } from "../../feedback/PageStates";
+import { LoadingState, ErrorState } from "../../feedback/PageStates";
 import { fetchPublicMapDetail, fetchPublicMapsIndex, fetchPublicMapSummary } from "./api";
 import {
   applyDynamicFilters,
@@ -12,6 +12,7 @@ import {
 } from "./filters";
 import DynamicFilterBar from "./DynamicFilterBar";
 import GenericMapView from "./GenericMapView";
+import LegacyImpactMapPage from "../map/LegacyImpactMapPage";
 import Select from "../../ui/Select";
 import type { MapSummaryInfo, PublicMapDetail, PublicMapIndexEntry, PublicMapItem } from "./types";
 
@@ -25,6 +26,7 @@ export default function MapsAggregator() {
   const [summaries, setSummaries] = useState<Map<number, MapSummaryInfo>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [useLegacyFallback, setUseLegacyFallback] = useState(false);
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   const [filters, setFilters] = useState<DynamicFilters>({});
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
@@ -34,6 +36,10 @@ export default function MapsAggregator() {
     setError(false);
     fetchPublicMapsIndex()
       .then(async (maps) => {
+        if (!maps.length) {
+          setUseLegacyFallback(true);
+          return;
+        }
         setIndex(maps);
         const [allDetails, allSummaries] = await Promise.all([
           Promise.all(maps.map((m) => fetchPublicMapDetail(m.id))),
@@ -49,7 +55,7 @@ export default function MapsAggregator() {
           ),
         );
       })
-      .catch(() => setError(true))
+      .catch(() => setUseLegacyFallback(true))
       .finally(() => setLoading(false));
   }, []);
 
@@ -102,8 +108,9 @@ export default function MapsAggregator() {
   );
 
   if (loading) return <LoadingState title="جاري تحميل خارطة المنصّة…" />;
+  if (useLegacyFallback) return <LegacyImpactMapPage />;
   if (error) return <ErrorState title="تعذّر تحميل البيانات" message="تحقّق من اتصال الخادم وحاول مجدداً." />;
-  if (!index.length) return <EmptyState title="لا توجد خرائط منشورة" message="ستظهر الخرائط بعد نشرها من إدارة المشاريع." />;
+  if (!index.length) return <LegacyImpactMapPage />;
 
   return (
     <div className="mx-auto max-w-page px-3 py-4 sm:px-4" dir="rtl">
