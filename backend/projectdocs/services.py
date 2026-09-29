@@ -411,6 +411,152 @@ def refresh_activity_auto_status(activity: StageActivity, save: bool = True) -> 
     return activity
 
 
+_DATE_ORDER_MSG = "تاريخ البداية يجب أن يسبق تاريخ الإغلاق"
+
+
+def _coerce_date(value) -> date | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(str(value)[:10])
+
+
+def activity_is_done(activity: StageActivity) -> bool:
+    return activity.manual_status == "done" or (activity.progress_pct or 0) >= 100
+
+
+def validate_activity_date_window(
+    *,
+    start,
+    end,
+    stage: DossierStage | None = None,
+    parent: StageActivity | None = None,
+    activity: StageActivity | None = None,
+) -> None:
+    """تحقق تسلسل التواريخ وانتماء النشاط لنطاق المرحلة أو النشاط الرئيسي."""
+    start_d = _coerce_date(start)
+    end_d = _coerce_date(end)
+    if start_d and end_d and start_d >= end_d:
+        raise ValidationError({"detail": _DATE_ORDER_MSG})
+
+    eff_start = start_d if start_d is not None else (activity.start_date if activity else None)
+    eff_end = end_d if end_d is not None else (activity.end_date if activity else None)
+    if not eff_start and not eff_end:
+        return
+
+    if parent is not None or (activity and activity.parent_id):
+        par = parent or (activity.parent if activity else None)
+        if not par:
+            return
+        if not (par.start_date and par.end_date):
+            raise ValidationError({"detail": "حدّد تواريخ النشاط الرئيسي قبل تواريخ النشاط الفرعي"})
+        if eff_start and eff_start < par.start_date:
+            raise ValidationError({"detail": "تاريخ بداية النشاط الفرعي خارج نطاق النشاط الرئيسي"})
+        if eff_end and eff_end > par.end_date:
+            raise ValidationError({"detail": "تاريخ إغلاق النشاط الفرعي خارج نطاق النشاط الرئيسي"})
+        if eff_start and eff_start > par.end_date:
+            raise ValidationError({"detail": "تاريخ بداية النشاط الفرعي خارج نطاق النشاط الرئيسي"})
+        if eff_end and eff_end < par.start_date:
+            raise ValidationError({"detail": "تاريخ إغلاق النشاط الفرعي خارج نطاق النشاط الرئيسي"})
+        return
+
+    st = stage or (activity.stage if activity else None)
+    if not st:
+        return
+    if not (st.planned_start and st.planned_end):
+        raise ValidationError({"detail": "حدّد تواريخ المرحلة قبل تواريخ النشاط الرئيسي"})
+    if eff_start and eff_start < st.planned_start:
+        raise ValidationError({"detail": "تاريخ بداية النشاط الرئيسي خارج نطاق المرحلة"})
+    if eff_end and eff_end > st.planned_end:
+        raise ValidationError({"detail": "تاريخ إغلاق النشاط الرئيسي خارج نطاق المرحلة"})
+    if eff_start and eff_start > st.planned_end:
+        raise ValidationError({"detail": "تاريخ بداية النشاط الرئيسي خارج نطاق المرحلة"})
+    if eff_end and eff_end < st.planned_start:
+        raise ValidationError({"detail": "تاريخ إغلاق النشاط الرئيسي خارج نطاق المرحلة"})
+
+
+def validate_parent_dates_cover_children(
+    activity: StageActivity,
+    start,
+    end,
+    *,
+    start_in_payload: bool = False,
+    end_in_payload: bool = False,
+) -> None:
+    """يرفض تضييق النشاط الرئيسي إذا بقي فرعي خارج النطاق."""
+    if activity.parent_id is not None:
+        return
+    new_start = _coerce_date(start) if start_in_payload else activity.start_date
+    new_end = _coerce_date(end) if end_in_payload else activity.end_date
+    if new_start is None and new_end is None:
+        return
+    for child in StageActivity.objects.filter(parent=activity):
+        if child.start_date and new_start and child.start_date < new_start:
+            raise ValidationError({"detail": "تعديل تواريخ النشاط الرئيسي يترك نشاطاً فرعياً خارج النطاق"})
+        if child.end_date and new_end and child.end_date > new_end:
+            raise ValidationError({"detail": "تعديل تواريخ النشاط الرئيسي يترك نشاطاً فرعياً خارج النطاق"})
+        if child.start_date and new_end and child.start_date > new_end:
+            raise ValidationError({"detail": "تعديل تواريخ النشاط الرئيسي يترك نشاطاً فرعياً خارج النطاق"})
+        if child.end_date and new_start and child.end_date < new_start:
+            raise ValidationError({"detail": "تعديل تواريخ النشاط الرئيسي يترك نشاطاً فرعياً خارج النطاق"})
+
+
+def validate_stage_planned_window(stage: DossierStage, planned_start, planned_end) -> None:
+    """يرفض تضييق المرحلة إذا بقي نشاط خارج النطاق."""
+    new_start = _coerce_date(planned_start)
+    new_end = _coerce_date(planned_end)
+    if new_start and new_end and new_start >= new_end:
+        raise ValidationError({"detail": _DATE_ORDER_MSG})
+    if new_start is None and new_end is None:
+        return
+    mains = StageActivity.objects.filter(stage=stage, parent__isnull=True)
+    for main in mains:
+        if main.start_date and new_start and main.start_date < new_start:
+            raise ValidationError({"detail": "تعديل تواريخ المرحلة يترك نشاطاً رئيسياً خارج النطاق"})
+        if main.end_date and new_end and main.end_date > new_end:
+            raise ValidationError({"detail": "تعديل تواريخ المرحلة يترك نشاطاً رئيسياً خارج النطاق"})
+        if main.start_date and new_end and main.start_date > new_end:
+            raise ValidationError({"detail": "تعديل تواريخ المرحلة يترك نشاطاً رئيسياً خارج النطاق"})
+        if main.end_date and new_start and main.end_date < new_start:
+            raise ValidationError({"detail": "تعديل تواريخ المرحلة يترك نشاطاً رئيسياً خارج النطاق"})
+        for child in StageActivity.objects.filter(parent=main):
+            if child.start_date and new_start and child.start_date < new_start:
+                raise ValidationError({"detail": "تعديل تواريخ المرحلة يترك نشاطاً فرعياً خارج النطاق"})
+            if child.end_date and new_end and child.end_date > new_end:
+                raise ValidationError({"detail": "تعديل تواريخ المرحلة يترك نشاطاً فرعياً خارج النطاق"})
+
+
+def assert_can_complete_parent_activity(activity: StageActivity) -> None:
+    """لا يُكمَل النشاط الرئيسي قبل إتمام كل الفروع."""
+    if activity.parent_id is not None:
+        return
+    children = StageActivity.objects.filter(parent=activity)
+    if not children.exists():
+        return
+    if any(not activity_is_done(child) for child in children):
+        raise ValidationError({"detail": "لا يمكن إتمام النشاط الرئيسي قبل إتمام جميع الأنشطة الفرعية"})
+
+
+def activity_week_starts(start, end) -> set[str]:
+    """بدايات الأسابيع الأربعة لكل شهر داخل نطاق النشاط. O(M)."""
+    s = _coerce_date(start)
+    e = _coerce_date(end)
+    if not s or not e or s >= e:
+        return set()
+    y, m = s.year, s.month
+    end_y, end_m = e.year, e.month
+    found: set[str] = set()
+    while (y, m) <= (end_y, end_m):
+        for day in (1, 8, 15, 22):
+            found.add(f"{y:04d}-{m:02d}-{day:02d}")
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    return found
+
+
 @transaction.atomic
 def create_dossier_for_project(
     *,
@@ -1445,6 +1591,7 @@ def complete_activity(
     evidence_title: str = "",
 ) -> StageActivity:
     """إتمام نشاط مع شاهد إلزامي ودرس مستفاد. O(1)."""
+    assert_can_complete_parent_activity(activity)
     assert_can_work_assigned_activity(user, dossier, activity)
     is_assignee_only = (
         not is_super_admin(user)

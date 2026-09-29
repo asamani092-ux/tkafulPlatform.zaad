@@ -1259,6 +1259,14 @@ class PlanFromPhasesTests(APITestCase):
         self.assertEqual(saved.status_code, 200, saved.content)
         listed = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/activities/")
         row = next(a for a in listed.data if a["title"] == "حفر")
+        dossier = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/")
+        order = next(s["order"] for s in dossier.data["stages"] if s["key"] == "define")
+        stage_ok = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/stages/{order}/",
+            {"planned_start": "2026-05-01", "planned_end": "2026-12-31"},
+            format="json",
+        )
+        self.assertEqual(stage_ok.status_code, 200, stage_ok.content)
         inverted = self.client.patch(
             f"/api/projectdocs/dossiers/{dossier_id}/activities/{row['id']}/",
             {"start_date": "2026-06-01", "end_date": "2026-05-01"},
@@ -1277,8 +1285,6 @@ class PlanFromPhasesTests(APITestCase):
             format="json",
         )
         self.assertEqual(ok.status_code, 200, ok.content)
-        dossier = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/")
-        order = next(s["order"] for s in dossier.data["stages"] if s["key"] == "define")
         bad_stage = self.client.patch(
             f"/api/projectdocs/dossiers/{dossier_id}/stages/{order}/",
             {"planned_start": "2026-06-01", "planned_end": "2026-05-01"},
@@ -1304,6 +1310,12 @@ class PlanFromPhasesTests(APITestCase):
             format="json",
         )
         self.assertEqual(stage.status_code, 200, stage.content)
+        dated = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{row['id']}/",
+            {"start_date": "2026-10-10", "end_date": "2026-12-20"},
+            format="json",
+        )
+        self.assertEqual(dated.status_code, 200, dated.content)
         outside = self.client.patch(
             f"/api/projectdocs/dossiers/{dossier_id}/activities/{row['id']}/",
             {"executed_weeks": ["2026-09-01"]},
@@ -1331,6 +1343,72 @@ class PlanFromPhasesTests(APITestCase):
         )
         self.assertEqual(kept.status_code, 200, kept.content)
         self.assertEqual(kept.data["executed_weeks"], ["2026-10-01", "2026-11-01"])
+
+    def test_hierarchical_activity_dates_and_parent_completion(self):
+        dossier_id = self._create()
+        saved = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/framework_bundle/",
+            {"data": self._phases(["حفر"])},
+            format="json",
+        )
+        self.assertEqual(saved.status_code, 200, saved.content)
+        listed = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/activities/")
+        main = next(a for a in listed.data if a["title"] == "حفر")
+        dossier = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/")
+        order = next(s["order"] for s in dossier.data["stages"] if s["key"] == "define")
+        self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/stages/{order}/",
+            {"planned_start": "2026-06-01", "planned_end": "2026-08-31"},
+            format="json",
+        )
+        outside_main = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{main['id']}/",
+            {"start_date": "2026-05-01", "end_date": "2026-07-01"},
+            format="json",
+        )
+        self.assertEqual(outside_main.status_code, 400, outside_main.content)
+        inside_main = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{main['id']}/",
+            {"start_date": "2026-06-10", "end_date": "2026-07-31"},
+            format="json",
+        )
+        self.assertEqual(inside_main.status_code, 200, inside_main.content)
+        child = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/",
+            {"parent": main["id"], "title": "فرعي"},
+            format="json",
+        )
+        self.assertEqual(child.status_code, 201, child.content)
+        child_outside = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{child.data['id']}/",
+            {"start_date": "2026-06-01", "end_date": "2026-08-01"},
+            format="json",
+        )
+        self.assertEqual(child_outside.status_code, 400, child_outside.content)
+        child_ok = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{child.data['id']}/",
+            {"start_date": "2026-06-15", "end_date": "2026-07-15"},
+            format="json",
+        )
+        self.assertEqual(child_ok.status_code, 200, child_ok.content)
+        parent_done_early = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{main['id']}/",
+            {"manual_status": "done"},
+            format="json",
+        )
+        self.assertEqual(parent_done_early.status_code, 400, parent_done_early.content)
+        narrow_parent = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{main['id']}/",
+            {"end_date": "2026-07-01"},
+            format="json",
+        )
+        self.assertEqual(narrow_parent.status_code, 400, narrow_parent.content)
+        narrow_stage = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/stages/{order}/",
+            {"planned_end": "2026-06-30"},
+            format="json",
+        )
+        self.assertEqual(narrow_stage.status_code, 400, narrow_stage.content)
 
 
 class TeamAssignNotifyTests(APITestCase):
