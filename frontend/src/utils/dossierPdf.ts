@@ -90,7 +90,7 @@ export async function downloadDossierPdf(
     </header>
     <p style="font-size:13px;margin:0 0 16px;color:#444">
       الاسم التسويقي: ${esc(payload.marketing_name || "—")} ·
-      الراعي: ${esc(payload.sponsor_name || "—")} ·
+      مدير الإدارة: ${esc(payload.sponsor_name || "—")} ·
       مكتب المشاريع: ${esc(payload.projects_office_name || "—")} ·
       لجنة المشاريع: ${esc(payload.projects_committee_name || "—")}
     </p>
