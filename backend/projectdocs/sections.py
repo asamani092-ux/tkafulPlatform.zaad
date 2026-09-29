@@ -427,7 +427,7 @@ APPROVALS_SECTIONS: list[dict] = [
                 "المعتمدون",
                 [
                     {"key": "row_id", "label": "معرّف", "hidden": True},
-                    {"key": "role_title", "label": "الدور / المسمى"},
+                    {"key": "role_title", "label": "الصفة"},
                     {"key": "name", "label": "الاسم"},
                     {"key": "email", "label": "البريد"},
                     {
@@ -436,7 +436,7 @@ APPROVALS_SECTIONS: list[dict] = [
                         "type": "select",
                         "options": list(APPROVER_STATUS_OPTIONS),
                     },
-                    {"key": "decided_at", "label": "تاريخ القرار", "type": "date"},
+                    {"key": "decided_at", "label": "التاريخ", "type": "date"},
                     {"key": "rejection_reason", "label": "سبب الرفض"},
                 ],
             ),

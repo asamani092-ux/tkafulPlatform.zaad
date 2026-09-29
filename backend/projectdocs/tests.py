@@ -14,10 +14,12 @@ from projectdocs.models import (
     BudgetLine,
     BudgetTxn,
     DossierAttachment,
+    DossierSection,
     ProjectDossier,
     StageActivity,
 )
 from projectdocs.sections import (
+    APPROVALS_SECTIONS,
     CARD_SECTIONS,
     DOCUMENT_SECTIONS,
     CLOSURE_SECTIONS,
@@ -184,6 +186,18 @@ class SectionsCatalogTests(APITestCase):
         )
         self.assertEqual(len(bundle["logical_impact"]), 2)
         self.assertEqual(len(bundle["main_phases"]), 5)
+
+    def test_approvals_record_excel_column_labels(self):
+        """جدول المعتمدين يطابق أعمدة وثيقة الإغلاق في الإكسل. O(1)."""
+        sec = next(s for s in APPROVALS_SECTIONS if s["key"] == "approvals_record")
+        table = next(f for f in sec["fields"] if f["type"] == "table")
+        labels = {c["key"]: c["label"] for c in table["columns"]}
+        self.assertEqual(labels["role_title"], "الصفة")
+        self.assertEqual(labels["name"], "الاسم")
+        self.assertEqual(labels["email"], "البريد")
+        self.assertEqual(labels["status"], "الحالة")
+        self.assertEqual(labels["decided_at"], "التاريخ")
+        self.assertEqual(labels["rejection_reason"], "سبب الرفض")
 
     def test_card_phase_budget_total_computed(self):
         cleaned = validate_section_data(
@@ -831,6 +845,65 @@ class DossierRestructureTests(APITestCase):
         self.assertGreaterEqual(len(cmp.data["pairs"]), 5)
         payload = document_closure_comparison(ProjectDossier.objects.get(pk=dossier_id))
         self.assertEqual(payload["pairs"][0]["document_key"], "basics")
+
+    def test_export_payload_includes_approvals_record_rows(self):
+        """تصدير PDF للإغلاق يقرأ جدول الاعتمادات من تبويب الاعتمادات. O(1)."""
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/projectdocs/dossiers/",
+            {"name": "تصدير اعتمادات", "sponsor_email": "exp@test.com", "sponsor_name": "مدير"},
+            format="json",
+        )
+        dossier_id = res.data["id"]
+        patch = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/approvals/approvals_record/",
+            {
+                "data": {
+                    "rows": [
+                        {
+                            "role_title": "لجنة المشاريع",
+                            "name": "معتمد",
+                            "email": "approver@test.com",
+                            "status": "pending",
+                            "decided_at": "",
+                            "rejection_reason": "",
+                        }
+                    ]
+                }
+            },
+            format="json",
+        )
+        self.assertEqual(patch.status_code, 200, patch.content)
+        export = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/export-payload/")
+        self.assertEqual(export.status_code, 200)
+        rows = export.data.get("approvals_record", {}).get("rows") or []
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["role_title"], "لجنة المشاريع")
+
+    def test_closure_legacy_approvals_section_not_editable(self):
+        """لا تحرير لاعتمادات الإغلاق القديمة — المصدر تبويب الاعتمادات. O(1)."""
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/projectdocs/dossiers/",
+            {"name": "قديم", "sponsor_email": "old@test.com"},
+            format="json",
+        )
+        dossier_id = res.data["id"]
+        dossier = ProjectDossier.objects.get(pk=dossier_id)
+        DossierSection.objects.create(
+            dossier=dossier,
+            kind="closure",
+            key="approvals_record",
+            data={"sponsor_decision": "ok", "sponsor_date": "2026-01-01", "notes": "x"},
+            status="filled",
+        )
+        blocked = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/closure/approvals_record/",
+            {"data": {"sponsor_decision": "y"}},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, 400)
+        self.assertIn("الاعتمادات", str(blocked.data))
 
     def test_card_fields_tables_and_info_page(self):
         """حفظ حقول البطاقة وجداولها وعكسها في صفحة المعلومات. O(1)."""

@@ -1280,6 +1280,10 @@ def update_section(
     user,
 ) -> DossierSection:
     assert_can_edit(user, dossier)
+    if kind == "closure" and key == "approvals_record":
+        raise ValidationError(
+            {"key": "جدول الاعتمادات يُدار من تبويب الاعتمادات فقط — لا يُحرَّر من وثيقة الإغلاق"}
+        )
     section_def = catalog.get_section_def(kind, key)
     if not section_def:
         raise ValidationError({"key": "قسم غير معروف"})

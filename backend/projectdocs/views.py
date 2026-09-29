@@ -732,6 +732,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="export-payload")
     def export_payload(self, request, pk=None):
         dossier = self.get_object()
+        services.migrate_dossier_catalog(dossier)
         return Response(
             {
                 "code": dossier.code,
@@ -748,6 +749,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
                     {"key": s.key, "status": s.status, "data": s.data}
                     for s in dossier.sections.filter(kind="closure")
                 ],
+                "approvals_record": {"rows": services.approvals_record_rows(dossier)},
                 "comparison": services.document_closure_comparison(dossier),
                 "schema": schema_payload(),
             }

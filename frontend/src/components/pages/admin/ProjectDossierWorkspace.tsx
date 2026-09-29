@@ -16,6 +16,7 @@ import ClosureComparison from "../../dossier/ClosureComparison";
 import CardTab, { UserPick, type CardScalars, type UserOption } from "../../dossier/CardTab";
 import DocumentTab from "../../dossier/DocumentTab";
 import ApprovalsTab from "../../dossier/ApprovalsTab";
+import ClosureApprovalsReadOnly from "../../dossier/ClosureApprovalsReadOnly";
 import DossierInfoPage, { type InfoPagePayload } from "../../dossier/DossierInfoPage";
 import {
   SECTION_STATUS_AR,
@@ -482,6 +483,15 @@ export default function ProjectDossierWorkspace() {
     });
   };
 
+  const approvalsRecordRows = useMemo(() => {
+    const draft = sectionDrafts["approvals:approvals_record"];
+    const rows = draft?.rows;
+    if (Array.isArray(rows)) return rows as Record<string, unknown>[];
+    const sec = dossier?.sections.find((s) => s.kind === "approvals" && s.key === "approvals_record");
+    const fromSec = sec?.data?.rows;
+    return Array.isArray(fromSec) ? (fromSec as Record<string, unknown>[]) : [];
+  }, [sectionDrafts, dossier?.sections]);
+
   /** تصفح/تعديل: مفتوح للمشرف ومدير الإدارة حتى على المقفلة. الإرسال فقط لـ active/returned. */
   const canEditWorkspace = (key: Tab) => {
     if (key === "info") return false;
@@ -685,7 +695,8 @@ export default function ProjectDossierWorkspace() {
                   onDecide={(sectionKey, decision) => void decideDocumentSection(sectionKey, decision)}
                 />
               ) : (
-                sectionsFor("closure").map(({ def, status }) => {
+                <>
+                {sectionsFor("closure").map(({ def, status }) => {
                   const kind = "closure" as const;
                   const draftKey = `${kind}:${def.key}`;
                   const editable = canEditWorkspace("closure");
@@ -716,7 +727,9 @@ export default function ProjectDossierWorkspace() {
                       />
                     </Card>
                   );
-                })
+                })}
+                <ClosureApprovalsReadOnly rows={approvalsRecordRows} />
+                </>
               )}
                 </>
               )}

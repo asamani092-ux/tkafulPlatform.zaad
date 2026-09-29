@@ -15,7 +15,23 @@ export type ExportPayload = {
   projects_committee_name: string;
   document: Array<{ key: string; status: string; data: Record<string, unknown> }>;
   closure: Array<{ key: string; status: string; data: Record<string, unknown> }>;
+  approvals_record?: { rows: Record<string, unknown>[] };
   schema: DossierSchema;
+};
+
+const CLOSURE_APPROVALS_COLUMNS: { key: string; label: string }[] = [
+  { key: "role_title", label: "الصفة" },
+  { key: "name", label: "الاسم" },
+  { key: "email", label: "البريد" },
+  { key: "status", label: "الحالة" },
+  { key: "decided_at", label: "التاريخ" },
+  { key: "rejection_reason", label: "سبب الرفض" },
+];
+
+const APPROVAL_STATUS_AR: Record<string, string> = {
+  pending: "بانتظار",
+  approved: "معتمد",
+  rejected: "مرفوض",
 };
 
 function esc(s: string): string {
@@ -61,6 +77,27 @@ function sectionHtml(section: SchemaSection, data: Record<string, unknown>): str
   </section>`;
 }
 
+function closureApprovalsTableHtml(rows: Record<string, unknown>[]): string {
+  if (!rows.length) {
+    return `<p style="font-size:12px;color:#706f6f">لا معتمدين — يُعرَّفون في تبويب الاعتمادات.</p>`;
+  }
+  const head = CLOSURE_APPROVALS_COLUMNS.map((c) => `<th style="padding:6px 8px;text-align:right;border:1px solid #ddd">${esc(c.label)}</th>`).join("");
+  const body = rows
+    .map((row) => {
+      const cells = CLOSURE_APPROVALS_COLUMNS.map((c) => {
+        const raw = row[c.key];
+        const text =
+          c.key === "status"
+            ? APPROVAL_STATUS_AR[String(raw || "pending")] || String(raw ?? "—")
+            : String(raw ?? "—");
+        return `<td style="padding:6px 8px;border:1px solid #ddd">${esc(text)}</td>`;
+      }).join("");
+      return `<tr>${cells}</tr>`;
+    })
+    .join("");
+  return `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><thead><tr style="background:#f5f5f5">${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
 export async function downloadDossierPdf(
   payload: ExportPayload,
   kind: "document" | "closure",
@@ -76,7 +113,14 @@ export async function downloadDossierPdf(
   root.style.cssText =
     "position:fixed;left:-10000px;top:0;width:900px;background:#fff;color:#1f1f1f;font-family:Tajawal,Tahoma,Arial,sans-serif;padding:28px 32px;box-sizing:border-box";
 
-  const body = schemaSecs.map((s) => sectionHtml(s, byKey[s.key] || {})).join("");
+  let body = schemaSecs.map((s) => sectionHtml(s, byKey[s.key] || {})).join("");
+  if (kind === "closure") {
+    const approvalRows = payload.approvals_record?.rows || [];
+    body += `<section style="margin-bottom:22px;page-break-inside:avoid">
+      <h2 style="font-size:16px;margin:0 0 10px;padding-bottom:6px;border-bottom:2px solid #8b1538;color:#8b1538">جدول الاعتمادات</h2>
+      ${closureApprovalsTableHtml(approvalRows)}
+    </section>`;
+  }
   root.innerHTML = `
     <header style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid ${primary};padding-bottom:12px;margin-bottom:18px">
       <div>
