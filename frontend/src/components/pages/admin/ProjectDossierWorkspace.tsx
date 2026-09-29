@@ -15,6 +15,8 @@ import DossierDashboard from "../../dossier/DossierDashboard";
 import ClosureComparison from "../../dossier/ClosureComparison";
 import CardTab, { UserPick, type CardScalars, type UserOption } from "../../dossier/CardTab";
 import DocumentTab from "../../dossier/DocumentTab";
+import ApprovalsTab from "../../dossier/ApprovalsTab";
+import ClosureApprovalsReadOnly from "../../dossier/ClosureApprovalsReadOnly";
 import DossierInfoPage, { type InfoPagePayload } from "../../dossier/DossierInfoPage";
 import {
   SECTION_STATUS_AR,
@@ -26,7 +28,7 @@ import {
 import { downloadDossierPdf, type ExportPayload } from "../../../utils/dossierPdf";
 import { shouldFlipPageLoading, type AdminLoadMode } from "../../../admin/loadMode";
 
-type Tab = "card" | "document" | "plan" | "closure" | "board" | "info";
+type Tab = "card" | "document" | "plan" | "closure" | "approvals" | "board" | "info";
 
 export default function ProjectDossierWorkspace() {
   const { slug } = useParams();
@@ -78,6 +80,9 @@ export default function ProjectDossierWorkspace() {
     sponsor_id: null,
     sponsor_name: "",
     sponsor_email: "",
+    manager_id: null,
+    manager_name: "",
+    manager_email: "",
     approver_id: null,
     approver_name: "",
     approver_email: "",
@@ -118,6 +123,9 @@ export default function ProjectDossierWorkspace() {
       sponsor_id: d.sponsor ?? null,
       sponsor_name: d.sponsor_name || "",
       sponsor_email: d.sponsor_email || "",
+      manager_id: d.manager ?? null,
+      manager_name: d.manager_username || "",
+      manager_email: d.manager_email || "",
       approver_id: d.approver ?? null,
       approver_name: d.approver_name || "",
       approver_email: d.approver_email || "",
@@ -237,6 +245,7 @@ export default function ProjectDossierWorkspace() {
     [workspaces, tab, activeWorkspace],
   );
   const wsOpen = (key: Tab) => {
+    if (key === "approvals" || key === "info") return true;
     const w = workspaces.find((x) => x.key === key);
     if (!w) return dossier?.bypass_workspace_gates || key === "card";
     return w.status !== "locked" || !!dossier?.bypass_workspace_gates;
@@ -283,6 +292,8 @@ export default function ProjectDossierWorkspace() {
           sponsor_id: card.sponsor_id,
           sponsor_name: card.sponsor_name,
           sponsor_email: card.sponsor_email,
+          manager_id: card.manager_id,
+          manager_email: card.manager_email,
           approver_id: card.approver_id,
           approver_name: card.approver_name,
           approver_email: card.approver_email,
@@ -301,7 +312,7 @@ export default function ProjectDossierWorkspace() {
     }
   };
 
-  const saveSection = async (kind: "card" | "document" | "closure", key: string) => {
+  const saveSection = async (kind: "card" | "document" | "closure" | "approvals", key: string) => {
     if (!dossier) return;
     const draftKey = `${kind}:${key}`;
     setSavingKey(draftKey);
@@ -353,7 +364,7 @@ export default function ProjectDossierWorkspace() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      toast.error({ title: data.detail || data.approver_email || data.sponsor_email || data.status || data.workspace || "تعذّر الإرسال" });
+      toast.error({ title: data.detail || data.approvals || data.approver_email || data.sponsor_email || data.status || data.workspace || "تعذّر الإرسال" });
       return;
     }
     if (data.email_sent === false) {
@@ -472,9 +483,19 @@ export default function ProjectDossierWorkspace() {
     });
   };
 
+  const approvalsRecordRows = useMemo(() => {
+    const draft = sectionDrafts["approvals:approvals_record"];
+    const rows = draft?.rows;
+    if (Array.isArray(rows)) return rows as Record<string, unknown>[];
+    const sec = dossier?.sections.find((s) => s.kind === "approvals" && s.key === "approvals_record");
+    const fromSec = sec?.data?.rows;
+    return Array.isArray(fromSec) ? (fromSec as Record<string, unknown>[]) : [];
+  }, [sectionDrafts, dossier?.sections]);
+
   /** تصفح/تعديل: مفتوح للمشرف ومدير الإدارة حتى على المقفلة. الإرسال فقط لـ active/returned. */
   const canEditWorkspace = (key: Tab) => {
     if (key === "info") return false;
+    if (key === "approvals") return canEditWorkspace("card");
     if (!wsOpen(key)) return false;
     const w = workspaces.find((x) => x.key === key);
     if (!w) return key === "card";
@@ -532,7 +553,7 @@ export default function ProjectDossierWorkspace() {
               onChange={(e) => setCard({ ...card, marketing_name: e.target.value })}
             />
             <UserPick
-              label="راعي المشروع"
+              label="مدير الإدارة"
               users={users}
               valueId={card.sponsor_id}
               valueName={card.sponsor_name}
@@ -548,20 +569,18 @@ export default function ProjectDossierWorkspace() {
               }
             />
             <UserPick
-              label="صاحب الاعتماد"
+              label="مدير المشروع"
               users={users}
-              valueId={card.approver_id}
-              valueName={card.approver_name}
-              valueEmail={card.approver_email}
-              emptyLabel="— مدير النظام إن تُرك فارغاً —"
-              hint="إن تُرك فارغاً يُعيَّن مدير النظام"
+              valueId={card.manager_id}
+              valueName={card.manager_name}
+              valueEmail={card.manager_email}
               onInvite={inviteUser}
               onPick={(u) =>
                 setCard({
                   ...card,
-                  approver_id: u?.id ?? null,
-                  approver_name: u?.name || "",
-                  approver_email: u?.email || "",
+                  manager_id: u?.id ?? null,
+                  manager_name: u?.name || "",
+                  manager_email: u?.email || "",
                 })
               }
             />
@@ -676,7 +695,8 @@ export default function ProjectDossierWorkspace() {
                   onDecide={(sectionKey, decision) => void decideDocumentSection(sectionKey, decision)}
                 />
               ) : (
-                sectionsFor("closure").map(({ def, status }) => {
+                <>
+                {sectionsFor("closure").map(({ def, status }) => {
                   const kind = "closure" as const;
                   const draftKey = `${kind}:${def.key}`;
                   const editable = canEditWorkspace("closure");
@@ -707,7 +727,9 @@ export default function ProjectDossierWorkspace() {
                       />
                     </Card>
                   );
-                })
+                })}
+                <ClosureApprovalsReadOnly rows={approvalsRecordRows} />
+                </>
               )}
                 </>
               )}
@@ -815,10 +837,22 @@ export default function ProjectDossierWorkspace() {
             </Card>
           )}
 
+          {tab === "approvals" && schema?.approvals?.[0] && (
+            <ApprovalsTab
+              section={schema.approvals[0]}
+              status={dossier.sections.find((s) => s.kind === "approvals" && s.key === "approvals_record")?.status || "empty"}
+              data={sectionDrafts["approvals:approvals_record"] || {}}
+              canEdit={canEditWorkspace("approvals")}
+              savingKey={savingKey}
+              onChange={(next) => setSectionDrafts((p) => ({ ...p, "approvals:approvals_record": next }))}
+              onSave={() => void saveSection("approvals", "approvals_record")}
+            />
+          )}
+
           {tab === "board" && (
             <Card>
               {!wsOpen("board") ? (
-                <p className="text-sm text-brand-gray">اللوحة مقفلة حتى اعتماد الإغلاق.</p>
+                <p className="text-sm text-brand-gray">اللوحة مقفلة حتى اعتماد تبويب الاعتمادات.</p>
               ) : (
                 <>
               <div className="mb-3 flex flex-wrap gap-2">

@@ -70,17 +70,19 @@ def _phase_week_starts(start, end) -> set[str]:
 def _clean_executed_weeks(activity, weeks):
     if not isinstance(weeks, list):
         return None, Response({"executed_weeks": "قائمة أسابيع غير صالحة"}, status=400)
-    allowed = _phase_week_starts(activity.stage.planned_start, activity.stage.planned_end)
+    allowed = services.activity_week_starts(activity.start_date, activity.end_date)
+    if not allowed:
+        return None, Response({"detail": "حدّد تواريخ النشاط قبل تسجيل أسابيع التنفيذ"}, status=400)
     previous = {_date_text(item) for item in (activity.executed_weeks or [])}
     cleaned: list[str] = []
     for item in weeks:
         text = _date_text(item)
         if not text:
-            return None, Response({"detail": "الأسبوع خارج نطاق تاريخ الواجهة الرئيسية"}, status=400)
+            return None, Response({"detail": "الأسبوع خارج نطاق تواريخ النشاط"}, status=400)
         if text not in allowed:
             if text in previous:
                 continue
-            return None, Response({"detail": "الأسبوع خارج نطاق تاريخ الواجهة الرئيسية"}, status=400)
+            return None, Response({"detail": "الأسبوع خارج نطاق تواريخ النشاط"}, status=400)
         if text not in cleaned:
             cleaned.append(text)
     return cleaned, None
@@ -206,10 +208,17 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
                     val = None
                 setattr(dossier, key, val)
         if "manager" in request.data or "manager_id" in request.data:
-            if not is_super_admin(request.user):
-                return Response({"detail": "تعيين المسؤول للمشرف فقط"}, status=403)
+            if not services.can_assign_dossier_manager(request.user, dossier):
+                return Response({"detail": "تعيين مدير المشروع لمدير الإدارة أو المشرف فقط"}, status=403)
             mid = request.data.get("manager") or request.data.get("manager_id")
-            dossier.manager_id = mid or None
+            if mid in ("", None):
+                services.transfer_dossier_manager(
+                    dossier,
+                    clear=True,
+                    email=request.data.get("manager_email") or "",
+                )
+            else:
+                services.transfer_dossier_manager(dossier, user_id=mid)
         if "sponsor_id" in request.data or "sponsor" in request.data:
             sid = request.data.get("sponsor_id", request.data.get("sponsor"))
             if sid in ("", None):
@@ -252,6 +261,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         if not dossier:
             return Response({"detail": "لا يوجد ملف"}, status=404)
         self.check_object_permissions(request, dossier)
+        services.migrate_dossier_catalog(dossier)
         services.sync_dossier_role_memberships(dossier)
         services.sync_document_from_card(dossier)
         services.sync_plan_from_document(dossier)
@@ -261,6 +271,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
 
     def retrieve(self, request, *args, **kwargs):
         dossier = self.get_object()
+        services.migrate_dossier_catalog(dossier)
         services.sync_dossier_role_memberships(dossier)
         services.sync_document_from_card(dossier)
         services.sync_plan_from_document(dossier)
@@ -474,6 +485,10 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         end = request.data["planned_end"] if "planned_end" in request.data else stage.planned_end
         if _dates_out_of_order(start, end):
             return Response({"detail": _DATE_ORDER_MSG}, status=400)
+        try:
+            services.validate_stage_planned_window(stage, start, end)
+        except ValidationError as exc:
+            return Response(exc.detail, status=400)
         for f in ("planned_start", "planned_end", "deliverable_title", "deliverable_date"):
             if f in request.data:
                 setattr(stage, f, request.data[f] or None)
@@ -503,6 +518,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             services.assert_workspace_open_for_work(request.user, dossier, "plan")
         except ValidationError as exc:
             return Response(exc.detail, status=400)
+        parent = None
         parent_id = data.get("parent")
         if parent_id:
             parent = StageActivity.objects.filter(
@@ -515,6 +531,16 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
             data["code"] = services._next_activity_code(dossier)
         if _dates_out_of_order(data.get("start_date"), data.get("end_date")):
             return Response({"detail": _DATE_ORDER_MSG}, status=400)
+        try:
+            act_stage = stage or (parent.stage if parent else None)
+            services.validate_activity_date_window(
+                start=data.get("start_date"),
+                end=data.get("end_date"),
+                stage=act_stage,
+                parent=parent,
+            )
+        except ValidationError as exc:
+            return Response(exc.detail, status=400)
         assign_requested = "responsible_user" in request.data
         assign_uid = data.pop("responsible_user", None)
         if assign_requested:
@@ -561,6 +587,23 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         end = payload["end_date"] if "end_date" in payload else activity.end_date
         if _dates_out_of_order(start, end):
             return Response({"detail": _DATE_ORDER_MSG}, status=400)
+        try:
+            services.validate_activity_date_window(
+                start=start,
+                end=end,
+                activity=activity,
+                parent=activity.parent if activity.parent_id else None,
+            )
+            if activity.parent_id is None:
+                services.validate_parent_dates_cover_children(
+                    activity,
+                    payload.get("start_date") if "start_date" in payload else activity.start_date,
+                    payload.get("end_date") if "end_date" in payload else activity.end_date,
+                    start_in_payload="start_date" in payload,
+                    end_in_payload="end_date" in payload,
+                )
+        except ValidationError as exc:
+            return Response(exc.detail, status=400)
         if "executed_weeks" in payload:
             cleaned, error = _clean_executed_weeks(activity, payload.get("executed_weeks"))
             if error:
@@ -569,6 +612,11 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         marks_done = payload.get("manual_status") == "done" or (
             "progress_pct" in payload and str(payload.get("progress_pct") or "0").isdigit() and int(payload.get("progress_pct") or 0) >= 100
         )
+        if marks_done:
+            try:
+                services.assert_can_complete_parent_activity(activity)
+            except ValidationError as exc:
+                return Response(exc.detail, status=400)
         if marks_done and not activity.attachments.exists():
             return Response({"detail": "الشاهد مطلوب عند الإتمام ولا يُغلق النشاط من الحالة وحدها"}, status=400)
         assign_uid = None
@@ -684,6 +732,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="export-payload")
     def export_payload(self, request, pk=None):
         dossier = self.get_object()
+        services.migrate_dossier_catalog(dossier)
         return Response(
             {
                 "code": dossier.code,
@@ -700,6 +749,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
                     {"key": s.key, "status": s.status, "data": s.data}
                     for s in dossier.sections.filter(kind="closure")
                 ],
+                "approvals_record": {"rows": services.approvals_record_rows(dossier)},
                 "comparison": services.document_closure_comparison(dossier),
                 "schema": schema_payload(),
             }

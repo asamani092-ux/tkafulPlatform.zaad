@@ -155,11 +155,6 @@ export default function ActivitiesPanel({
   const detailStage = ordered.find((s) => s.key === detailKey) || null;
   const detailActs = detailStage ? phaseActivities(detailStage.id, activities) : [];
   const detailMains = detailActs.filter((a) => a.parent == null);
-  const range = {
-    start: detailStage?.planned_start ?? null,
-    end: detailStage?.planned_end ?? null,
-  };
-  const months = useMemo(() => buildMonthWeeks(range.start, range.end), [range.start, range.end]);
   const hasTeam = teamMembers.length > 0;
 
   const addActivity = async (stageId: number, parentId: number | null) => {
@@ -230,10 +225,24 @@ export default function ActivitiesPanel({
   };
 
   const toggleWeek = (a: StageActivity, weekStart: string) => {
-    const visible = new Set(months.flatMap((block) => block.weeks.map((week) => week.label)));
+    const visible = new Set(
+      buildMonthWeeks(a.start_date, a.end_date).flatMap((block) => block.weeks.map((week) => week.label)),
+    );
     const current = (a.executed_weeks || []).filter((week) => visible.has(week));
     const next = current.includes(weekStart) ? current.filter((w) => w !== weekStart) : [...current, weekStart];
     void patch(a.id, { executed_weeks: next });
+  };
+
+  const saveActivityDates = (a: StageActivity, nextStart: string | null, nextEnd: string | null) => {
+    if (!datesOrdered(nextStart, nextEnd)) {
+      setDateError(DATE_ORDER_MSG);
+      return;
+    }
+    setDateError("");
+    const payload: Record<string, unknown> = {};
+    if (nextStart !== a.start_date) payload.start_date = nextStart;
+    if (nextEnd !== a.end_date) payload.end_date = nextEnd;
+    if (Object.keys(payload).length) void patch(a.id, payload);
   };
 
   const saveStageDates = (stage: DossierStageRow, nextStart: string | null, nextEnd: string | null) => {
@@ -312,8 +321,67 @@ export default function ActivitiesPanel({
     );
   };
 
+  const renderWeekCells = (a: StageActivity) => {
+    const months = buildMonthWeeks(a.start_date, a.end_date);
+    if (!a.start_date || !a.end_date) {
+      return <span className="text-xs text-brand-gray">حدّد تواريخ النشاط</span>;
+    }
+    if (!datesOrdered(a.start_date, a.end_date)) {
+      return <span className="text-xs text-red-600">{DATE_ORDER_MSG}</span>;
+    }
+    if (!months.length) return null;
+    return (
+      <div className="max-w-full overflow-x-auto">
+        <table className="w-max border-collapse text-xs">
+          <thead>
+            <tr>
+              {months.map((m) => (
+                <th key={m.label} className={`${weekCell} text-center`} colSpan={4}>
+                  {m.label}
+                </th>
+              ))}
+            </tr>
+            <tr>
+              {months.flatMap((m) =>
+                m.weeks.map((w) => (
+                  <th key={`${m.label}-${w.label}`} className={`${weekCell} w-9 whitespace-nowrap text-center`}>
+                    {weekCaption(w.label)}
+                  </th>
+                )),
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {months.flatMap((m) =>
+                m.weeks.map((w) => {
+                  const on = (a.executed_weeks || []).includes(w.label);
+                  return (
+                    <td key={`${a.id}-${m.label}-${w.label}`} className={`${weekCell} w-9`}>
+                      <button
+                        type="button"
+                        title={on ? WEEK_DONE_MSG : weekCaption(w.label)}
+                        className={`block h-7 w-full min-w-8 rounded ${on ? "bg-emerald-500" : "bg-surface-muted/40"}`}
+                        disabled={!canEdit}
+                        aria-pressed={on}
+                        aria-label={on ? WEEK_DONE_MSG : weekCaption(w.label)}
+                        onClick={() => toggleWeek(a, w.label)}
+                      />
+                    </td>
+                  );
+                }),
+              )}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   const renderActivity = (a: StageActivity, stage: DossierStageRow, level: "رئيسي" | "فرعي") => {
     const locked = !!a.locked;
+    const childCount = level === "رئيسي" ? (childrenOf.get(a.id) || []).length : 0;
+    const blockDone = level === "رئيسي" && childCount > 0;
     return (
       <tr key={a.id} className={level === "فرعي" ? "bg-emerald-50/40" : undefined}>
         <td className={cell}>{level}</td>
@@ -329,12 +397,37 @@ export default function ActivitiesPanel({
           />
         </td>
         <td className={cell}>
+          <input
+            type="date"
+            className="input-field text-sm"
+            disabled={!canEdit}
+            defaultValue={a.start_date || ""}
+            key={`${a.id}-sd-${a.start_date}`}
+            onBlur={(e) => saveActivityDates(a, e.target.value || null, a.end_date)}
+          />
+        </td>
+        <td className={cell}>
+          <input
+            type="date"
+            className="input-field text-sm"
+            disabled={!canEdit}
+            defaultValue={a.end_date || ""}
+            key={`${a.id}-ed-${a.end_date}`}
+            onBlur={(e) => saveActivityDates(a, a.start_date, e.target.value || null)}
+          />
+        </td>
+        <td className={cell}>{renderWeekCells(a)}</td>
+        <td className={cell}>
           <select
             className="input-field text-sm"
             disabled={!canEdit}
             value={a.manual_status || ""}
             onChange={(e) => {
               if (e.target.value === "done") {
+                if (blockDone) {
+                  setCompleteError("لا يمكن إتمام النشاط الرئيسي قبل إتمام جميع الأنشطة الفرعية");
+                  return;
+                }
                 setCompleteError("");
                 setCompleteId(a.id);
                 return;
@@ -368,7 +461,7 @@ export default function ActivitiesPanel({
         <td className={cell}>
           <div className="flex flex-wrap items-center gap-2">
             {level === "رئيسي" ? renderAdder(stage.id, a.id) : null}
-            {canEdit && a.manual_status !== "done" && (
+            {canEdit && a.manual_status !== "done" && !blockDone && (
               <Button type="button" variant="secondary" size="sm" onClick={() => { setCompleteError(""); setCompleteId(a.id); }}>
                 إتمام
               </Button>
@@ -588,7 +681,7 @@ export default function ActivitiesPanel({
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="bg-surface-muted/40">
-                    {["المستوى", "النشاط", "الحالة", "المسؤول", ""].map((h) => (
+                    {["المستوى", "النشاط", "البداية", "الإغلاق", "أسابيع التنفيذ", "الحالة", "المسؤول", ""].map((h) => (
                       <th key={h || "add"} className={`${cell} text-right font-bold text-primary`}>
                         {h}
                       </th>
@@ -605,68 +698,9 @@ export default function ActivitiesPanel({
                 </tbody>
               </table>
             </div>
-            <h4 className="mb-2 mt-4 font-bold text-primary">أسابيع التنفيذ</h4>
-            <p className="mb-2 text-sm text-brand-gray">اضغط مربع الأسبوع الذي وقع فيه التنفيذ داخل تاريخ الواجهة. اللون الأخضر يعني تم التنفيذ في هذا الأسبوع.</p>
-            {!range.start || !range.end ? (
-              <p className="text-sm text-brand-gray">حدد تاريخ البداية والإغلاق في الواجهة الرئيسية</p>
-            ) : !datesOrdered(range.start, range.end) ? (
-              <p className="text-sm text-red-600">{DATE_ORDER_MSG}</p>
-            ) : (
-              <>
-              <div className="max-w-full overflow-x-auto">
-                <table className="w-max border-collapse text-xs">
-                  <thead>
-                    <tr>
-                      <th className={`${weekCell} sticky right-0 z-10 bg-surface px-2 text-right`}>النشاط</th>
-                      {months.map((m) => (
-                        <th key={m.label} className={`${weekCell} text-center`} colSpan={4}>
-                          {m.label}
-                        </th>
-                      ))}
-                    </tr>
-                    <tr>
-                      <th className={`${weekCell} sticky right-0 z-10 bg-surface`} />
-                      {months.flatMap((m) =>
-                        m.weeks.map((w) => (
-                          <th key={`${m.label}-${w.label}`} className={`${weekCell} w-9 whitespace-nowrap text-center`}>
-                            {weekCaption(w.label)}
-                          </th>
-                        )),
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detailActs.map((a) => (
-                      <tr key={`cal-${a.id}`}>
-                        <td className={`${weekCell} sticky right-0 z-10 bg-surface px-2 font-bold`}>{a.title}</td>
-                        {months.flatMap((m) =>
-                          m.weeks.map((w) => {
-                            const on = (a.executed_weeks || []).includes(w.label);
-                            return (
-                              <td key={`${a.id}-${m.label}-${w.label}`} className={`${weekCell} w-9`}>
-                                <button
-                                  type="button"
-                                  title={on ? WEEK_DONE_MSG : weekCaption(w.label)}
-                                  className={`block h-7 w-full min-w-8 rounded ${on ? "bg-emerald-500" : "bg-surface-muted/40"}`}
-                                  disabled={!canEdit}
-                                  aria-pressed={on}
-                                  aria-label={on ? WEEK_DONE_MSG : weekCaption(w.label)}
-                                  onClick={() => toggleWeek(a, w.label)}
-                                />
-                              </td>
-                            );
-                          }),
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {detailActs.some((a) => (a.executed_weeks || []).some((week) => months.some((m) => m.weeks.some((w) => w.label === week)))) && (
-                <p className="mt-2 text-sm text-brand-gray">{WEEK_DONE_MSG}</p>
-              )}
-              </>
-            )}
+            <p className="mt-3 text-sm text-brand-gray">
+              أسابيع التنفيذ (أربعة لكل شهر) مرتبطة بتواريخ كل نشاط. اللون الأخضر يعني تم التنفيذ في هذا الأسبوع.
+            </p>
           </div>
         </div>
       )}

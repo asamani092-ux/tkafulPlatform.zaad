@@ -245,6 +245,7 @@ class ApprovalRequest(models.Model):
         ("document", "الوثيقة"),
         ("plan", "الخطة التنفيذية"),
         ("closure", "الإغلاق"),
+        ("approvals", "الاعتمادات"),
         ("board", "لوحة المشروع"),
     ]
     DECISION_CHOICES = [
@@ -268,6 +269,9 @@ class ApprovalRequest(models.Model):
     decision = models.CharField(max_length=20, choices=DECISION_CHOICES, default="pending")
     decided_at = models.DateTimeField(null=True, blank=True)
     note = models.TextField(blank=True)
+    recipient_email = models.EmailField(blank=True)
+    recipient_name = models.CharField(max_length=200, blank=True)
+    approver_row_id = models.CharField(max_length=64, blank=True)
     payload_snapshot = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -283,7 +287,18 @@ class ApprovalRequest(models.Model):
         return secrets.token_urlsafe(32)
 
     @classmethod
-    def create_pending(cls, *, dossier, scope: str, stage=None, payload=None, days: int = 14):
+    def create_pending(
+        cls,
+        *,
+        dossier,
+        scope: str,
+        stage=None,
+        payload=None,
+        days: int = 14,
+        recipient_email: str = "",
+        recipient_name: str = "",
+        approver_row_id: str = "",
+    ):
         return cls.objects.create(
             dossier=dossier,
             scope=scope,
@@ -291,6 +306,9 @@ class ApprovalRequest(models.Model):
             token=cls.mint_token(),
             expires_at=timezone.now() + timedelta(days=days),
             payload_snapshot=payload or {},
+            recipient_email=(recipient_email or "").strip(),
+            recipient_name=(recipient_name or "").strip(),
+            approver_row_id=(approver_row_id or "").strip(),
         )
 
     @property
@@ -344,6 +362,7 @@ class DossierWorkspace(models.Model):
         ("document", "الوثيقة"),
         ("plan", "الخطة التنفيذية"),
         ("closure", "الإغلاق"),
+        ("approvals", "الاعتمادات"),
         ("board", "لوحة المشروع"),
     ]
     STATUS_CHOICES = [
