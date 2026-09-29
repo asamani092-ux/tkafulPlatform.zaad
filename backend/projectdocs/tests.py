@@ -1140,12 +1140,31 @@ class DocumentTwelveCardsTests(APITestCase):
         self.assertEqual(blocked.status_code, 400, blocked.content)
 
 
+def _response_detail_text(data) -> str:
+    if not isinstance(data, dict):
+        return str(data)
+    if "detail" in data:
+        detail = data["detail"]
+        if isinstance(detail, list):
+            return " ".join(str(item) for item in detail)
+        return str(detail)
+    return " ".join(str(value) for value in data.values())
+
+
 class PlanFromPhasesTests(APITestCase):
     """مزامنة أنشطة الوثيقة إلى الخطة، قفل العنوان، واعتماد المراحل. O(P+A)."""
+
+    _MSG_MAIN_OUTSIDE_STAGE = "تاريخ بداية النشاط الرئيسي خارج نطاق المرحلة"
+    _MSG_CHILD_OUTSIDE_PARENT = "تاريخ إغلاق النشاط الفرعي خارج نطاق النشاط الرئيسي"
+    _MSG_PARENT_BEFORE_CHILDREN = "لا يمكن إتمام النشاط الرئيسي قبل إتمام جميع الأنشطة الفرعية"
 
     def setUp(self):
         self.admin = make_user("planadmin", role="admin")
         self.manager = make_user("planmgr", role="user")
+
+    def _assert_bad_detail(self, response, fragment: str) -> None:
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn(fragment, _response_detail_text(response.data), response.data)
 
     def _create(self):
         self.client.force_authenticate(self.admin)
@@ -1366,7 +1385,7 @@ class PlanFromPhasesTests(APITestCase):
             {"start_date": "2026-05-01", "end_date": "2026-07-01"},
             format="json",
         )
-        self.assertEqual(outside_main.status_code, 400, outside_main.content)
+        self._assert_bad_detail(outside_main, self._MSG_MAIN_OUTSIDE_STAGE)
         inside_main = self.client.patch(
             f"/api/projectdocs/dossiers/{dossier_id}/activities/{main['id']}/",
             {"start_date": "2026-06-10", "end_date": "2026-07-31"},
@@ -1381,10 +1400,10 @@ class PlanFromPhasesTests(APITestCase):
         self.assertEqual(child.status_code, 201, child.content)
         child_outside = self.client.patch(
             f"/api/projectdocs/dossiers/{dossier_id}/activities/{child.data['id']}/",
-            {"start_date": "2026-06-01", "end_date": "2026-08-01"},
+            {"start_date": "2026-06-15", "end_date": "2026-08-01"},
             format="json",
         )
-        self.assertEqual(child_outside.status_code, 400, child_outside.content)
+        self._assert_bad_detail(child_outside, self._MSG_CHILD_OUTSIDE_PARENT)
         child_ok = self.client.patch(
             f"/api/projectdocs/dossiers/{dossier_id}/activities/{child.data['id']}/",
             {"start_date": "2026-06-15", "end_date": "2026-07-15"},
@@ -1396,7 +1415,7 @@ class PlanFromPhasesTests(APITestCase):
             {"manual_status": "done"},
             format="json",
         )
-        self.assertEqual(parent_done_early.status_code, 400, parent_done_early.content)
+        self._assert_bad_detail(parent_done_early, self._MSG_PARENT_BEFORE_CHILDREN)
         narrow_parent = self.client.patch(
             f"/api/projectdocs/dossiers/{dossier_id}/activities/{main['id']}/",
             {"end_date": "2026-07-01"},
@@ -1409,6 +1428,47 @@ class PlanFromPhasesTests(APITestCase):
             format="json",
         )
         self.assertEqual(narrow_stage.status_code, 400, narrow_stage.content)
+
+    def test_parent_complete_endpoint_blocked_until_children_done(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        dossier_id = self._create()
+        saved = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/framework_bundle/",
+            {"data": self._phases(["حفر"])},
+            format="json",
+        )
+        self.assertEqual(saved.status_code, 200, saved.content)
+        listed = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/activities/")
+        main = next(a for a in listed.data if a["title"] == "حفر")
+        dossier = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/")
+        order = next(s["order"] for s in dossier.data["stages"] if s["key"] == "define")
+        self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/stages/{order}/",
+            {"planned_start": "2026-06-01", "planned_end": "2026-08-31"},
+            format="json",
+        )
+        self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{main['id']}/",
+            {"start_date": "2026-06-10", "end_date": "2026-07-31"},
+            format="json",
+        )
+        child = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/",
+            {"parent": main["id"], "title": "فرعي"},
+            format="json",
+        )
+        self.assertEqual(child.status_code, 201, child.content)
+        blocked = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{main['id']}/complete/",
+            {
+                "lessons": "درس الرئيسي",
+                "evidence_url": "",
+                "file": SimpleUploadedFile("شاهد.txt", b"proof"),
+            },
+            format="multipart",
+        )
+        self._assert_bad_detail(blocked, self._MSG_PARENT_BEFORE_CHILDREN)
 
 
 class TeamAssignNotifyTests(APITestCase):
