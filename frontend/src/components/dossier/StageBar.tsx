@@ -58,8 +58,8 @@ export default function StageBar({ workspaces, currentKey, bypassLocked = false,
       {active && active.needs_approval !== false && active.key !== "card" && (
         <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900">
           {active.status === "submitted"
-            ? `بانتظار اعتماد صاحب الاعتماد لتبويب «${active.label}» — التبويب التالي يبقى مقفلاً.`
-            : `أرسل تبويب «${active.label}» لاعتماد صاحب الاعتماد — البطاقة بلا اعتماد.`}
+            ? `بانتظار اعتماد المعتمدين لتبويب «${active.label}» — التبويب التالي يبقى مقفلاً.`
+            : `أرسل تبويب «${active.label}» للاعتماد (بريد لكل معتمد في تبويب الاعتمادات) — البطاقة بلا اعتماد.`}
         </p>
       )}
       {bypassLocked && (

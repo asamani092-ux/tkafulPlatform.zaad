@@ -14,10 +14,12 @@ from projectdocs.models import (
     BudgetLine,
     BudgetTxn,
     DossierAttachment,
+    DossierSection,
     ProjectDossier,
     StageActivity,
 )
 from projectdocs.sections import (
+    APPROVALS_SECTIONS,
     CARD_SECTIONS,
     DOCUMENT_SECTIONS,
     CLOSURE_SECTIONS,
@@ -54,11 +56,11 @@ def fill_all_document_sections(client, dossier_id):
             "strategic_goal": "هدف",
         },
         "indicators": {"rows": [{"goal": "غ", "indicator_name": "م", "target": "1"}]},
-        "logical_impact": {
-            "rows": [
+        "framework_bundle": {
+            "logical_impact": [
                 {
                     "row_key": "impact",
-                    "label": "الأثر",
+                    "label": "الإطار المنطقي",
                     "description": "د",
                     "indicators": "م",
                     "means": "و",
@@ -72,11 +74,9 @@ def fill_all_document_sections(client, dossier_id):
                     "means": "و",
                     "assumptions": "ا",
                 },
-            ]
-        },
-        "outputs_quality": {"rows": [{"output": "مخرج", "quality": "جودة"}]},
-        "main_phases": {
-            "phases": [
+            ],
+            "outputs_quality": [{"output": "مخرج", "quality": "جودة"}],
+            "main_phases": [
                 {"key": p["key"], "label": p["label"], "activities": ["نشاط"]}
                 for p in [
                     {"key": "define", "label": "تحديد وتعريف المشروع"},
@@ -85,7 +85,7 @@ def fill_all_document_sections(client, dossier_id):
                     {"key": "execute", "label": "تنفيذ المشروع"},
                     {"key": "close", "label": "إغلاق المشروع"},
                 ]
-            ]
+            ],
         },
         "objectives": {"rows": [{"objective": "هدف", "indicator": "مؤشر"}]},
         "aspirations": {"short_term": "ق", "long_term": "ط", "impact": "أ"},
@@ -155,13 +155,14 @@ def make_user(username, role="user"):
 
 class SectionsCatalogTests(APITestCase):
     def test_catalog_counts(self):
-        self.assertEqual(len(DOCUMENT_SECTIONS), 13)
-        self.assertEqual(len(CLOSURE_SECTIONS), 11)
+        self.assertEqual(len(DOCUMENT_SECTIONS), 11)
+        self.assertEqual(len(CLOSURE_SECTIONS), 10)
         self.assertEqual(len(CARD_SECTIONS), 5)
         payload = schema_payload()
         self.assertEqual(len(payload["stages"]), 5)
-        self.assertEqual(len(payload["document"]), 13)
-        self.assertEqual(len(payload["closure"]), 11)
+        self.assertEqual(len(payload["document"]), 11)
+        self.assertEqual(len(payload["closure"]), 10)
+        self.assertEqual(len(payload["approvals"]), 1)
         self.assertEqual(len(payload["card"]), 5)
         self.assertEqual(len(payload["document_fixed_phases"]), 5)
 
@@ -178,10 +179,25 @@ class SectionsCatalogTests(APITestCase):
         self.assertEqual(cleaned["rows"][0]["goal"], "أ")
 
     def test_logical_matrix_and_phases(self):
-        matrix = validate_section_data("document", "logical_impact", {"rows": []})
-        self.assertEqual(len(matrix["rows"]), 2)
-        phases = validate_section_data("document", "main_phases", {"phases": []})
-        self.assertEqual(len(phases["phases"]), 5)
+        bundle = validate_section_data(
+            "document",
+            "framework_bundle",
+            {"logical_impact": [], "outputs_quality": [], "main_phases": []},
+        )
+        self.assertEqual(len(bundle["logical_impact"]), 2)
+        self.assertEqual(len(bundle["main_phases"]), 5)
+
+    def test_approvals_record_excel_column_labels(self):
+        """جدول المعتمدين يطابق أعمدة وثيقة الإغلاق في الإكسل. O(1)."""
+        sec = next(s for s in APPROVALS_SECTIONS if s["key"] == "approvals_record")
+        table = next(f for f in sec["fields"] if f["type"] == "table")
+        labels = {c["key"]: c["label"] for c in table["columns"]}
+        self.assertEqual(labels["role_title"], "الصفة")
+        self.assertEqual(labels["name"], "الاسم")
+        self.assertEqual(labels["email"], "البريد")
+        self.assertEqual(labels["status"], "الحالة")
+        self.assertEqual(labels["decided_at"], "التاريخ")
+        self.assertEqual(labels["rejection_reason"], "سبب الرفض")
 
     def test_card_phase_budget_total_computed(self):
         cleaned = validate_section_data(
@@ -234,9 +250,9 @@ class DossierApiTests(APITestCase):
         )
         self.assertEqual(res.status_code, 201, res.content)
         self.assertTrue(res.data["code"].startswith("PRJ-"))
-        self.assertEqual(len(res.data["sections"]), 34)
+        self.assertEqual(len(res.data["sections"]), 32)
         self.assertEqual(len(res.data["stages"]), 5)
-        self.assertEqual(len(res.data["workspaces"]), 5)
+        self.assertEqual(len(res.data["workspaces"]), 6)
         self.assertEqual(res.data["workspaces"][0]["key"], "card")
         self.assertEqual(res.data["workspaces"][0]["status"], "active")
         self.assertEqual(res.data["workspaces"][1]["status"], "locked")
@@ -392,7 +408,8 @@ class DossierApiTests(APITestCase):
         self.client.force_authenticate(self.admin)
         res = self.client.get("/api/projectdocs/schema/")
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(len(res.data["document"]), 13)
+        self.assertEqual(len(res.data["document"]), 11)
+        self.assertEqual(len(res.data["approvals"]), 1)
         self.assertEqual(len(res.data["document_fixed_phases"]), 5)
 
     @patch("projectdocs.services.send_approval_email", return_value=True)
@@ -480,7 +497,7 @@ class DossierRestructureTests(APITestCase):
             format="json",
         )
         dossier_id = res.data["id"]
-        self.assertEqual(len(res.data["workspaces"]), 5)
+        self.assertEqual(len(res.data["workspaces"]), 6)
         by_key = {w["key"]: w for w in res.data["workspaces"]}
         self.assertEqual(by_key["card"]["status"], "active")
         self.assertEqual(by_key["document"]["status"], "locked")
@@ -565,8 +582,8 @@ class DossierRestructureTests(APITestCase):
         )
         self.assertEqual(ok_act.status_code, 201, ok_act.content)
 
-    def test_sponsor_without_approver_cannot_decide(self):
-        """الراعي المغاير لصاحب الاعتماد لا يعتمد."""
+    def test_sponsor_department_manager_can_decide_workspace(self):
+        """مدير الإدارة (الراعي) يعتمد التبويب؛ غير المخوّل لا."""
         self.client.force_authenticate(self.admin)
         res = self.client.post(
             "/api/projectdocs/dossiers/",
@@ -595,23 +612,23 @@ class DossierRestructureTests(APITestCase):
         sponsor_user.email = "sponsor-a@test.com"
         sponsor_user.save(update_fields=["email"])
         self.client.force_authenticate(sponsor_user)
-        denied = self.client.post(
+        ok_sponsor = self.client.post(
             f"/api/projectdocs/dossiers/{dossier_id}/workspaces/document/decide/",
             {"decision": "approved"},
             format="json",
         )
-        self.assertEqual(denied.status_code, 403, denied.content)
+        self.assertEqual(ok_sponsor.status_code, 200, ok_sponsor.content)
 
-        approver_user = make_user("ap-only", role="user")
-        approver_user.email = "approver-b@test.com"
-        approver_user.save(update_fields=["email"])
-        self.client.force_authenticate(approver_user)
-        ok = self.client.post(
-            f"/api/projectdocs/dossiers/{dossier_id}/workspaces/document/decide/",
+        outsider = make_user("outsider", role="user")
+        outsider.email = "outsider@test.com"
+        outsider.save(update_fields=["email"])
+        self.client.force_authenticate(outsider)
+        denied = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/workspaces/plan/decide/",
             {"decision": "approved"},
             format="json",
         )
-        self.assertEqual(ok.status_code, 200, ok.content)
+        self.assertNotEqual(denied.status_code, 200, denied.content)
 
     def test_admin_decide_consumes_pending_email_token(self):
         """القرار الداخلي يستهلك طلب الإيميل القائم فلا يبقى الرمز صالحاً. O(1)."""
@@ -828,6 +845,65 @@ class DossierRestructureTests(APITestCase):
         self.assertGreaterEqual(len(cmp.data["pairs"]), 5)
         payload = document_closure_comparison(ProjectDossier.objects.get(pk=dossier_id))
         self.assertEqual(payload["pairs"][0]["document_key"], "basics")
+
+    def test_export_payload_includes_approvals_record_rows(self):
+        """تصدير PDF للإغلاق يقرأ جدول الاعتمادات من تبويب الاعتمادات. O(1)."""
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/projectdocs/dossiers/",
+            {"name": "تصدير اعتمادات", "sponsor_email": "exp@test.com", "sponsor_name": "مدير"},
+            format="json",
+        )
+        dossier_id = res.data["id"]
+        patch = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/approvals/approvals_record/",
+            {
+                "data": {
+                    "rows": [
+                        {
+                            "role_title": "لجنة المشاريع",
+                            "name": "معتمد",
+                            "email": "approver@test.com",
+                            "status": "pending",
+                            "decided_at": "",
+                            "rejection_reason": "",
+                        }
+                    ]
+                }
+            },
+            format="json",
+        )
+        self.assertEqual(patch.status_code, 200, patch.content)
+        export = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/export-payload/")
+        self.assertEqual(export.status_code, 200)
+        rows = export.data.get("approvals_record", {}).get("rows") or []
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["role_title"], "لجنة المشاريع")
+
+    def test_closure_legacy_approvals_section_not_editable(self):
+        """لا تحرير لاعتمادات الإغلاق القديمة — المصدر تبويب الاعتمادات. O(1)."""
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            "/api/projectdocs/dossiers/",
+            {"name": "قديم", "sponsor_email": "old@test.com"},
+            format="json",
+        )
+        dossier_id = res.data["id"]
+        dossier = ProjectDossier.objects.get(pk=dossier_id)
+        DossierSection.objects.create(
+            dossier=dossier,
+            kind="closure",
+            key="approvals_record",
+            data={"sponsor_decision": "ok", "sponsor_date": "2026-01-01", "notes": "x"},
+            status="filled",
+        )
+        blocked = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/closure/approvals_record/",
+            {"data": {"sponsor_decision": "y"}},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, 400)
+        self.assertIn("الاعتمادات", str(blocked.data))
 
     def test_card_fields_tables_and_info_page(self):
         """حفظ حقول البطاقة وجداولها وعكسها في صفحة المعلومات. O(1)."""
@@ -1094,11 +1170,15 @@ class DocumentTwelveCardsTests(APITestCase):
     def test_main_phases_always_five(self):
         cleaned = validate_section_data(
             "document",
-            "main_phases",
-            {"phases": [{"key": "define", "label": "x", "activities": ["أ"]}]},
+            "framework_bundle",
+            {
+                "logical_impact": [],
+                "outputs_quality": [],
+                "main_phases": [{"key": "define", "label": "x", "activities": ["أ"]}],
+            },
         )
-        self.assertEqual(len(cleaned["phases"]), 5)
-        self.assertEqual(cleaned["phases"][0]["activities"], ["أ"])
+        self.assertEqual(len(cleaned["main_phases"]), 5)
+        self.assertEqual(cleaned["main_phases"][0]["activities"], ["أ"])
 
     def test_card_scalars_appear_on_document_basics(self):
         dossier_id = self._create()
@@ -1133,12 +1213,31 @@ class DocumentTwelveCardsTests(APITestCase):
         self.assertEqual(blocked.status_code, 400, blocked.content)
 
 
+def _response_detail_text(data) -> str:
+    if not isinstance(data, dict):
+        return str(data)
+    if "detail" in data:
+        detail = data["detail"]
+        if isinstance(detail, list):
+            return " ".join(str(item) for item in detail)
+        return str(detail)
+    return " ".join(str(value) for value in data.values())
+
+
 class PlanFromPhasesTests(APITestCase):
     """مزامنة أنشطة الوثيقة إلى الخطة، قفل العنوان، واعتماد المراحل. O(P+A)."""
+
+    _MSG_MAIN_OUTSIDE_STAGE = "تاريخ بداية النشاط الرئيسي خارج نطاق المرحلة"
+    _MSG_CHILD_OUTSIDE_PARENT = "تاريخ إغلاق النشاط الفرعي خارج نطاق النشاط الرئيسي"
+    _MSG_PARENT_BEFORE_CHILDREN = "لا يمكن إتمام النشاط الرئيسي قبل إتمام جميع الأنشطة الفرعية"
 
     def setUp(self):
         self.admin = make_user("planadmin", role="admin")
         self.manager = make_user("planmgr", role="user")
+
+    def _assert_bad_detail(self, response, fragment: str) -> None:
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn(fragment, _response_detail_text(response.data), response.data)
 
     def _create(self):
         self.client.force_authenticate(self.admin)
@@ -1157,19 +1256,21 @@ class PlanFromPhasesTests(APITestCase):
 
     def _phases(self, activities):
         return {
-            "phases": [
+            "logical_impact": [],
+            "outputs_quality": [],
+            "main_phases": [
                 {"key": "define", "label": "تحديد وتعريف المشروع", "activities": activities},
                 {"key": "prepare", "label": "إعداد المشروع", "activities": []},
                 {"key": "plan", "label": "التخطيط للمشروع", "activities": []},
                 {"key": "execute", "label": "تنفيذ المشروع", "activities": []},
                 {"key": "close", "label": "إغلاق المشروع", "activities": []},
-            ]
+            ],
         }
 
     def test_sync_locks_title_and_keeps_row_after_chip_removed(self):
         dossier_id = self._create()
         saved = self.client.patch(
-            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/main_phases/",
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/framework_bundle/",
             {"data": self._phases(["حفر"])},
             format="json",
         )
@@ -1200,7 +1301,7 @@ class PlanFromPhasesTests(APITestCase):
         self.assertFalse(child.data["locked"])
 
         self.client.patch(
-            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/main_phases/",
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/framework_bundle/",
             {"data": self._phases([])},
             format="json",
         )
@@ -1243,13 +1344,21 @@ class PlanFromPhasesTests(APITestCase):
     def test_rejects_start_not_before_end(self):
         dossier_id = self._create()
         saved = self.client.patch(
-            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/main_phases/",
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/framework_bundle/",
             {"data": self._phases(["حفر"])},
             format="json",
         )
         self.assertEqual(saved.status_code, 200, saved.content)
         listed = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/activities/")
         row = next(a for a in listed.data if a["title"] == "حفر")
+        dossier = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/")
+        order = next(s["order"] for s in dossier.data["stages"] if s["key"] == "define")
+        stage_ok = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/stages/{order}/",
+            {"planned_start": "2026-05-01", "planned_end": "2026-12-31"},
+            format="json",
+        )
+        self.assertEqual(stage_ok.status_code, 200, stage_ok.content)
         inverted = self.client.patch(
             f"/api/projectdocs/dossiers/{dossier_id}/activities/{row['id']}/",
             {"start_date": "2026-06-01", "end_date": "2026-05-01"},
@@ -1268,8 +1377,6 @@ class PlanFromPhasesTests(APITestCase):
             format="json",
         )
         self.assertEqual(ok.status_code, 200, ok.content)
-        dossier = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/")
-        order = next(s["order"] for s in dossier.data["stages"] if s["key"] == "define")
         bad_stage = self.client.patch(
             f"/api/projectdocs/dossiers/{dossier_id}/stages/{order}/",
             {"planned_start": "2026-06-01", "planned_end": "2026-05-01"},
@@ -1280,7 +1387,7 @@ class PlanFromPhasesTests(APITestCase):
     def test_executed_week_stays_inside_phase_range(self):
         dossier_id = self._create()
         saved = self.client.patch(
-            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/main_phases/",
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/framework_bundle/",
             {"data": self._phases(["حفر"])},
             format="json",
         )
@@ -1295,6 +1402,12 @@ class PlanFromPhasesTests(APITestCase):
             format="json",
         )
         self.assertEqual(stage.status_code, 200, stage.content)
+        dated = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{row['id']}/",
+            {"start_date": "2026-10-10", "end_date": "2026-12-20"},
+            format="json",
+        )
+        self.assertEqual(dated.status_code, 200, dated.content)
         outside = self.client.patch(
             f"/api/projectdocs/dossiers/{dossier_id}/activities/{row['id']}/",
             {"executed_weeks": ["2026-09-01"]},
@@ -1322,6 +1435,113 @@ class PlanFromPhasesTests(APITestCase):
         )
         self.assertEqual(kept.status_code, 200, kept.content)
         self.assertEqual(kept.data["executed_weeks"], ["2026-10-01", "2026-11-01"])
+
+    def test_hierarchical_activity_dates_and_parent_completion(self):
+        dossier_id = self._create()
+        saved = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/framework_bundle/",
+            {"data": self._phases(["حفر"])},
+            format="json",
+        )
+        self.assertEqual(saved.status_code, 200, saved.content)
+        listed = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/activities/")
+        main = next(a for a in listed.data if a["title"] == "حفر")
+        dossier = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/")
+        order = next(s["order"] for s in dossier.data["stages"] if s["key"] == "define")
+        self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/stages/{order}/",
+            {"planned_start": "2026-06-01", "planned_end": "2026-08-31"},
+            format="json",
+        )
+        outside_main = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{main['id']}/",
+            {"start_date": "2026-05-01", "end_date": "2026-07-01"},
+            format="json",
+        )
+        self._assert_bad_detail(outside_main, self._MSG_MAIN_OUTSIDE_STAGE)
+        inside_main = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{main['id']}/",
+            {"start_date": "2026-06-10", "end_date": "2026-07-31"},
+            format="json",
+        )
+        self.assertEqual(inside_main.status_code, 200, inside_main.content)
+        child = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/",
+            {"parent": main["id"], "title": "فرعي"},
+            format="json",
+        )
+        self.assertEqual(child.status_code, 201, child.content)
+        child_outside = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{child.data['id']}/",
+            {"start_date": "2026-06-15", "end_date": "2026-08-01"},
+            format="json",
+        )
+        self._assert_bad_detail(child_outside, self._MSG_CHILD_OUTSIDE_PARENT)
+        child_ok = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{child.data['id']}/",
+            {"start_date": "2026-06-15", "end_date": "2026-07-15"},
+            format="json",
+        )
+        self.assertEqual(child_ok.status_code, 200, child_ok.content)
+        parent_done_early = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{main['id']}/",
+            {"manual_status": "done"},
+            format="json",
+        )
+        self._assert_bad_detail(parent_done_early, self._MSG_PARENT_BEFORE_CHILDREN)
+        narrow_parent = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{main['id']}/",
+            {"end_date": "2026-07-01"},
+            format="json",
+        )
+        self.assertEqual(narrow_parent.status_code, 400, narrow_parent.content)
+        narrow_stage = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/stages/{order}/",
+            {"planned_end": "2026-06-30"},
+            format="json",
+        )
+        self.assertEqual(narrow_stage.status_code, 400, narrow_stage.content)
+
+    def test_parent_complete_endpoint_blocked_until_children_done(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        dossier_id = self._create()
+        saved = self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/sections/document/framework_bundle/",
+            {"data": self._phases(["حفر"])},
+            format="json",
+        )
+        self.assertEqual(saved.status_code, 200, saved.content)
+        listed = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/activities/")
+        main = next(a for a in listed.data if a["title"] == "حفر")
+        dossier = self.client.get(f"/api/projectdocs/dossiers/{dossier_id}/")
+        order = next(s["order"] for s in dossier.data["stages"] if s["key"] == "define")
+        self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/stages/{order}/",
+            {"planned_start": "2026-06-01", "planned_end": "2026-08-31"},
+            format="json",
+        )
+        self.client.patch(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{main['id']}/",
+            {"start_date": "2026-06-10", "end_date": "2026-07-31"},
+            format="json",
+        )
+        child = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/",
+            {"parent": main["id"], "title": "فرعي"},
+            format="json",
+        )
+        self.assertEqual(child.status_code, 201, child.content)
+        blocked = self.client.post(
+            f"/api/projectdocs/dossiers/{dossier_id}/activities/{main['id']}/complete/",
+            {
+                "lessons": "درس الرئيسي",
+                "evidence_url": "",
+                "file": SimpleUploadedFile("شاهد.txt", b"proof"),
+            },
+            format="multipart",
+        )
+        self._assert_bad_detail(blocked, self._MSG_PARENT_BEFORE_CHILDREN)
 
 
 class TeamAssignNotifyTests(APITestCase):

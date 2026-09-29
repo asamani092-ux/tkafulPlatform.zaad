@@ -20,6 +20,7 @@ type ApprovalPayload = {
     project_name: string;
     marketing_name: string;
     sponsor_name: string;
+    manager_name?: string;
     current_stage: string;
     status: string;
   };
@@ -98,7 +99,8 @@ export default function ApprovalReviewPage() {
           {payload.dossier.project_name} · {payload.dossier.code}
         </p>
         <p className="text-sm text-brand-gray">
-          الراعي: {payload.dossier.sponsor_name || "—"} · النطاق:{" "}
+          مدير الإدارة: {payload.dossier.sponsor_name || "—"}
+          {payload.dossier.manager_name ? ` · مدير المشروع: ${payload.dossier.manager_name}` : ""} · النطاق:{" "}
           {payload.scope === "stage"
             ? "مرحلة"
             : payload.scope === "card"

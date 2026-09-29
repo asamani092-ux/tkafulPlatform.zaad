@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import secrets
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -191,6 +192,46 @@ def transfer_dossier_sponsor(
     return dossier
 
 
+def transfer_dossier_manager(
+    dossier: ProjectDossier,
+    *,
+    user_id=None,
+    email: str = "",
+    name: str = "",
+    clear: bool = False,
+) -> ProjectDossier:
+    """تعيين مدير المشروع مع عضوية project_editor. O(1)."""
+    old = dossier.manager
+    old_id = dossier.manager_id
+    if clear:
+        dossier.manager = None
+        if email:
+            dossier.manager_email = (email or "").strip()
+        elif not name:
+            dossier.manager_email = ""
+    else:
+        manager, _m_name, m_email = _resolve_user_ref(user_id=user_id, email=email, name=name)
+        dossier.manager = manager
+        dossier.manager_email = m_email or (manager.email if manager else "")
+    dossier.save(update_fields=["manager", "manager_email", "updated_at"])
+    if dossier.manager_id:
+        ensure_project_membership(dossier.project, dossier.manager, role="project_editor")
+    if old_id and old_id != dossier.manager_id:
+        revoke_project_membership_if_unused(dossier, old)
+    return dossier
+
+
+def can_assign_dossier_manager(user, dossier: ProjectDossier) -> bool:
+    """تعيين مدير المشروع: مشرف أو مدير الإدارة (الراعي). O(1)."""
+    if not user or not user.is_authenticated:
+        return False
+    if is_super_admin(user):
+        return True
+    if dossier.sponsor_id == user.id:
+        return True
+    return _email_matches(user, dossier.sponsor_email)
+
+
 def sync_dossier_role_memberships(dossier: ProjectDossier) -> None:
     """شفاء ربط الأدوار من البريد + ضمان عضوية الراعي/المدير/المعتمد. O(1)."""
     changed = link_dossier_role_users_from_email(dossier)
@@ -370,6 +411,152 @@ def refresh_activity_auto_status(activity: StageActivity, save: bool = True) -> 
     return activity
 
 
+_DATE_ORDER_MSG = "تاريخ البداية يجب أن يسبق تاريخ الإغلاق"
+
+
+def _coerce_date(value) -> date | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(str(value)[:10])
+
+
+def activity_is_done(activity: StageActivity) -> bool:
+    return activity.manual_status == "done" or (activity.progress_pct or 0) >= 100
+
+
+def validate_activity_date_window(
+    *,
+    start,
+    end,
+    stage: DossierStage | None = None,
+    parent: StageActivity | None = None,
+    activity: StageActivity | None = None,
+) -> None:
+    """تحقق تسلسل التواريخ وانتماء النشاط لنطاق المرحلة أو النشاط الرئيسي."""
+    start_d = _coerce_date(start)
+    end_d = _coerce_date(end)
+    if start_d and end_d and start_d >= end_d:
+        raise ValidationError({"detail": _DATE_ORDER_MSG})
+
+    eff_start = start_d if start_d is not None else (activity.start_date if activity else None)
+    eff_end = end_d if end_d is not None else (activity.end_date if activity else None)
+    if not eff_start and not eff_end:
+        return
+
+    if parent is not None or (activity and activity.parent_id):
+        par = parent or (activity.parent if activity else None)
+        if not par:
+            return
+        if not (par.start_date and par.end_date):
+            raise ValidationError({"detail": "حدّد تواريخ النشاط الرئيسي قبل تواريخ النشاط الفرعي"})
+        if eff_start and eff_start < par.start_date:
+            raise ValidationError({"detail": "تاريخ بداية النشاط الفرعي خارج نطاق النشاط الرئيسي"})
+        if eff_end and eff_end > par.end_date:
+            raise ValidationError({"detail": "تاريخ إغلاق النشاط الفرعي خارج نطاق النشاط الرئيسي"})
+        if eff_start and eff_start > par.end_date:
+            raise ValidationError({"detail": "تاريخ بداية النشاط الفرعي خارج نطاق النشاط الرئيسي"})
+        if eff_end and eff_end < par.start_date:
+            raise ValidationError({"detail": "تاريخ إغلاق النشاط الفرعي خارج نطاق النشاط الرئيسي"})
+        return
+
+    st = stage or (activity.stage if activity else None)
+    if not st:
+        return
+    if not (st.planned_start and st.planned_end):
+        raise ValidationError({"detail": "حدّد تواريخ المرحلة قبل تواريخ النشاط الرئيسي"})
+    if eff_start and eff_start < st.planned_start:
+        raise ValidationError({"detail": "تاريخ بداية النشاط الرئيسي خارج نطاق المرحلة"})
+    if eff_end and eff_end > st.planned_end:
+        raise ValidationError({"detail": "تاريخ إغلاق النشاط الرئيسي خارج نطاق المرحلة"})
+    if eff_start and eff_start > st.planned_end:
+        raise ValidationError({"detail": "تاريخ بداية النشاط الرئيسي خارج نطاق المرحلة"})
+    if eff_end and eff_end < st.planned_start:
+        raise ValidationError({"detail": "تاريخ إغلاق النشاط الرئيسي خارج نطاق المرحلة"})
+
+
+def validate_parent_dates_cover_children(
+    activity: StageActivity,
+    start,
+    end,
+    *,
+    start_in_payload: bool = False,
+    end_in_payload: bool = False,
+) -> None:
+    """يرفض تضييق النشاط الرئيسي إذا بقي فرعي خارج النطاق."""
+    if activity.parent_id is not None:
+        return
+    new_start = _coerce_date(start) if start_in_payload else activity.start_date
+    new_end = _coerce_date(end) if end_in_payload else activity.end_date
+    if new_start is None and new_end is None:
+        return
+    for child in StageActivity.objects.filter(parent=activity):
+        if child.start_date and new_start and child.start_date < new_start:
+            raise ValidationError({"detail": "تعديل تواريخ النشاط الرئيسي يترك نشاطاً فرعياً خارج النطاق"})
+        if child.end_date and new_end and child.end_date > new_end:
+            raise ValidationError({"detail": "تعديل تواريخ النشاط الرئيسي يترك نشاطاً فرعياً خارج النطاق"})
+        if child.start_date and new_end and child.start_date > new_end:
+            raise ValidationError({"detail": "تعديل تواريخ النشاط الرئيسي يترك نشاطاً فرعياً خارج النطاق"})
+        if child.end_date and new_start and child.end_date < new_start:
+            raise ValidationError({"detail": "تعديل تواريخ النشاط الرئيسي يترك نشاطاً فرعياً خارج النطاق"})
+
+
+def validate_stage_planned_window(stage: DossierStage, planned_start, planned_end) -> None:
+    """يرفض تضييق المرحلة إذا بقي نشاط خارج النطاق."""
+    new_start = _coerce_date(planned_start)
+    new_end = _coerce_date(planned_end)
+    if new_start and new_end and new_start >= new_end:
+        raise ValidationError({"detail": _DATE_ORDER_MSG})
+    if new_start is None and new_end is None:
+        return
+    mains = StageActivity.objects.filter(stage=stage, parent__isnull=True)
+    for main in mains:
+        if main.start_date and new_start and main.start_date < new_start:
+            raise ValidationError({"detail": "تعديل تواريخ المرحلة يترك نشاطاً رئيسياً خارج النطاق"})
+        if main.end_date and new_end and main.end_date > new_end:
+            raise ValidationError({"detail": "تعديل تواريخ المرحلة يترك نشاطاً رئيسياً خارج النطاق"})
+        if main.start_date and new_end and main.start_date > new_end:
+            raise ValidationError({"detail": "تعديل تواريخ المرحلة يترك نشاطاً رئيسياً خارج النطاق"})
+        if main.end_date and new_start and main.end_date < new_start:
+            raise ValidationError({"detail": "تعديل تواريخ المرحلة يترك نشاطاً رئيسياً خارج النطاق"})
+        for child in StageActivity.objects.filter(parent=main):
+            if child.start_date and new_start and child.start_date < new_start:
+                raise ValidationError({"detail": "تعديل تواريخ المرحلة يترك نشاطاً فرعياً خارج النطاق"})
+            if child.end_date and new_end and child.end_date > new_end:
+                raise ValidationError({"detail": "تعديل تواريخ المرحلة يترك نشاطاً فرعياً خارج النطاق"})
+
+
+def assert_can_complete_parent_activity(activity: StageActivity) -> None:
+    """لا يُكمَل النشاط الرئيسي قبل إتمام كل الفروع."""
+    if activity.parent_id is not None:
+        return
+    children = StageActivity.objects.filter(parent=activity)
+    if not children.exists():
+        return
+    if any(not activity_is_done(child) for child in children):
+        raise ValidationError({"detail": "لا يمكن إتمام النشاط الرئيسي قبل إتمام جميع الأنشطة الفرعية"})
+
+
+def activity_week_starts(start, end) -> set[str]:
+    """بدايات الأسابيع الأربعة لكل شهر داخل نطاق النشاط. O(M)."""
+    s = _coerce_date(start)
+    e = _coerce_date(end)
+    if not s or not e or s >= e:
+        return set()
+    y, m = s.year, s.month
+    end_y, end_m = e.year, e.month
+    found: set[str] = set()
+    while (y, m) <= (end_y, end_m):
+        for day in (1, 8, 15, 22):
+            found.add(f"{y:04d}-{m:02d}-{day:02d}")
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    return found
+
+
 @transaction.atomic
 def create_dossier_for_project(
     *,
@@ -446,6 +633,7 @@ def create_dossier_for_project(
         ("document", catalog.all_section_keys("document")),
         ("plan", catalog.plan_phase_keys()),
         ("closure", catalog.all_section_keys("closure")),
+        ("approvals", catalog.all_section_keys("approvals")),
     ):
         for key in keys:
             section_rows.append(DossierSection(dossier=dossier, kind=kind, key=key, data={}, status="empty"))
@@ -514,8 +702,7 @@ def _next_activity_code(dossier: ProjectDossier) -> str:
 def sync_plan_from_document(dossier: ProjectDossier) -> None:
     """ينسخ أنشطة المراحل الرئيسية إلى الخطة دون حذف أو الكتابة فوق الموجود. O(P+A)."""
     ensure_plan_phase_sections(dossier)
-    phases_sec = dossier.sections.filter(kind="document", key="main_phases").first()
-    phase_rows = ((phases_sec.data if phases_sec else {}) or {}).get("phases") or []
+    phase_rows = document_main_phase_rows(dossier)
     stages = {s.key: s for s in dossier.stages.all()}
     existing = StageActivity.objects.filter(stage__dossier=dossier, parent__isnull=True)
     seen = {(a.stage_id, (a.title or "").strip()) for a in existing}
@@ -565,6 +752,230 @@ def ensure_document_sections(dossier: ProjectDossier) -> None:
         to_create.append(DossierSection(dossier=dossier, kind="document", key=key, data={}, status="empty"))
     if to_create:
         DossierSection.objects.bulk_create(to_create)
+
+
+def ensure_approvals_sections(dossier: ProjectDossier) -> None:
+    existing = set(dossier.sections.filter(kind="approvals").values_list("key", flat=True))
+    rows = [
+        DossierSection(dossier=dossier, kind="approvals", key=key, data={}, status="empty")
+        for key in catalog.all_section_keys("approvals")
+        if key not in existing
+    ]
+    if rows:
+        DossierSection.objects.bulk_create(rows)
+
+
+def ensure_workspaces_catalog(dossier: ProjectDossier) -> None:
+    """ضمان تبويب الاعتمادات وترتيب اللوحة. O(W)."""
+    by_key = {w.key: w for w in dossier.workspaces.all()}
+    if "approvals" not in by_key:
+        board = by_key.get("board")
+        if board and board.order <= 5:
+            board.order = 6
+            board.save(update_fields=["order", "updated_at"])
+        closure = by_key.get("closure")
+        status = "active" if closure and closure.status == "approved" else "locked"
+        DossierWorkspace.objects.create(dossier=dossier, order=5, key="approvals", status=status)
+
+
+def _framework_bundle_data_from_legacy(dossier: ProjectDossier, current: dict) -> dict:
+    """دمج أقسام الوثيقة القديمة في framework_bundle دون مسح الموجود. O(1)."""
+    data = dict(current or {})
+    legacy_map = (
+        ("logical_impact", "logical_impact", "rows"),
+        ("outputs_quality", "outputs_quality", "rows"),
+        ("main_phases", "main_phases", "phases"),
+    )
+    for old_key, dest_key, inner in legacy_map:
+        if data.get(dest_key):
+            continue
+        old_sec = dossier.sections.filter(kind="document", key=old_key).first()
+        if not old_sec or not old_sec.data:
+            continue
+        od = old_sec.data or {}
+        if inner == "rows" and dest_key == "outputs_quality":
+            data[dest_key] = od.get("rows") or od.get(dest_key) or []
+        elif inner == "rows":
+            data[dest_key] = od.get("rows") or od.get(dest_key) or od
+        elif inner == "phases":
+            data[dest_key] = od.get("phases") or od.get(dest_key) or od
+    return data
+
+
+def _default_framework_bundle_payload() -> dict:
+    return {
+        "logical_impact": catalog.default_logical_impact_rows(),
+        "outputs_quality": [],
+        "main_phases": catalog.default_main_phases(),
+    }
+
+
+def migrate_framework_bundle_section(dossier: ProjectDossier) -> None:
+    ensure_document_sections(dossier)
+    bundle = dossier.sections.filter(kind="document", key="framework_bundle").first()
+    if not bundle:
+        return
+    merged = _framework_bundle_data_from_legacy(dossier, bundle.data or {})
+    if not merged.get("logical_impact"):
+        merged["logical_impact"] = catalog.default_logical_impact_rows()
+    if merged.get("outputs_quality") is None:
+        merged["outputs_quality"] = []
+    if not merged.get("main_phases"):
+        merged["main_phases"] = catalog.default_main_phases()
+    try:
+        cleaned = catalog.validate_section_data("document", "framework_bundle", merged)
+    except Exception:
+        cleaned = merged
+    bundle.data = cleaned
+    if bundle.status == "empty" and catalog.section_is_filled(cleaned):
+        bundle.status = "filled"
+    bundle.save(update_fields=["data", "status", "updated_at"])
+
+
+def _legacy_closure_approvals_to_rows(dossier: ProjectDossier, old_data: dict) -> list[dict]:
+    rows: list[dict] = []
+    if not isinstance(old_data, dict):
+        return rows
+    if old_data.get("sponsor_decision") or old_data.get("sponsor_date") or old_data.get("notes"):
+        rows.append(
+            {
+                "row_id": secrets.token_hex(8),
+                "role_title": "مدير الإدارة",
+                "name": dossier.sponsor_name or "",
+                "email": dossier.sponsor_email or "",
+                "status": "approved" if old_data.get("sponsor_decision") else "pending",
+                "decided_at": str(old_data.get("sponsor_date") or ""),
+                "rejection_reason": "",
+            }
+        )
+    return rows
+
+
+def migrate_approvals_record_section(dossier: ProjectDossier) -> None:
+    ensure_approvals_sections(dossier)
+    sec = dossier.sections.filter(kind="approvals", key="approvals_record").first()
+    if not sec:
+        return
+    data = dict(sec.data or {})
+    rows = data.get("rows") if isinstance(data.get("rows"), list) else []
+    if not rows:
+        old = dossier.sections.filter(kind="closure", key="approvals_record").first()
+        if old and old.data:
+            rows = _legacy_closure_approvals_to_rows(dossier, old.data)
+    if not rows and (dossier.sponsor_email or dossier.sponsor_name):
+        rows = [
+            {
+                "row_id": secrets.token_hex(8),
+                "role_title": "مدير الإدارة",
+                "name": dossier.sponsor_name or "",
+                "email": dossier.sponsor_email or "",
+                "status": "pending",
+                "decided_at": "",
+                "rejection_reason": "",
+            }
+        ]
+    for row in rows:
+        if isinstance(row, dict) and not row.get("row_id"):
+            row["row_id"] = secrets.token_hex(8)
+    if rows:
+        data["rows"] = rows
+        try:
+            data = catalog.validate_section_data("approvals", "approvals_record", data)
+        except Exception:
+            pass
+        sec.data = data
+        if sec.status == "empty" and catalog.section_is_filled(data):
+            sec.status = "filled"
+        sec.save(update_fields=["data", "status", "updated_at"])
+
+
+def migrate_dossier_catalog(dossier: ProjectDossier) -> None:
+    """ترحيل تراكمي عند القراءة: إطار المشروع + تبويب الاعتمادات. O(S)."""
+    ensure_workspaces_catalog(dossier)
+    migrate_framework_bundle_section(dossier)
+    migrate_approvals_record_section(dossier)
+
+
+def document_main_phase_rows(dossier: ProjectDossier) -> list:
+    migrate_framework_bundle_section(dossier)
+    bundle = dossier.sections.filter(kind="document", key="framework_bundle").first()
+    if bundle and bundle.data:
+        phases = bundle.data.get("main_phases")
+        if isinstance(phases, list):
+            return phases
+        if isinstance(phases, dict):
+            return phases.get("phases") or []
+    legacy = dossier.sections.filter(kind="document", key="main_phases").first()
+    if legacy and legacy.data:
+        return (legacy.data or {}).get("phases") or []
+    return []
+
+
+def approvals_record_rows(dossier: ProjectDossier) -> list[dict]:
+    migrate_approvals_record_section(dossier)
+    sec = dossier.sections.filter(kind="approvals", key="approvals_record").first()
+    data = (sec.data if sec else {}) or {}
+    rows = data.get("rows") or []
+    return [r for r in rows if isinstance(r, dict)]
+
+
+def _approver_rows_with_email(dossier: ProjectDossier) -> list[dict]:
+    return [r for r in approvals_record_rows(dossier) if (r.get("email") or "").strip()]
+
+
+def _reset_approver_rows_pending(dossier: ProjectDossier) -> None:
+    sec = dossier.sections.filter(kind="approvals", key="approvals_record").first()
+    if not sec:
+        return
+    data = dict(sec.data or {})
+    next_rows = []
+    for row in data.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        r = dict(row)
+        if (r.get("email") or "").strip():
+            r["status"] = "pending"
+            r["decided_at"] = ""
+            r["rejection_reason"] = ""
+        next_rows.append(r)
+    data["rows"] = next_rows
+    sec.data = data
+    sec.save(update_fields=["data", "updated_at"])
+
+
+def _update_approver_row(
+    dossier: ProjectDossier,
+    *,
+    row_id: str,
+    status: str,
+    note: str = "",
+    decided_at=None,
+) -> None:
+    sec = dossier.sections.filter(kind="approvals", key="approvals_record").first()
+    if not sec:
+        return
+    data = dict(sec.data or {})
+    rows = []
+    for row in data.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        r = dict(row)
+        if row_id and str(r.get("row_id")) == str(row_id):
+            r["status"] = status
+            r["decided_at"] = str(decided_at or timezone.now().date())
+            if status == "rejected":
+                r["rejection_reason"] = note or ""
+        rows.append(r)
+    data["rows"] = rows
+    sec.data = data
+    sec.save(update_fields=["data", "updated_at"])
+
+
+def _all_approvers_approved(dossier: ProjectDossier) -> bool:
+    rows = _approver_rows_with_email(dossier)
+    if not rows:
+        return False
+    return all((r.get("status") or "") == "approved" for r in rows)
 
 
 def _card_section_rows(dossier: ProjectDossier, key: str) -> list:
@@ -617,8 +1028,10 @@ def sync_document_from_card(dossier: ProjectDossier) -> None:
             "execution_end": str(dossier.execution_end or ""),
             "sponsor_name": dossier.sponsor_name or "",
             "sponsor_email": dossier.sponsor_email or "",
-            "approver_name": dossier.approver_name or "",
-            "approver_email": dossier.approver_email or "",
+            "manager_name": (
+                (dossier.manager.get_full_name() or dossier.manager.username) if dossier.manager_id else ""
+            ),
+            "manager_email": dossier.manager_email or (dossier.manager.email if dossier.manager_id else ""),
             "strategic_goal": dossier.strategic_goal or "",
         }
         basics.status = "filled" if catalog.section_is_filled(basics.data) else basics.status
@@ -647,23 +1060,7 @@ def sync_document_from_card(dossier: ProjectDossier) -> None:
         similar.status = "filled" if catalog.section_is_filled(similar.data) else similar.status
         similar.save(update_fields=["data", "status", "updated_at"])
 
-    # 4) الأثر المنطقي — تهيئة صفوف ثابتة إن فارغ
-    logical = by_key.get("logical_impact")
-    if logical and not (logical.data or {}).get("rows"):
-        logical.data = {"rows": catalog.default_logical_impact_rows()}
-        logical.save(update_fields=["data", "updated_at"])
-
-    # 5) المراحل الرئيسية — تهيئة المراحل الثابتة
-    phases = by_key.get("main_phases")
-    if phases:
-        existing_phases = (phases.data or {}).get("phases")
-        if not existing_phases:
-            phases.data = {"phases": catalog.default_main_phases()}
-            phases.save(update_fields=["data", "updated_at"])
-        else:
-            # ضمان وجود كل المراحل الثابتة مع الحفاظ على الأنشطة
-            phases.data = {"phases": catalog.validate_section_data("document", "main_phases", {"phases": existing_phases}).get("phases")}
-            phases.save(update_fields=["data", "updated_at"])
+    migrate_framework_bundle_section(dossier)
 
     # 6) المخصص من البطاقة (عرض فقط) داخل قسم الميزانية
     budget = by_key.get("budget")
@@ -758,10 +1155,14 @@ def can_bypass_workspace_gates(user, dossier: ProjectDossier) -> bool:
 
 
 def can_approve_dossier(user, dossier: ProjectDossier) -> bool:
-    """اعتماد التبويبات: مدير النظام أو صاحب الاعتماد. O(1)."""
+    """اعتماد التبويبات: مشرف، مدير الإدارة، أو صاحب الاعتماد (توافق). O(1)."""
     if not user or not user.is_authenticated:
         return False
     if is_super_admin(user):
+        return True
+    if dossier.sponsor_id and dossier.sponsor_id == user.id:
+        return True
+    if _email_matches(user, dossier.sponsor_email):
         return True
     if dossier.approver_id and dossier.approver_id == user.id:
         return True
@@ -879,6 +1280,10 @@ def update_section(
     user,
 ) -> DossierSection:
     assert_can_edit(user, dossier)
+    if kind == "closure" and key == "approvals_record":
+        raise ValidationError(
+            {"key": "جدول الاعتمادات يُدار من تبويب الاعتمادات فقط — لا يُحرَّر من وثيقة الإغلاق"}
+        )
     section_def = catalog.get_section_def(kind, key)
     if not section_def:
         raise ValidationError({"key": "قسم غير معروف"})
@@ -888,6 +1293,9 @@ def update_section(
         assert_workspace_open_for_work(user, dossier, "document")
     elif kind == "closure":
         assert_workspace_open_for_work(user, dossier, "closure")
+    elif kind == "approvals":
+        if not can_edit_dossier(user, dossier):
+            raise PermissionDenied("لا صلاحية لتعديل سجل الاعتمادات")
     elif kind == "card":
         assert_workspace_open_for_work(user, dossier, "card")
     else:
@@ -927,10 +1335,17 @@ def update_section(
                 "execution_end": str(dossier.execution_end or ""),
                 "sponsor_name": dossier.sponsor_name or "",
                 "sponsor_email": dossier.sponsor_email or "",
-                "approver_name": dossier.approver_name or "",
-                "approver_email": dossier.approver_email or "",
+                "manager_name": (
+                    (dossier.manager.get_full_name() or dossier.manager.username) if dossier.manager_id else ""
+                ),
+                "manager_email": dossier.manager_email or (dossier.manager.email if dossier.manager_id else ""),
                 "strategic_goal": dossier.strategic_goal or "",
             }
+
+    if kind == "approvals" and key == "approvals_record":
+        for row in cleaned.get("rows") or []:
+            if isinstance(row, dict) and not row.get("row_id"):
+                row["row_id"] = secrets.token_hex(8)
 
     section.data = cleaned
     section.status = "filled" if catalog.section_is_filled(cleaned) else "empty"
@@ -942,7 +1357,7 @@ def update_section(
         _sync_dossier_budget_from_card(dossier, cleaned)
     if kind == "card":
         sync_document_from_card(dossier)
-    if kind == "document" and key == "main_phases":
+    if kind == "document" and key == "framework_bundle":
         sync_plan_from_document(dossier)
     if kind == "document" and key == "team":
         sync_team_memberships(dossier)
@@ -1002,8 +1417,10 @@ def info_page_payload(dossier: ProjectDossier) -> dict:
         "location": dossier.location,
         "sponsor_name": dossier.sponsor_name,
         "sponsor_email": dossier.sponsor_email,
-        "approver_name": dossier.approver_name,
-        "approver_email": dossier.approver_email,
+        "manager_name": (
+            (dossier.manager.get_full_name() or dossier.manager.username) if dossier.manager_id else ""
+        ),
+        "manager_email": dossier.manager_email or (dossier.manager.email if dossier.manager_id else ""),
         "indicators": indicators,
         "phases_budget_summary": {
             "from_association": phase_assoc,
@@ -1178,6 +1595,7 @@ def complete_activity(
     evidence_title: str = "",
 ) -> StageActivity:
     """إتمام نشاط مع شاهد إلزامي ودرس مستفاد. O(1)."""
+    assert_can_complete_parent_activity(activity)
     assert_can_work_assigned_activity(user, dossier, activity)
     is_assignee_only = (
         not is_super_admin(user)
@@ -1249,7 +1667,7 @@ def document_closure_comparison(dossier: ProjectDossier) -> dict:
         ("budget", "financial_performance", "الأداء المالي / التكلفة"),
         ("budget", "final_cost", "التكلفة النهائية"),
         ("objectives", "scope_measure", "النطاق / الأهداف"),
-        ("main_phases", "time_performance", "الأداء الزمني"),
+        ("framework_bundle", "time_performance", "الأداء الزمني"),
         ("stakeholders", "stakeholder_satisfaction", "أصحاب المصلحة"),
     ]
     doc_map = {s.key: s for s in dossier.sections.filter(kind="document")}
@@ -1405,6 +1823,7 @@ def decide_plan_phase(
 def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -> tuple[ApprovalRequest, bool]:
     """إرسال تبويب (وثيقة/خطة/إغلاق/لوحة) لاعتماد صاحب الاعتماد. O(1). يُرجع (approval, email_sent)."""
     assert_can_edit(user, dossier)
+    migrate_dossier_catalog(dossier)
     wdef = workspace_def(key)
     if not wdef or not wdef.get("needs_approval"):
         raise ValidationError({"workspace": "هذا التبويب لا يحتاج اعتماداً"})
@@ -1413,8 +1832,11 @@ def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -
         raise ValidationError({"workspace": "تبويب غير موجود"})
     if ws.status not in ("active", "returned"):
         raise ValidationError({"status": "لا يمكن إرسال هذا التبويب الآن"})
-    if not dossier.approver_email:
-        raise ValidationError({"approver_email": "بريد صاحب الاعتماد مطلوب قبل الإرسال"})
+    approver_rows = _approver_rows_with_email(dossier)
+    if not approver_rows:
+        raise ValidationError(
+            {"approvals": "أضف معتمداً واحداً على الأقل ببريد صالح في تبويب الاعتمادات"}
+        )
 
     if key == "document":
         keys = catalog.all_section_keys("document")
@@ -1439,6 +1861,12 @@ def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -
             raise ValidationError({"sections": "اعتمد المراحل الخمس قبل إرسال الخطة"})
     elif key == "closure":
         dossier.sections.filter(kind="closure", status__in=("filled", "returned", "submitted")).update(status="submitted")
+    elif key == "approvals":
+        sec = dossier.sections.filter(kind="approvals", key="approvals_record").first()
+        if not sec or sec.status not in ("filled", "returned", "submitted", "approved"):
+            raise ValidationError({"sections": "أكمل سجل المعتمدين قبل الإرسال"})
+
+    _reset_approver_rows_pending(dossier)
 
     ws.status = "submitted"
     ws.return_note = ""
@@ -1450,17 +1878,30 @@ def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -
         dossier=dossier, scope=key, decision="pending"
     ).update(decision="expired", decided_at=timezone.now())
 
-    approval = ApprovalRequest.create_pending(
-        dossier=dossier,
-        scope=key,
-        payload={
-            "workspace_key": key,
-            "workspace_label": wdef["label"],
-            "dossier_code": dossier.code,
-            "project_name": dossier.project.name,
-        },
-    )
-    emailed = send_approval_email(approval)
+    first: ApprovalRequest | None = None
+    emailed = False
+    for row in approver_rows:
+        row_id = str(row.get("row_id") or "")
+        approval = ApprovalRequest.create_pending(
+            dossier=dossier,
+            scope=key,
+            payload={
+                "workspace_key": key,
+                "workspace_label": wdef["label"],
+                "dossier_code": dossier.code,
+                "project_name": dossier.project.name,
+                "approver_row_id": row_id,
+                "approver_name": row.get("name") or "",
+                "approver_role": row.get("role_title") or "",
+            },
+            recipient_email=str(row.get("email") or ""),
+            recipient_name=str(row.get("name") or ""),
+            approver_row_id=row_id,
+        )
+        if first is None:
+            first = approval
+        if send_approval_email(approval):
+            emailed = True
     log_activity(
         actor=user,
         action=ACTION_STAGE_SUBMIT,
@@ -1472,10 +1913,10 @@ def submit_workspace(*, dossier: ProjectDossier, key: str, user, request=None) -
         dossier=dossier,
         message=f"طُلب اعتماد «{wdef['label']}» لمشروع {dossier.code}",
         link=f"/Admin/projects/{dossier.project.slug}/dossier",
-        users=[u for u in [dossier.manager] if u],
+        users=[u for u in [dossier.manager, dossier.sponsor] if u],
         roles=["admin"],
     )
-    return approval, emailed
+    return first, emailed
 
 
 def _lock_following_unapproved(dossier: ProjectDossier, order: int) -> None:
@@ -1539,6 +1980,8 @@ def _approve_workspace(dossier: ProjectDossier, key: str, *, actor=None, request
             raise ValidationError({"sections": "اعتمد المراحل الخمس قبل اعتماد الخطة"})
     elif key == "closure":
         dossier.sections.filter(kind="closure").update(status="approved")
+    elif key == "approvals":
+        dossier.sections.filter(kind="approvals").update(status="approved")
 
     ws.status = "approved"
     ws.approved_at = timezone.now()
@@ -1580,6 +2023,8 @@ def _return_workspace(dossier: ProjectDossier, key: str, *, note: str, actor=Non
             sec.save(update_fields=["status", "updated_at"])
     elif key == "closure":
         dossier.sections.filter(kind="closure").update(status="returned")
+    elif key == "approvals":
+        dossier.sections.filter(kind="approvals").update(status="returned")
     dossier.status = "in_progress"
     dossier.save(update_fields=["status", "updated_at"])
     log_activity(
@@ -1705,11 +2150,18 @@ def apply_approval_decision(
             _approve_stage(dossier, stage, actor=actor, request=request)
         else:
             _return_stage(dossier, stage, note=note, actor=actor, request=request)
-    elif locked.scope in ("document", "plan", "closure", "board"):
-        if decision == "approved":
-            _approve_workspace(dossier, locked.scope, actor=actor, request=request)
-        else:
+    elif locked.scope in ("document", "plan", "closure", "approvals", "board"):
+        row_id = locked.approver_row_id or (locked.payload_snapshot or {}).get("approver_row_id") or ""
+        via_admin = bool(actor) or (locked.payload_snapshot or {}).get("via") == "admin"
+        if row_id:
+            if decision == "returned":
+                _update_approver_row(dossier, row_id=row_id, status="rejected", note=note)
+            else:
+                _update_approver_row(dossier, row_id=row_id, status="approved", note=note)
+        if decision == "returned":
             _return_workspace(dossier, locked.scope, note=note, actor=actor, request=request)
+        elif via_admin or _all_approvers_approved(dossier):
+            _approve_workspace(dossier, locked.scope, actor=actor, request=request)
     elif locked.scope == "card":
         if decision == "approved":
             _approve_workspace(dossier, "card", actor=actor, request=request)
@@ -1728,7 +2180,7 @@ def apply_approval_decision(
         msg = f"اعتُمدت مرحلة «{_stage_label(stage_key)}» لمشروع {dossier.code}"
     else:
         msg = f"أُعيدت مرحلة «{_stage_label(stage_key)}» للتعديل — {dossier.code}"
-    recipients = [u for u in [dossier.manager] if u]
+    recipients = [u for u in [dossier.manager, dossier.sponsor] if u]
     _notify_dossier_event(
         dossier=dossier,
         message=msg,
@@ -1898,6 +2350,7 @@ def dashboard_stats(dossier: ProjectDossier) -> dict:
 
 def public_approval_payload(approval: ApprovalRequest) -> dict:
     dossier = approval.dossier
+    migrate_dossier_catalog(dossier)
     stage = approval.stage
     sections = []
     if stage:
@@ -1913,6 +2366,38 @@ def public_approval_payload(approval: ApprovalRequest) -> dict:
                     "fields": sdef["fields"],
                 }
             )
+    elif approval.scope in {w["key"] for w in catalog.WORKSPACES}:
+        kind_map = {
+            "document": "document",
+            "closure": "closure",
+            "approvals": "approvals",
+            "plan": "plan",
+        }
+        kind = kind_map.get(approval.scope)
+        if kind == "plan":
+            for key in catalog.plan_phase_keys():
+                sec = dossier.sections.filter(kind="plan", key=key).first()
+                sections.append(
+                    {
+                        "key": key,
+                        "label": key,
+                        "data": sec.data if sec else {},
+                        "status": sec.status if sec else "empty",
+                        "fields": [],
+                    }
+                )
+        elif kind:
+            for sdef in catalog._sections_for_kind(kind):
+                sec = dossier.sections.filter(kind=kind, key=sdef["key"]).first()
+                sections.append(
+                    {
+                        "key": sdef["key"],
+                        "label": sdef["label"],
+                        "data": sec.data if sec else {},
+                        "status": sec.status if sec else "empty",
+                        "fields": sdef["fields"],
+                    }
+                )
     return {
         "token": approval.token,
         "usable": approval.is_usable,
@@ -1925,9 +2410,18 @@ def public_approval_payload(approval: ApprovalRequest) -> dict:
             "project_name": dossier.project.name,
             "marketing_name": dossier.marketing_name,
             "sponsor_name": dossier.sponsor_name,
+            "manager_name": (
+                (dossier.manager.get_full_name() or dossier.manager.username) if dossier.manager_id else ""
+            ),
             "current_stage": dossier.current_stage,
             "status": dossier.status,
         },
+        "approver": {
+            "name": approval.recipient_name or (approval.payload_snapshot or {}).get("approver_name") or "",
+            "role": (approval.payload_snapshot or {}).get("approver_role") or "",
+            "email": approval.recipient_email or "",
+        },
+        "workspaces": workspaces_payload(dossier),
         "stage": (
             {
                 "order": stage.order,

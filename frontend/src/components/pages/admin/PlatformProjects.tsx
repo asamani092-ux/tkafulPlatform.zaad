@@ -80,9 +80,7 @@ export default function PlatformProjects() {
     sponsor_id: "" as string,
     sponsor_name: "",
     sponsor_email: "",
-    approver_id: "" as string,
-    approver_name: "",
-    approver_email: "",
+    manager_id: "" as string,
     saving: false,
   });
   const [deleteModal, setDeleteModal] = useState<{
@@ -173,9 +171,7 @@ export default function PlatformProjects() {
       sponsor_id: "",
       sponsor_name: "",
       sponsor_email: "",
-      approver_id: "",
-      approver_name: "",
-      approver_email: "",
+      manager_id: "",
       saving: false,
     });
     void loadAllUsers();
@@ -184,7 +180,7 @@ export default function PlatformProjects() {
   const createDossierProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!dossierCreate.name.trim() || (!dossierCreate.sponsor_email.trim() && !dossierCreate.sponsor_id)) {
-      toast.error({ title: "الاسم والراعي مطلوبان" });
+      toast.error({ title: "الاسم ومدير الإدارة مطلوبان" });
       return;
     }
     setDossierCreate((s) => ({ ...s, saving: true }));
@@ -193,11 +189,9 @@ export default function PlatformProjects() {
         name: dossierCreate.name.trim(),
         sponsor_name: dossierCreate.sponsor_name.trim(),
         sponsor_email: dossierCreate.sponsor_email.trim(),
-        approver_name: dossierCreate.approver_name.trim(),
-        approver_email: dossierCreate.approver_email.trim(),
       };
       if (dossierCreate.sponsor_id) body.sponsor_id = Number(dossierCreate.sponsor_id);
-      if (dossierCreate.approver_id) body.approver_id = Number(dossierCreate.approver_id);
+      if (dossierCreate.manager_id) body.manager_id = Number(dossierCreate.manager_id);
       const res = await authFetch("/api/projectdocs/dossiers/", {
         method: "POST",
         body: JSON.stringify(body),
@@ -216,9 +210,7 @@ export default function PlatformProjects() {
         sponsor_id: "",
         sponsor_name: "",
         sponsor_email: "",
-        approver_id: "",
-        approver_name: "",
-        approver_email: "",
+        manager_id: "",
         saving: false,
       });
       navigate(`/Admin/projects/${encodeURIComponent(data.project_slug)}/dossier`);
@@ -701,7 +693,7 @@ export default function PlatformProjects() {
         title="إنشاء ملف مشروع"
       >
         <p className="mb-3 text-sm text-brand-gray">
-          ابدأ باسم المشروع والراعي وصاحب الاعتماد ثم انتقل مباشرة لبطاقة الملف.
+          ابدأ باسم المشروع ومدير الإدارة ومدير المشروع ثم انتقل مباشرة لبطاقة الملف.
         </p>
         <form className="space-y-3" onSubmit={(e) => void createDossierProject(e)}>
           <Input
@@ -711,7 +703,7 @@ export default function PlatformProjects() {
             required
           />
           <Select
-            label="راعي المشروع"
+            label="مدير الإدارة"
             value={dossierCreate.sponsor_id}
             onChange={(e) => {
               const id = e.target.value;
@@ -732,16 +724,13 @@ export default function PlatformProjects() {
             ))}
           </Select>
           <Select
-            label="صاحب الاعتماد"
-            value={dossierCreate.approver_id}
+            label="مدير المشروع"
+            value={dossierCreate.manager_id}
             onChange={(e) => {
               const id = e.target.value;
-              const u = allUsers.find((x) => String(x.id) === id);
               setDossierCreate((s) => ({
                 ...s,
-                approver_id: id,
-                approver_name: u?.name || "",
-                approver_email: u?.email || "",
+                manager_id: id,
               }));
             }}
           >

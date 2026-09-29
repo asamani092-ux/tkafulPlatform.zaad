@@ -7,6 +7,7 @@ import {
   InfoWindow,
 } from "@vis.gl/react-google-maps";
 import { GOOGLE_MAPS_API_KEY } from "../../../config";
+import LeafletGenericMapView from "./LeafletGenericMapView";
 import type { PublicMapDetail, PublicMapItem } from "./types";
 
 interface Props {
@@ -40,19 +41,7 @@ function itemColor(item: PublicMapItem, detail: PublicMapDetail): string {
   return detail.project.brand_color || "#8b1538";
 }
 
-function MapMissingKey() {
-  return (
-    <div
-      className="flex h-full items-center justify-center px-4 text-center text-sm"
-      style={{ minHeight: "min(420px, 55vh)", background: "var(--tmkeen-surface-muted, #f5f5f5)", color: "var(--tmkeen-brand-gray)" }}
-      role="status"
-    >
-      تعذّر عرض الخريطة — أضف مفتاح Google Maps في المتغيّر VITE_GOOGLE_MAPS_API_KEY.
-    </div>
-  );
-}
-
-/** عارض الخرائط العام — Google Maps؛ مركز = أول نقطة ظاهرة وإلا الرياض. */
+/** عارض الخرائط العام — Google Maps مع احتياط Leaflet؛ مركز = أول نقطة ظاهرة وإلا الرياض. */
 export default function GenericMapView({ maps, visibleItems, selectedItemId, onSelectItem }: Props) {
   const first = visibleItems[0];
   const center: LatLng = first
@@ -67,9 +56,12 @@ export default function GenericMapView({ maps, visibleItems, selectedItemId, onS
 
   if (!GOOGLE_MAPS_API_KEY) {
     return (
-      <div style={{ height: "min(420px, 55vh)", borderRadius: "0.75rem", overflow: "hidden", border: "2px solid var(--tmkeen-surface-border)" }}>
-        <MapMissingKey />
-      </div>
+      <LeafletGenericMapView
+        maps={maps}
+        visibleItems={visibleItems}
+        selectedItemId={selectedItemId}
+        onSelectItem={onSelectItem}
+      />
     );
   }
 

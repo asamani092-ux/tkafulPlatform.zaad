@@ -1,36 +1,15 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ClipboardList } from "lucide-react";
-import { API_BASE_URL } from "../../config";
 import Card from "../ui/Card";
-import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 import HeroBand from "../ui/HeroBand";
 
-interface Service {
-  id: number;
-  title: string;
-  desc: string;
-  status: string;
-}
-
 export default function Services() {
-  const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/api/public-services/`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setServices(d.results || d))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
   return (
     <div>
-      <HeroBand title="الخدمات" subtitle="فرص تطوعية وخدمات يمكنك المشاركة فيها لصنع الأثر." />
+      <HeroBand title="الخدمات" subtitle="طلبات الخدمة المجتمعية — فرص التطوّع في صفحة المتطوعين." />
       <main className="mx-auto max-w-page px-4 py-10">
-        <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card>
             <div className="mb-4 flex items-start justify-between">
               <div>
@@ -43,26 +22,16 @@ export default function Services() {
             </div>
             <Link to="/request-service"><Button variant="secondary">قدّم طلباً</Button></Link>
           </Card>
+          <Card>
+            <div className="mb-4">
+              <h3 className="mb-2 text-xl font-bold text-primary">التطوّع</h3>
+              <p className="text-sm text-brand-gray">
+                فرص التطوّع وإحصاءات المتطوعين في صفحة واحدة — اختر مشروعاً وانضم عبر صفحة المشروع.
+              </p>
+            </div>
+            <Link to="/volunteers"><Button variant="secondary">عرض فرص التطوّع</Button></Link>
+          </Card>
         </div>
-        <h2 className="mb-6 text-center text-2xl font-bold text-primary">فرص التطوّع</h2>
-        {loading ? (
-          <p className="text-center text-brand-gray">جاري التحميل…</p>
-        ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {services.length === 0 ? (
-              <p className="col-span-full text-center text-brand-gray">لا توجد خدمات حالياً.</p>
-            ) : (
-              services.map((s) => (
-                <Card key={s.id}>
-                  <div className="mb-2"><Badge variant="primary">{s.status}</Badge></div>
-                  <h3 className="mb-2 text-lg font-bold text-primary">{s.title}</h3>
-                  <p className="mb-4 text-sm text-brand-gray">{s.desc}</p>
-                  <Link to="/signin"><Button variant="secondary">تطوّع الآن</Button></Link>
-                </Card>
-              ))
-            )}
-          </div>
-        )}
       </main>
     </div>
   );

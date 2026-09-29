@@ -14,7 +14,8 @@ WORKSPACES = (
     {"order": 2, "key": "document", "label": "الوثيقة", "needs_approval": True},
     {"order": 3, "key": "plan", "label": "الخطة التنفيذية", "needs_approval": True},
     {"order": 4, "key": "closure", "label": "الإغلاق", "needs_approval": True},
-    {"order": 5, "key": "board", "label": "لوحة المشروع", "needs_approval": True},
+    {"order": 5, "key": "approvals", "label": "الاعتمادات", "needs_approval": True},
+    {"order": 6, "key": "board", "label": "لوحة المشروع", "needs_approval": True},
 )
 
 # مراحل المحتوى داخل الوثيقة — مؤشر مكان فقط (ليست بوابات اعتماد)
@@ -46,6 +47,8 @@ def _sections_for_kind(kind: str) -> list[dict]:
         return CLOSURE_SECTIONS
     if kind == "card":
         return CARD_SECTIONS
+    if kind == "approvals":
+        return APPROVALS_SECTIONS
     return []
 
 
@@ -168,9 +171,11 @@ def plan_phase_keys() -> list[str]:
     return [p["key"] for p in DOCUMENT_FIXED_PHASES]
 
 LOGICAL_IMPACT_ROWS: list[dict] = [
-    {"row_key": "impact", "label": "الأثر"},
+    {"row_key": "impact", "label": "الإطار المنطقي"},
     {"row_key": "returns", "label": "العوائد والغايات"},
 ]
+
+APPROVER_STATUS_OPTIONS = ("pending", "approved", "rejected")
 
 
 DOCUMENT_SECTIONS: list[dict] = [
@@ -187,10 +192,10 @@ DOCUMENT_SECTIONS: list[dict] = [
             _f("location", "الموقع"),
             _f("execution_start", "تاريخ بدء التنفيذ", "date"),
             _f("execution_end", "تاريخ انتهاء التنفيذ", "date"),
-            _f("sponsor_name", "راعي المشروع"),
-            _f("sponsor_email", "ايميل الراعي", "text"),
-            _f("approver_name", "صاحب الاعتماد"),
-            _f("approver_email", "ايميل صاحب الاعتماد", "text"),
+            _f("sponsor_name", "مدير الإدارة"),
+            _f("sponsor_email", "بريد مدير الإدارة", "text"),
+            _f("manager_name", "مدير المشروع"),
+            _f("manager_email", "بريد مدير المشروع", "text"),
             _f("strategic_goal", "الهدف الاستراتيجي", "textarea"),
         ],
     },
@@ -213,14 +218,14 @@ DOCUMENT_SECTIONS: list[dict] = [
         ],
     },
     {
-        "key": "logical_impact",
-        "label": "الأثر المنطقي",
+        "key": "framework_bundle",
+        "label": "إطار المشروع",
         "stage": "define",
-        "ui": "logical_matrix",
+        "ui": "framework_bundle",
         "fields": [
             _f(
-                "rows",
-                "الأثر المنطقي",
+                "logical_impact",
+                "الإطار المنطقي",
                 "logical_matrix",
                 columns=[
                     {"key": "description", "label": "الوصف"},
@@ -229,31 +234,15 @@ DOCUMENT_SECTIONS: list[dict] = [
                     {"key": "assumptions", "label": "الافتراضات"},
                 ],
             ),
-        ],
-    },
-    {
-        "key": "outputs_quality",
-        "label": "مخرجات المشروع",
-        "stage": "prepare",
-        "ui": "table",
-        "fields": [
             _table(
-                "rows",
-                "المخرجات",
+                "outputs_quality",
+                "مخرجات المشروع",
                 [
                     {"key": "output", "label": "المخرجات"},
                     {"key": "quality", "label": "تطلعات الجودة"},
                 ],
             ),
-        ],
-    },
-    {
-        "key": "main_phases",
-        "label": "المراحل الرئيسية",
-        "stage": "prepare",
-        "ui": "fixed_phases_activities",
-        "fields": [
-            _f("phases", "المراحل والأنشطة", "phases_activities"),
+            _f("main_phases", "مراحل المشروع", "phases_activities"),
         ],
     },
     {
@@ -427,6 +416,35 @@ DOCUMENT_SECTIONS: list[dict] = [
 ]
 
 
+APPROVALS_SECTIONS: list[dict] = [
+    {
+        "key": "approvals_record",
+        "label": "سجل المعتمدين",
+        "stage": "approvals",
+        "fields": [
+            _table(
+                "rows",
+                "المعتمدون",
+                [
+                    {"key": "row_id", "label": "معرّف", "hidden": True},
+                    {"key": "role_title", "label": "الصفة"},
+                    {"key": "name", "label": "الاسم"},
+                    {"key": "email", "label": "البريد"},
+                    {
+                        "key": "status",
+                        "label": "الحالة",
+                        "type": "select",
+                        "options": list(APPROVER_STATUS_OPTIONS),
+                    },
+                    {"key": "decided_at", "label": "التاريخ", "type": "date"},
+                    {"key": "rejection_reason", "label": "سبب الرفض"},
+                ],
+            ),
+        ],
+    },
+]
+
+
 CLOSURE_SECTIONS: list[dict] = [
     {
         "key": "closure_basics",
@@ -546,16 +564,6 @@ CLOSURE_SECTIONS: list[dict] = [
         ],
     },
     {
-        "key": "approvals_record",
-        "label": "الاعتمادات",
-        "stage": "close",
-        "fields": [
-            _f("sponsor_decision", "قرار الراعي"),
-            _f("sponsor_date", "تاريخ الاعتماد", "date"),
-            _f("notes", "ملاحظات الاعتماد", "textarea"),
-        ],
-    },
-    {
         "key": "final_cost",
         "label": "التكلفة النهائية",
         "stage": "close",
@@ -622,8 +630,12 @@ def _coerce_field(fdef: FieldDef, val):
             raise serializers.ValidationError({fdef["key"]: "قيمة غير مسموحة"})
         return str(val)
     if t == "logical_matrix":
+        if isinstance(val, dict) and "rows" in val:
+            val = val.get("rows")
         return _coerce_logical_matrix(fdef, val)
     if t == "phases_activities":
+        if isinstance(val, dict) and "phases" in val:
+            val = val.get("phases")
         return _coerce_phases_activities(val)
     if t == "table":
         if not isinstance(val, list):
@@ -761,7 +773,7 @@ def schema_payload() -> dict:
                 {
                     "key": s["key"],
                     "label": s["label"],
-                    "stage": s["stage"],
+                    "stage": s.get("stage", ""),
                     "fields": fields,
                     "ui": s.get("ui") or "default",
                     "from_card": bool(s.get("from_card")),
@@ -774,6 +786,7 @@ def schema_payload() -> dict:
         "workspaces": list(WORKSPACES),
         "document": pack(DOCUMENT_SECTIONS),
         "closure": pack(CLOSURE_SECTIONS),
+        "approvals": pack(APPROVALS_SECTIONS),
         "card": pack(CARD_SECTIONS),
         "document_fixed_phases": list(DOCUMENT_FIXED_PHASES),
     }
