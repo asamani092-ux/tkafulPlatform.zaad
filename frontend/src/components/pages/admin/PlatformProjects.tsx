@@ -171,9 +171,7 @@ export default function PlatformProjects() {
       sponsor_id: "",
       sponsor_name: "",
       sponsor_email: "",
-      approver_id: "",
-      approver_name: "",
-      approver_email: "",
+      manager_id: "",
       saving: false,
     });
     void loadAllUsers();
