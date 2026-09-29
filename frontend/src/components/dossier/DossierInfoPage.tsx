@@ -13,8 +13,8 @@ export type InfoPagePayload = {
   location: string;
   sponsor_name: string;
   sponsor_email: string;
-  approver_name?: string;
-  approver_email?: string;
+  manager_name?: string;
+  manager_email?: string;
   indicators: Array<Record<string, unknown>>;
   phases_budget_summary: {
     from_association: number;
@@ -103,10 +103,10 @@ export default function DossierInfoPage({ data, onBack }: Props) {
               ["الموقع", data.location],
               ["تاريخ البدء", data.execution_start || "—"],
               ["تاريخ الانتهاء", data.execution_end || "—"],
-              ["راعي المشروع", data.sponsor_name],
-              ["ايميل الراعي", data.sponsor_email],
-              ["صاحب الاعتماد", data.approver_name || "—"],
-              ["ايميل صاحب الاعتماد", data.approver_email || "—"],
+              ["مدير الإدارة", data.sponsor_name],
+              ["بريد مدير الإدارة", data.sponsor_email],
+              ["مدير المشروع", data.manager_name || "—"],
+              ["بريد مدير المشروع", data.manager_email || "—"],
             ] as const
           ).map(([k, v]) => (
             <div key={k} className="rounded-lg bg-surface-muted/30 px-3 py-2">

@@ -18,6 +18,9 @@ export type CardScalars = {
   sponsor_id: number | null;
   sponsor_name: string;
   sponsor_email: string;
+  manager_id: number | null;
+  manager_name: string;
+  manager_email: string;
   approver_id: number | null;
   approver_name: string;
   approver_email: string;
@@ -215,7 +218,7 @@ export default function CardTab({
         )}
       </div>
 
-      <CollapsibleCard title="البيانات المطلوبة" defaultOpen={false} subtitle="الاسم والإدارة والتواريخ والراعي وصاحب الاعتماد">
+      <CollapsibleCard title="البيانات المطلوبة" defaultOpen={false} subtitle="الاسم والإدارة والتواريخ ومدير الإدارة ومدير المشروع">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Input
             label="الاسم"
@@ -256,12 +259,13 @@ export default function CardTab({
             onChange={(e) => onCardChange({ ...card, execution_end: e.target.value })}
           />
           <UserPick
-            label="راعي المشروع"
+            label="مدير الإدارة"
             users={users}
             valueId={card.sponsor_id}
             valueName={card.sponsor_name}
             valueEmail={card.sponsor_email}
             disabled={!canEdit}
+            hint="الاعتماد النهائي وتعيين مدير المشروع"
             onInvite={onInviteUser}
             onPick={(u) =>
               onCardChange({
@@ -273,21 +277,20 @@ export default function CardTab({
             }
           />
           <UserPick
-            label="صاحب الاعتماد"
+            label="مدير المشروع"
             users={users}
-            valueId={card.approver_id}
-            valueName={card.approver_name}
-            valueEmail={card.approver_email}
+            valueId={card.manager_id}
+            valueName={card.manager_name}
+            valueEmail={card.manager_email}
             disabled={!canEdit}
-            emptyLabel="— مدير النظام إن تُرك فارغاً —"
-            hint="إن تُرك فارغاً يُعيَّن مدير النظام"
+            hint="يملأ البطاقة والوثيقة والخطة والإغلاق ويرسل للاعتماد"
             onInvite={onInviteUser}
             onPick={(u) =>
               onCardChange({
                 ...card,
-                approver_id: u?.id ?? null,
-                approver_name: u?.name || "",
-                approver_email: u?.email || "",
+                manager_id: u?.id ?? null,
+                manager_name: u?.name || "",
+                manager_email: u?.email || "",
               })
             }
           />

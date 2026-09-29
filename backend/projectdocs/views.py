@@ -206,10 +206,17 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
                     val = None
                 setattr(dossier, key, val)
         if "manager" in request.data or "manager_id" in request.data:
-            if not is_super_admin(request.user):
-                return Response({"detail": "تعيين المسؤول للمشرف فقط"}, status=403)
+            if not services.can_assign_dossier_manager(request.user, dossier):
+                return Response({"detail": "تعيين مدير المشروع لمدير الإدارة أو المشرف فقط"}, status=403)
             mid = request.data.get("manager") or request.data.get("manager_id")
-            dossier.manager_id = mid or None
+            if mid in ("", None):
+                services.transfer_dossier_manager(
+                    dossier,
+                    clear=True,
+                    email=request.data.get("manager_email") or "",
+                )
+            else:
+                services.transfer_dossier_manager(dossier, user_id=mid)
         if "sponsor_id" in request.data or "sponsor" in request.data:
             sid = request.data.get("sponsor_id", request.data.get("sponsor"))
             if sid in ("", None):
@@ -252,6 +259,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
         if not dossier:
             return Response({"detail": "لا يوجد ملف"}, status=404)
         self.check_object_permissions(request, dossier)
+        services.migrate_dossier_catalog(dossier)
         services.sync_dossier_role_memberships(dossier)
         services.sync_document_from_card(dossier)
         services.sync_plan_from_document(dossier)
@@ -261,6 +269,7 @@ class ProjectDossierViewSet(viewsets.ModelViewSet):
 
     def retrieve(self, request, *args, **kwargs):
         dossier = self.get_object()
+        services.migrate_dossier_catalog(dossier)
         services.sync_dossier_role_memberships(dossier)
         services.sync_document_from_card(dossier)
         services.sync_plan_from_document(dossier)
