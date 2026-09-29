@@ -46,13 +46,14 @@ export interface DossierSchema {
   workspaces?: Array<{ order: number; key: string; label: string; needs_approval?: boolean }>;
   document: SchemaSection[];
   closure: SchemaSection[];
+  approvals?: SchemaSection[];
   card?: SchemaSection[];
   document_fixed_phases?: Array<{ key: string; label: string }>;
 }
 
 export interface DossierSectionRow {
   id: number;
-  kind: "card" | "document" | "plan" | "closure";
+  kind: "card" | "document" | "plan" | "closure" | "approvals";
   key: string;
   data: Record<string, unknown>;
   status: string;

@@ -62,7 +62,7 @@ function LogicalImpactMatrix({
     rows.length >= 2
       ? rows
       : [
-          { row_key: "impact", label: "الأثر", description: "", indicators: "", means: "", assumptions: "" },
+          { row_key: "impact", label: "الإطار المنطقي", description: "", indicators: "", means: "", assumptions: "" },
           {
             row_key: "returns",
             label: "العوائد والغايات",
@@ -591,7 +591,62 @@ function SimilarWithBeneficiaries({
   );
 }
 
-/** تبويب الوثيقة — 12 بطاقة مع اعتماد لكل بطاقة. */
+function FrameworkBundlePanel({
+  data,
+  disabled,
+  fixedPhases,
+  onChange,
+}: {
+  data: Record<string, unknown>;
+  disabled?: boolean;
+  fixedPhases: Array<{ key: string; label: string }>;
+  onChange: (next: Record<string, unknown>) => void;
+}) {
+  const logical = (data.logical_impact as Record<string, unknown>) ?? { rows: data.logical_impact };
+  const logicalData = Array.isArray(data.logical_impact)
+    ? { rows: data.logical_impact }
+    : (logical as Record<string, unknown>);
+  const outputs = Array.isArray(data.outputs_quality) ? data.outputs_quality : asRows(data.outputs_quality);
+  const phasesData = Array.isArray(data.main_phases) ? { phases: data.main_phases } : { phases: asRows(data.main_phases) };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h4 className="mb-2 text-sm font-bold text-primary">الإطار المنطقي</h4>
+        <LogicalImpactMatrix
+          data={logicalData}
+          disabled={disabled}
+          onChange={(n) => onChange({ ...data, logical_impact: n.rows })}
+        />
+      </div>
+      <div>
+        <h4 className="mb-2 text-sm font-bold text-primary">مخرجات المشروع</h4>
+        <EditableDataTable
+          label="المخرجات"
+          hideTitle
+          columns={[
+            { key: "output", label: "المخرجات" },
+            { key: "quality", label: "تطلعات الجودة" },
+          ]}
+          rows={outputs as Record<string, string | number>[]}
+          disabled={disabled}
+          onChange={(next) => onChange({ ...data, outputs_quality: next })}
+        />
+      </div>
+      <div>
+        <h4 className="mb-2 text-sm font-bold text-primary">مراحل المشروع</h4>
+        <FixedPhasesActivities
+          data={phasesData}
+          disabled={disabled}
+          fixedPhases={fixedPhases}
+          onChange={(n) => onChange({ ...data, main_phases: n.phases })}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** تبويب الوثيقة — بطاقات مع اعتماد لكل بطاقة. */
 export default function DocumentTab({
   sections,
   drafts,
@@ -608,7 +663,7 @@ export default function DocumentTab({
   return (
     <div className="space-y-3" dir="rtl">
       <p className="text-sm text-brand-gray">
-        أقسام وثيقة المشروع — اعتماد كل بطاقة من المدير؛ اعتماد التبويب بعد اكتمال البطاقات.
+        أقسام وثيقة المشروع — اعتماد كل بطاقة من مدير المشروع؛ اعتماد التبويب بعد اكتمال البطاقات.
       </p>
       {sections.map(({ def, status }) => {
         const draftKey = `document:${def.key}`;
@@ -668,6 +723,14 @@ export default function DocumentTab({
               ) : null
             }
           >
+            {ui === "framework_bundle" && (
+              <FrameworkBundlePanel
+                data={data}
+                disabled={!editable}
+                fixedPhases={fixedPhases}
+                onChange={(n) => onDraftChange(def.key, n)}
+              />
+            )}
             {ui === "logical_matrix" && (
               <LogicalImpactMatrix data={data} disabled={!editable} onChange={(n) => onDraftChange(def.key, n)} />
             )}
